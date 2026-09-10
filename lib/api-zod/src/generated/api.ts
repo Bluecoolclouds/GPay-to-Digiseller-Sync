@@ -170,6 +170,7 @@ export const ListActivitiesResponse = zod.array(ListActivitiesResponseItem)
 export const GetSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
+  "exchangeRateMode": zod.enum(['cbr', 'manual']),
   "conversionMarkupPercent": zod.number(),
   "digisellerFeePercent": zod.number(),
   "fixedReserveRub": zod.number(),
@@ -200,6 +201,7 @@ export const updateSettingsBodyMinimumProfitRubMin = 0;
 export const UpdateSettingsBody = zod.object({
   "defaultMarginPercent": zod.number().min(updateSettingsBodyDefaultMarginPercentMin).max(updateSettingsBodyDefaultMarginPercentMax),
   "usdRubRate": zod.number().gt(updateSettingsBodyUsdRubRateExclusiveMin),
+  "exchangeRateMode": zod.enum(['cbr', 'manual']),
   "conversionMarkupPercent": zod.number().min(updateSettingsBodyConversionMarkupPercentMin).max(updateSettingsBodyConversionMarkupPercentMax),
   "digisellerFeePercent": zod.number().min(updateSettingsBodyDigisellerFeePercentMin).max(updateSettingsBodyDigisellerFeePercentMax),
   "fixedReserveRub": zod.number().min(updateSettingsBodyFixedReserveRubMin),
@@ -211,6 +213,7 @@ export const UpdateSettingsBody = zod.object({
 export const UpdateSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
+  "exchangeRateMode": zod.enum(['cbr', 'manual']),
   "conversionMarkupPercent": zod.number(),
   "digisellerFeePercent": zod.number(),
   "fixedReserveRub": zod.number(),

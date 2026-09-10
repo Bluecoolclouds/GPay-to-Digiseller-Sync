@@ -23,6 +23,7 @@ export default function SettingsPage() {
       reset({
         defaultMarginPercent: settings.defaultMarginPercent,
         usdRubRate: settings.usdRubRate,
+        exchangeRateMode: settings.exchangeRateMode,
         conversionMarkupPercent: settings.conversionMarkupPercent,
         digisellerFeePercent: settings.digisellerFeePercent,
         fixedReserveRub: settings.fixedReserveRub,
@@ -41,6 +42,8 @@ export default function SettingsPage() {
       onError: () => toast.error("Не удалось сохранить настройки")
     })
   }
+
+  const exchangeRateMode = watch("exchangeRateMode")
 
   const handleTestConnections = () => {
     testConnectionsMutation.mutate(undefined, {
@@ -78,8 +81,25 @@ export default function SettingsPage() {
                     <Input type="number" {...register("defaultMarginPercent", { valueAsNumber: true })} />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Курс ЦБ USD → RUB</label>
-                    <Input type="number" step="0.01" readOnly {...register("usdRubRate", { valueAsNumber: true })} />
+                    <label className="text-sm font-medium">Источник курса</label>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm focus:ring-1 focus:ring-ring focus:outline-none"
+                      {...register("exchangeRateMode")}
+                    >
+                      <option value="cbr">Автоматически — ЦБ РФ</option>
+                      <option value="manual">Ввести вручную</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      {exchangeRateMode === "manual" ? "Ручной курс USD → RUB" : "Курс ЦБ USD → RUB"}
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      readOnly={exchangeRateMode !== "manual"}
+                      {...register("usdRubRate", { valueAsNumber: true })}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Запас на конвертацию (%)</label>

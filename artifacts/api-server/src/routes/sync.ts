@@ -310,6 +310,21 @@ router.post("/connections/test", async (_req, res): Promise<void> => {
 
 router.get("/exchange-rate", async (_req, res): Promise<void> => {
   const settings = await getSettingsRow();
+  if (settings.exchangeRateMode === "manual") {
+    res.json(
+      GetExchangeRateResponse.parse({
+        usdRub: settings.usdRubRate,
+        conversionMarkupPercent: settings.conversionMarkupPercent,
+        purchaseRate:
+          settings.usdRubRate * (1 + settings.conversionMarkupPercent / 100),
+        source: "Ручной курс",
+        effectiveDate: new Date().toLocaleDateString("ru-RU"),
+        fetchedAt: new Date().toISOString(),
+        isFallback: false,
+      }),
+    );
+    return;
+  }
   const rate = await getOfficialUsdRubRate(settings.usdRubRate);
   if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
     const [updatedSettings] = await db

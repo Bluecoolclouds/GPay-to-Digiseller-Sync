@@ -11,6 +11,7 @@ export const settingsTable = pgTable("sync_settings", {
   id: integer("id").primaryKey().default(1),
   defaultMarginPercent: doublePrecision("default_margin_percent").notNull().default(15),
   usdRubRate: doublePrecision("usd_rub_rate").notNull().default(92),
+  exchangeRateMode: text("exchange_rate_mode").notNull().default("cbr"),
   conversionMarkupPercent: doublePrecision("conversion_markup_percent").notNull().default(2),
   digisellerFeePercent: doublePrecision("digiseller_fee_percent").notNull().default(5),
   fixedReserveRub: doublePrecision("fixed_reserve_rub").notNull().default(30),

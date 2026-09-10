@@ -134,6 +134,14 @@ export interface Activity {
   createdAt: string;
 }
 
+export type SettingsExchangeRateMode = typeof SettingsExchangeRateMode[keyof typeof SettingsExchangeRateMode];
+
+
+export const SettingsExchangeRateMode = {
+  cbr: 'cbr',
+  manual: 'manual',
+} as const;
+
 export type SettingsAutomationMode = typeof SettingsAutomationMode[keyof typeof SettingsAutomationMode];
 
 
@@ -145,6 +153,7 @@ export const SettingsAutomationMode = {
 export interface Settings {
   defaultMarginPercent: number;
   usdRubRate: number;
+  exchangeRateMode: SettingsExchangeRateMode;
   conversionMarkupPercent: number;
   digisellerFeePercent: number;
   fixedReserveRub: number;
@@ -153,6 +162,14 @@ export interface Settings {
   disableOnUnavailable: boolean;
   credentialsConfigured: boolean;
 }
+
+export type SettingsInputExchangeRateMode = typeof SettingsInputExchangeRateMode[keyof typeof SettingsInputExchangeRateMode];
+
+
+export const SettingsInputExchangeRateMode = {
+  cbr: 'cbr',
+  manual: 'manual',
+} as const;
 
 export type SettingsInputAutomationMode = typeof SettingsInputAutomationMode[keyof typeof SettingsInputAutomationMode];
 
@@ -170,6 +187,7 @@ export interface SettingsInput {
   defaultMarginPercent: number;
   /** @exclusiveMinimum 0 */
   usdRubRate: number;
+  exchangeRateMode: SettingsInputExchangeRateMode;
   /**
      * @minimum 0
      * @maximum 20

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SettingsInputAutomationMode } from './settingsInputAutomationMode';
+import type { SettingsInputExchangeRateMode } from './settingsInputExchangeRateMode';
 
 export interface SettingsInput {
   /**
@@ -15,6 +16,7 @@ export interface SettingsInput {
   defaultMarginPercent: number;
   /** @exclusiveMinimum 0 */
   usdRubRate: number;
+  exchangeRateMode: SettingsInputExchangeRateMode;
   /**
      * @minimum 0
      * @maximum 20

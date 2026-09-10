@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SettingsAutomationMode } from './settingsAutomationMode';
+import type { SettingsExchangeRateMode } from './settingsExchangeRateMode';
 
 export interface Settings {
   defaultMarginPercent: number;
   usdRubRate: number;
+  exchangeRateMode: SettingsExchangeRateMode;
   conversionMarkupPercent: number;
   digisellerFeePercent: number;
   fixedReserveRub: number;

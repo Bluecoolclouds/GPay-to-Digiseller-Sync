@@ -26,6 +26,8 @@ export * from './productUpdate';
 export * from './productUpdatePublicationStatus';
 export * from './settings';
 export * from './settingsAutomationMode';
+export * from './settingsExchangeRateMode';
 export * from './settingsInput';
 export * from './settingsInputAutomationMode';
+export * from './settingsInputExchangeRateMode';
 export * from './syncResult';
