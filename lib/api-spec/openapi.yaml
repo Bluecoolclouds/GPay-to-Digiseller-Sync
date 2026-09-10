@@ -1,22 +1,21 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: GPay Market to Digiseller synchronization API
 servers:
   - url: /api
-    description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: dashboard
+  - name: products
+  - name: sync
+  - name: settings
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +23,286 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Synchronization overview
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, available, unavailable, published, draft]
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Cached GPay products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+  /products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Product not found
+  /products/{id}/publish:
+    post:
+      operationId: publishProduct
+      tags: [products]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Product publication result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "409":
+          description: Product cannot be published
+  /sync/catalog:
+    post:
+      operationId: syncCatalog
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatalogSyncInput"
+      responses:
+        "200":
+          description: Catalog synchronization result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+        "502":
+          description: GPay API unavailable
+  /activities:
+    get:
+      operationId: listActivities
+      tags: [dashboard]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Recent synchronization events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      responses:
+        "200":
+          description: Pricing and safety settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+  /connections:
+    get:
+      operationId: getConnections
+      tags: [settings]
+      responses:
+        "200":
+          description: External API connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connections"
+  /connections/test:
+    post:
+      operationId: testConnections
+      tags: [settings]
+      responses:
+        "200":
+          description: Live connection test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connections"
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
-
+        status: { type: string }
+    Dashboard:
+      type: object
+      required: [totalProducts, availableProducts, publishedProducts, averageMargin, potentialRevenue, lastSyncAt, automationMode]
+      properties:
+        totalProducts: { type: integer }
+        availableProducts: { type: integer }
+        publishedProducts: { type: integer }
+        averageMargin: { type: number }
+        potentialRevenue: { type: number }
+        lastSyncAt: { type: [string, "null"], format: date-time }
+        automationMode: { type: string, enum: [manual, automatic] }
+    Product:
+      type: object
+      required: [id, gpayId, name, productType, supplierPriceUsd, salePriceRub, marginPercent, isAvailable, publicationStatus, region, updatedAt]
+      properties:
+        id: { type: integer }
+        gpayId: { type: integer }
+        digisellerId: { type: [integer, "null"] }
+        appId: { type: [integer, "null"] }
+        subId: { type: [integer, "null"] }
+        name: { type: string }
+        imageUrl: { type: [string, "null"] }
+        productType: { type: string }
+        supplierPriceUsd: { type: number }
+        salePriceRub: { type: number }
+        marginPercent: { type: number }
+        profitRub: { type: number }
+        isAvailable: { type: boolean }
+        publicationStatus: { type: string, enum: [draft, published, paused, error] }
+        region: { type: string }
+        warningMessage: { type: [string, "null"] }
+        updatedAt: { type: string, format: date-time }
+    ProductPage:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+    ProductUpdate:
+      type: object
+      properties:
+        marginPercent: { type: number, minimum: 0, maximum: 500 }
+        publicationStatus: { type: string, enum: [draft, published, paused] }
+    CatalogSyncInput:
+      type: object
+      required: [pageSize]
+      properties:
+        pageSize: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        availableOnly: { type: boolean, default: true }
+    SyncResult:
+      type: object
+      required: [success, imported, updated, disabled, message, completedAt]
+      properties:
+        success: { type: boolean }
+        imported: { type: integer }
+        updated: { type: integer }
+        disabled: { type: integer }
+        message: { type: string }
+        completedAt: { type: string, format: date-time }
+    Activity:
+      type: object
+      required: [id, type, title, description, status, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [sync, price, publish, connection] }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [success, warning, error] }
+        createdAt: { type: string, format: date-time }
+    Settings:
+      type: object
+      required: [defaultMarginPercent, usdRubRate, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured]
+      properties:
+        defaultMarginPercent: { type: number }
+        usdRubRate: { type: number }
+        digisellerFeePercent: { type: number }
+        fixedReserveRub: { type: number }
+        minimumProfitRub: { type: number }
+        automationMode: { type: string, enum: [manual, automatic] }
+        disableOnUnavailable: { type: boolean }
+        credentialsConfigured: { type: boolean }
+    SettingsInput:
+      type: object
+      required: [defaultMarginPercent, usdRubRate, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]
+      properties:
+        defaultMarginPercent: { type: number, minimum: 0, maximum: 500 }
+        usdRubRate: { type: number, exclusiveMinimum: 0 }
+        digisellerFeePercent: { type: number, minimum: 0, maximum: 100 }
+        fixedReserveRub: { type: number, minimum: 0 }
+        minimumProfitRub: { type: number, minimum: 0 }
+        automationMode: { type: string, enum: [manual, automatic] }
+        disableOnUnavailable: { type: boolean }
+    ConnectionState:
+      type: object
+      required: [configured, healthy, label, detail]
+      properties:
+        configured: { type: boolean }
+        healthy: { type: boolean }
+        label: { type: string }
+        detail: { type: string }
+    Connections:
+      type: object
+      required: [gpay, digiseller, checkedAt]
+      properties:
+        gpay: { $ref: "#/components/schemas/ConnectionState" }
+        digiseller: { $ref: "#/components/schemas/ConnectionState" }
+        checkedAt: { type: string, format: date-time }

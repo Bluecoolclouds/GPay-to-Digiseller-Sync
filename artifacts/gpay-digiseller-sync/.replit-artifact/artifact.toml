@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "GPay → Digiseller Sync"
+description = "Панель управления импортом товаров GPay Market в Digiseller, расчетом наценки, синхронизацией цен и статусов, а также безопасным ручным подтверждением закупок."
+version = "1.0.0"
+id = "artifacts/gpay-digiseller-sync"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20581
+
+[services.development]
+run = "pnpm --filter @workspace/gpay-digiseller-sync run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gpay-digiseller-sync", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/gpay-digiseller-sync/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20581"
+BASE_PATH = "/"

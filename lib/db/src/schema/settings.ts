@@ -1,0 +1,20 @@
+import {
+  boolean,
+  doublePrecision,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+export const settingsTable = pgTable("sync_settings", {
+  id: integer("id").primaryKey().default(1),
+  defaultMarginPercent: doublePrecision("default_margin_percent").notNull().default(15),
+  usdRubRate: doublePrecision("usd_rub_rate").notNull().default(92),
+  digisellerFeePercent: doublePrecision("digiseller_fee_percent").notNull().default(5),
+  fixedReserveRub: doublePrecision("fixed_reserve_rub").notNull().default(30),
+  minimumProfitRub: doublePrecision("minimum_profit_rub").notNull().default(100),
+  automationMode: text("automation_mode").notNull().default("manual"),
+  disableOnUnavailable: boolean("disable_on_unavailable").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

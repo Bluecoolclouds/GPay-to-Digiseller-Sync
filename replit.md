@@ -1,6 +1,6 @@
-# [Project name]
+# GPay → Digiseller Sync
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Панель импортирует товары GPay Market, рассчитывает цены с наценкой и готовит их к публикации в Digiseller.
 
 ## Run & Operate
 
@@ -22,15 +22,25 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — контракт приложения
+- `lib/db/src/schema/` — товары, настройки и журнал синхронизации
+- `artifacts/api-server/src/lib/` — клиенты GPay и Digiseller
+- `artifacts/api-server/src/routes/sync.ts` — API панели
+- `artifacts/gpay-digiseller-sync/` — веб-панель
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Закупка и фактическая публикация в Digiseller по умолчанию ручные: сначала проверяем категории, контент, цены и возвраты.
+- Доступы внешних сервисов хранятся только в Replit Secrets.
+- Перед продажей цена считается из USD/RUB, комиссии, наценки, резерва и минимальной прибыли.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Живая проверка подключений GPay и Digiseller
+- Импорт доступных товаров из GPay
+- Поиск, фильтры, индивидуальная наценка и расчет прибыли
+- Общие правила цены и безопасный ручной режим
+- Журнал синхронизации
 
 ## User preferences
 
