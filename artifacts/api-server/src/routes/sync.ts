@@ -27,7 +27,11 @@ import {
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
 import { fetchGPayProducts, loginGPay } from "../lib/gpay";
-import { createDigisellerProduct, loginDigiseller } from "../lib/digiseller";
+import {
+  addDigisellerProductToPlati,
+  createDigisellerProduct,
+  loginDigiseller,
+} from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 
 const router: IRouter = Router();
@@ -174,7 +178,27 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     return;
   }
   if (current.digisellerId) {
-    res.json(PublishProductResponse.parse({ ...current, updatedAt: current.updatedAt.toISOString() }));
+    try {
+      await addDigisellerProductToPlati(current.digisellerId, {
+        name: current.name,
+        description: [
+          current.name,
+          "",
+          `Регион: ${current.region}.`,
+          current.productType === "1"
+            ? "Поставка Steam Gift после проверки наличия и цены."
+            : "Поставка цифрового ключа после проверки наличия и цены.",
+        ].join("\n"),
+        priceRub: current.salePriceRub,
+        productType: current.productType,
+      });
+      res.json(PublishProductResponse.parse({ ...current, updatedAt: current.updatedAt.toISOString() }));
+    } catch (error) {
+      req.log.error({ err: error, productId: current.id }, "Plati.Market category assignment failed");
+      res.status(502).json({
+        error: error instanceof Error ? error.message : "Plati.Market category assignment failed",
+      });
+    }
     return;
   }
   try {

@@ -1,1 +1,1 @@
-- [Digiseller product type for manual fulfillment](digiseller-manual-fulfillment.md) — use Arbitrary with Form; UniqueFixed rejects Form content.
+- [Digiseller manual fulfillment and Plati category](digiseller-manual-fulfillment.md) — use Arbitrary/Form and attach Plati through the exact cataloguer game category.
