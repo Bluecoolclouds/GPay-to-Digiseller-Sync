@@ -17,6 +17,11 @@ export interface SettingsInput {
   usdRubRate: number;
   /**
      * @minimum 0
+     * @maximum 20
+     */
+  conversionMarkupPercent: number;
+  /**
+     * @minimum 0
      * @maximum 100
      */
   digisellerFeePercent: number;

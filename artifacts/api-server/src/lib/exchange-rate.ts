@@ -1,5 +1,7 @@
 type RateSnapshot = {
   usdRub: number;
+  conversionMarkupPercent?: number;
+  purchaseRate?: number;
   source: string;
   effectiveDate: string;
   fetchedAt: string;

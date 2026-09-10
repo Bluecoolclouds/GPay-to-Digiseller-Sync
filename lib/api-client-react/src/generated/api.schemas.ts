@@ -145,6 +145,7 @@ export const SettingsAutomationMode = {
 export interface Settings {
   defaultMarginPercent: number;
   usdRubRate: number;
+  conversionMarkupPercent: number;
   digisellerFeePercent: number;
   fixedReserveRub: number;
   minimumProfitRub: number;
@@ -169,6 +170,11 @@ export interface SettingsInput {
   defaultMarginPercent: number;
   /** @exclusiveMinimum 0 */
   usdRubRate: number;
+  /**
+     * @minimum 0
+     * @maximum 20
+     */
+  conversionMarkupPercent: number;
   /**
      * @minimum 0
      * @maximum 100
@@ -197,6 +203,8 @@ export interface Connections {
 
 export interface ExchangeRate {
   usdRub: number;
+  conversionMarkupPercent: number;
+  purchaseRate: number;
   source: string;
   effectiveDate: string;
   fetchedAt: string;

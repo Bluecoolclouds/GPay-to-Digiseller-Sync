@@ -56,11 +56,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               Курс доллара
             </div>
             <div className="mt-1 font-mono text-xl font-semibold text-foreground">
-              {exchangeRate ? `${exchangeRate.usdRub.toFixed(2)} ₽` : "—"}
+              {exchangeRate ? `${exchangeRate.purchaseRate.toFixed(2)} ₽` : "—"}
             </div>
             <div className="mt-1 text-[10px] text-muted-foreground">
               {exchangeRate
-                ? `${exchangeRate.source} · ${exchangeRate.effectiveDate}`
+                ? `ЦБ ${exchangeRate.usdRub.toFixed(2)} ₽ + ${exchangeRate.conversionMarkupPercent}%`
                 : "Получаем курс…"}
             </div>
           </div>

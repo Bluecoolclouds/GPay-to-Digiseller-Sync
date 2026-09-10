@@ -23,6 +23,7 @@ export default function SettingsPage() {
       reset({
         defaultMarginPercent: settings.defaultMarginPercent,
         usdRubRate: settings.usdRubRate,
+        conversionMarkupPercent: settings.conversionMarkupPercent,
         digisellerFeePercent: settings.digisellerFeePercent,
         fixedReserveRub: settings.fixedReserveRub,
         minimumProfitRub: settings.minimumProfitRub,
@@ -77,8 +78,12 @@ export default function SettingsPage() {
                     <Input type="number" {...register("defaultMarginPercent", { valueAsNumber: true })} />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Курс USD → RUB</label>
-                    <Input type="number" step="0.01" {...register("usdRubRate", { valueAsNumber: true })} />
+                    <label className="text-sm font-medium">Курс ЦБ USD → RUB</label>
+                    <Input type="number" step="0.01" readOnly {...register("usdRubRate", { valueAsNumber: true })} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Запас на конвертацию (%)</label>
+                    <Input type="number" step="0.1" {...register("conversionMarkupPercent", { valueAsNumber: true })} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Комиссия Digiseller (%)</label>

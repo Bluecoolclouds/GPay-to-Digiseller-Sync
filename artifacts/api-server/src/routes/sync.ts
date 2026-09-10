@@ -52,7 +52,8 @@ function calculatePrice(
   settings: Awaited<ReturnType<typeof getSettingsRow>>,
   marginPercent = settings.defaultMarginPercent,
 ) {
-  const baseRub = supplierPriceUsd * settings.usdRubRate;
+  const purchaseRate = settings.usdRubRate * (1 + settings.conversionMarkupPercent / 100);
+  const baseRub = supplierPriceUsd * purchaseRate;
   const price = Math.ceil(
     baseRub * (1 + settings.digisellerFeePercent / 100) * (1 + marginPercent / 100) +
       settings.fixedReserveRub,
@@ -61,6 +62,25 @@ function calculatePrice(
     salePriceRub: Math.max(price, Math.ceil(baseRub + settings.minimumProfitRub)),
     profitRub: Math.max(price, Math.ceil(baseRub + settings.minimumProfitRub)) - baseRub,
   };
+}
+
+async function recalculateAllProductPrices(
+  settings: Awaited<ReturnType<typeof getSettingsRow>>,
+) {
+  const purchaseRate =
+    settings.usdRubRate * (1 + settings.conversionMarkupPercent / 100);
+  const baseRub = sql`${productsTable.supplierPriceUsd} * ${purchaseRate}`;
+  const calculatedPrice = sql`greatest(
+    ceil(${baseRub} * (1 + ${settings.digisellerFeePercent} / 100.0) * (1 + ${productsTable.marginPercent} / 100.0) + ${settings.fixedReserveRub}),
+    ceil(${baseRub} + ${settings.minimumProfitRub})
+  )`;
+  await db
+    .update(productsTable)
+    .set({
+      salePriceRub: calculatedPrice,
+      profitRub: sql`${calculatedPrice} - ${baseRub}`,
+      updatedAt: new Date(),
+    });
 }
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
@@ -262,6 +282,7 @@ router.put("/settings", async (req, res): Promise<void> => {
     .values({ id: 1, ...parsed.data })
     .onConflictDoUpdate({ target: settingsTable.id, set: { ...parsed.data, updatedAt: new Date() } })
     .returning();
+  await recalculateAllProductPrices(settings);
   res.json(UpdateSettingsResponse.parse({ ...settings, credentialsConfigured: credentialsConfigured() }));
 });
 
@@ -291,12 +312,20 @@ router.get("/exchange-rate", async (_req, res): Promise<void> => {
   const settings = await getSettingsRow();
   const rate = await getOfficialUsdRubRate(settings.usdRubRate);
   if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
-    await db
+    const [updatedSettings] = await db
       .update(settingsTable)
       .set({ usdRubRate: rate.usdRub, updatedAt: new Date() })
-      .where(eq(settingsTable.id, 1));
+      .where(eq(settingsTable.id, 1))
+      .returning();
+    await recalculateAllProductPrices(updatedSettings);
   }
-  res.json(GetExchangeRateResponse.parse(rate));
+  res.json(
+    GetExchangeRateResponse.parse({
+      ...rate,
+      conversionMarkupPercent: settings.conversionMarkupPercent,
+      purchaseRate: rate.usdRub * (1 + settings.conversionMarkupPercent / 100),
+    }),
+  );
 });
 
 export default router;

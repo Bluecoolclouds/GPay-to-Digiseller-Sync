@@ -282,10 +282,11 @@ components:
         createdAt: { type: string, format: date-time }
     Settings:
       type: object
-      required: [defaultMarginPercent, usdRubRate, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured]
+      required: [defaultMarginPercent, usdRubRate, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured]
       properties:
         defaultMarginPercent: { type: number }
         usdRubRate: { type: number }
+        conversionMarkupPercent: { type: number }
         digisellerFeePercent: { type: number }
         fixedReserveRub: { type: number }
         minimumProfitRub: { type: number }
@@ -294,10 +295,11 @@ components:
         credentialsConfigured: { type: boolean }
     SettingsInput:
       type: object
-      required: [defaultMarginPercent, usdRubRate, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]
+      required: [defaultMarginPercent, usdRubRate, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]
       properties:
         defaultMarginPercent: { type: number, minimum: 0, maximum: 500 }
         usdRubRate: { type: number, exclusiveMinimum: 0 }
+        conversionMarkupPercent: { type: number, minimum: 0, maximum: 20 }
         digisellerFeePercent: { type: number, minimum: 0, maximum: 100 }
         fixedReserveRub: { type: number, minimum: 0 }
         minimumProfitRub: { type: number, minimum: 0 }
@@ -320,9 +322,11 @@ components:
         checkedAt: { type: string, format: date-time }
     ExchangeRate:
       type: object
-      required: [usdRub, source, effectiveDate, fetchedAt, isFallback]
+      required: [usdRub, conversionMarkupPercent, purchaseRate, source, effectiveDate, fetchedAt, isFallback]
       properties:
         usdRub: { type: number }
+        conversionMarkupPercent: { type: number }
+        purchaseRate: { type: number }
         source: { type: string }
         effectiveDate: { type: string }
         fetchedAt: { type: string, format: date-time }

@@ -8,6 +8,8 @@
 
 export interface ExchangeRate {
   usdRub: number;
+  conversionMarkupPercent: number;
+  purchaseRate: number;
   source: string;
   effectiveDate: string;
   fetchedAt: Date;

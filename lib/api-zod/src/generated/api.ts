@@ -170,6 +170,7 @@ export const ListActivitiesResponse = zod.array(ListActivitiesResponseItem)
 export const GetSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
+  "conversionMarkupPercent": zod.number(),
   "digisellerFeePercent": zod.number(),
   "fixedReserveRub": zod.number(),
   "minimumProfitRub": zod.number(),
@@ -184,6 +185,9 @@ export const updateSettingsBodyDefaultMarginPercentMax = 500;
 
 export const updateSettingsBodyUsdRubRateExclusiveMin = 0;
 
+export const updateSettingsBodyConversionMarkupPercentMin = 0;
+export const updateSettingsBodyConversionMarkupPercentMax = 20;
+
 export const updateSettingsBodyDigisellerFeePercentMin = 0;
 export const updateSettingsBodyDigisellerFeePercentMax = 100;
 
@@ -196,6 +200,7 @@ export const updateSettingsBodyMinimumProfitRubMin = 0;
 export const UpdateSettingsBody = zod.object({
   "defaultMarginPercent": zod.number().min(updateSettingsBodyDefaultMarginPercentMin).max(updateSettingsBodyDefaultMarginPercentMax),
   "usdRubRate": zod.number().gt(updateSettingsBodyUsdRubRateExclusiveMin),
+  "conversionMarkupPercent": zod.number().min(updateSettingsBodyConversionMarkupPercentMin).max(updateSettingsBodyConversionMarkupPercentMax),
   "digisellerFeePercent": zod.number().min(updateSettingsBodyDigisellerFeePercentMin).max(updateSettingsBodyDigisellerFeePercentMax),
   "fixedReserveRub": zod.number().min(updateSettingsBodyFixedReserveRubMin),
   "minimumProfitRub": zod.number().min(updateSettingsBodyMinimumProfitRubMin),
@@ -206,6 +211,7 @@ export const UpdateSettingsBody = zod.object({
 export const UpdateSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
+  "conversionMarkupPercent": zod.number(),
   "digisellerFeePercent": zod.number(),
   "fixedReserveRub": zod.number(),
   "minimumProfitRub": zod.number(),
@@ -254,6 +260,8 @@ export const TestConnectionsResponse = zod.object({
  */
 export const GetExchangeRateResponse = zod.object({
   "usdRub": zod.number(),
+  "conversionMarkupPercent": zod.number(),
+  "purchaseRate": zod.number(),
   "source": zod.string(),
   "effectiveDate": zod.string(),
   "fetchedAt": zod.coerce.date(),

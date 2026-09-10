@@ -10,6 +10,7 @@ import type { SettingsAutomationMode } from './settingsAutomationMode';
 export interface Settings {
   defaultMarginPercent: number;
   usdRubRate: number;
+  conversionMarkupPercent: number;
   digisellerFeePercent: number;
   fixedReserveRub: number;
   minimumProfitRub: number;
