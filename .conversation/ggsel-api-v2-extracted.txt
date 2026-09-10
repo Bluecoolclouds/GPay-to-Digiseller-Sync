@@ -1,0 +1,4881 @@
+
+
+# PAGE: archive-option-variants-asynchronously
+SOURCE: https://seller.ggsel.com/docs/v2/archive-option-variants-asynchronously
+
+Archive option variants asynchronously
+DELETE
+/api_sellers/v2/offers/:offer_id/options/:option_id/variants
+Archive option variants asynchronously
+Request ​
+Path Parameters
+offer_id integer required
+option_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+option_variant_ids integer[]
+delete_all string
+Possible values: [ true , false ]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Job created
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean required
+job_id string required
+{
+"success" : true ,
+"job_id" : "string"
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Delete, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options/:option_id/variants");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"option_variant_ids\": [\n 0\n ],\n \"delete_all\": \"true\"\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+option_id — path required
+locale — header
+Body
+{ "option_variant_ids" : [ 0 ] , "delete_all" : "true" }
+
+
+# PAGE: archive-options
+SOURCE: https://seller.ggsel.com/docs/v2/archive-options
+
+Archive options
+DELETE
+/api_sellers/v2/offers/:offer_id/options
+Archive options
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+option_ids integer[]
+delete_all string
+Possible values: [ true , false ]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Options archived
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Delete, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"option_ids\": [\n 0\n ],\n \"delete_all\": \"true\"\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+Body
+{ "option_ids" : [ 0 ] , "delete_all" : "true" }
+
+
+# PAGE: archive-products
+SOURCE: https://seller.ggsel.com/docs/v2/archive-products
+
+Archive products
+DELETE
+/api_sellers/v2/offers/:offer_id/products
+Archive products
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+product_ids integer[]
+Product IDs to archive
+delete_all string
+Archive all products in stock
+Possible values: [ true , false ]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Products archive enqueued
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Products not allowed
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Delete, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/products");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"product_ids\": [\n 0\n ],\n \"delete_all\": \"true\"\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+Body
+{ "product_ids" : [ 0 ] , "delete_all" : "true" }
+
+
+# PAGE: archive-splitted-products
+SOURCE: https://seller.ggsel.com/docs/v2/archive-splitted-products
+
+Archive splitted products
+DELETE
+/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products
+Archive splitted products
+Request ​
+Path Parameters
+offer_id integer required
+variant_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+product_ids integer[]
+Product IDs to archive
+delete_all string
+Archive all products in stock
+Possible values: [ true , false ]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Splitted products archive enqueued
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Delete, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"product_ids\": [\n 0\n ],\n \"delete_all\": \"true\"\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+variant_id — path required
+locale — header
+Body
+{ "product_ids" : [ 0 ] , "delete_all" : "true" }
+
+
+# PAGE: batch-activate-offers
+SOURCE: https://seller.ggsel.com/docs/v2/batch-activate-offers
+
+Batch activate offers
+POST
+/api_sellers/v2/offers/batch_activate
+Batch activate offers
+Request ​
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+offer_ids integer[] required
+List of offer IDs (maximum 100)
+Possible values: >= 1 , <= 100
+Example: [123456,234567,345678]
+Responses ​
+- 200
+- 400
+- 401
+- 422
+Job enqueued
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Bad request — empty offer_ids
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/batch_activate");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"offer_ids\": [\n 123456,\n 234567,\n 345678\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+locale — header
+Body
+{ "offer_ids" : [ 123456 , 234567 , 345678 ] }
+
+
+# PAGE: batch-delete-offers
+SOURCE: https://seller.ggsel.com/docs/v2/batch-delete-offers
+
+Batch delete offers
+POST
+/api_sellers/v2/offers/batch_delete
+Batch delete offers
+Request ​
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+offer_ids integer[] required
+List of offer IDs (maximum 100)
+Possible values: >= 1 , <= 100
+Example: [123456,234567,345678]
+Responses ​
+- 200
+- 400
+- 401
+- 422
+Job enqueued
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Bad request — empty offer_ids
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/batch_delete");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"offer_ids\": [\n 123456,\n 234567,\n 345678\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+locale — header
+Body
+{ "offer_ids" : [ 123456 , 234567 , 345678 ] }
+
+
+# PAGE: batch-pause-offers
+SOURCE: https://seller.ggsel.com/docs/v2/batch-pause-offers
+
+Batch pause offers
+POST
+/api_sellers/v2/offers/batch_pause
+Batch pause offers
+Request ​
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+offer_ids integer[] required
+List of offer IDs (maximum 100)
+Possible values: >= 1 , <= 100
+Example: [123456,234567,345678]
+Responses ​
+- 200
+- 400
+- 401
+- 422
+Job enqueued
+- application/json
+- Schema
+- Example (auto)
+Schema
+success boolean
+job_id string
+{
+"success" : true ,
+"job_id" : "string"
+}
+Bad request — empty offer_ids
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Too many items
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/batch_pause");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"offer_ids\": [\n 123456,\n 234567,\n 345678\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+locale — header
+Body
+{ "offer_ids" : [ 123456 , 234567 , 345678 ] }
+
+
+# PAGE: batch-update-options-visibility
+SOURCE: https://seller.ggsel.com/docs/v2/batch-update-options-visibility
+
+Batch update options visibility
+PATCH
+/api_sellers/v2/offers/:offer_id/options/batch_visibility
+Batch update options visibility
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+options object[] required
+-
+Array [
+id integer required
+Option ID
+status string required
+active - option is visible hidden - option is hidden
+Possible values: [ active , hidden ]
+-
+]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Idempotent request
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Option ID
+status string
+active - option is active hidden - option is hidden
+Possible values: [ active , hidden ]
+type string
+Option type
+Possible values: [ text , multiline_text , check_box , radio_button ]
+title_ru string nullable
+Option name (RU)
+title_en string nullable
+Option name (EN)
+comment_ru string nullable
+Option comment (RU)
+comment_en string nullable
+Option comment (EN)
+is_required boolean
+Whether the option is required
+Default value: false
+is_price_modifier_hidden boolean
+Whether price modifiers are hidden
+Default value: false
+has_splitted_products boolean
+Whether splitted products exist
+position integer
+Option position ASC
+Default value: 0
+variants object[]
+-
+Array [
+id integer
+Variant ID
+title_ru string nullable
+Variant name (RU)
+title_en string nullable
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+status string
+active - variant is active hidden - variant is hidden
+Possible values: [ active , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+-
+]
+{
+"data" : [
+{
+"id" : 0 ,
+"status" : "active" ,
+"type" : "text" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"comment_ru" : "string" ,
+"comment_en" : "string" ,
+"is_required" : false ,
+"is_price_modifier_hidden" : false ,
+"has_splitted_products" : true ,
+"position" : 0 ,
+"variants" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : true ,
+"status" : "active" ,
+"position" : 0
+}
+]
+}
+]
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Patch, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options/batch_visibility");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"options\": [\n {\n \"id\": 0,\n \"status\": \"active\"\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+Body
+{ "options" : [ { "id" : 0 , "status" : "active" } ] }
+
+
+# PAGE: batch-update-variants-visibility
+SOURCE: https://seller.ggsel.com/docs/v2/batch-update-variants-visibility
+
+Batch update variants visibility
+PATCH
+/api_sellers/v2/offers/:offer_id/options/:option_id/variants/batch_visibility
+Batch update variants visibility
+Request ​
+Path Parameters
+offer_id integer required
+option_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+variants object[] required
+-
+Array [
+id integer required
+Variant ID
+status string required
+active - variant is visible hidden - variant is hidden
+Possible values: [ active , hidden ]
+-
+]
+Responses ​
+- 200
+- 400
+- 401
+- 404
+- 422
+Idempotent request
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Variant ID
+title_ru string nullable
+Variant name (RU)
+title_en string nullable
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+status string
+active - variant is active hidden - variant is hidden
+Possible values: [ active , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+{
+"data" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : true ,
+"status" : "active" ,
+"position" : 0
+}
+]
+}
+Invalid operation
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Patch, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options/:option_id/variants/batch_visibility");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"variants\": [\n {\n \"id\": 0,\n \"status\": \"active\"\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+option_id — path required
+locale — header
+Body
+{ "variants" : [ { "id" : 0 , "status" : "active" } ] }
+
+
+# PAGE: create-many
+SOURCE: https://seller.ggsel.com/docs/v2/create-many
+
+Create many
+POST
+/api_sellers/v2/offers/:offer_id/options
+Create many
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+options object[]
+-
+Array [
+id integer
+Record ID; if absent, a new record is created
+type string
+Option type
+Possible values: [ text , multiline_text , check_box , radio_button ]
+status string
+active - option is active archived - option is disabled hidden - option is hidden
+Possible values: [ active , archived , hidden ]
+has_splitted_products boolean
+Enable/disable splitted products
+title_ru string
+Option name (RU)
+title_en string
+Option name (EN)
+comment_ru string
+Option comment (RU)
+comment_en string nullable
+Option comment (EN)
+is_required boolean
+Whether the option is required
+Default value: false
+is_price_modifier_hidden boolean
+Whether price modifiers are hidden
+Default value: false
+position integer
+Option position ASC
+Default value: 0
+-
+]
+Responses ​
+- 200
+- 401
+- 404
+- 422
+Bulk operation succeeded
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Option ID
+status string
+active - option is active hidden - option is hidden
+Possible values: [ active , hidden ]
+type string
+Option type
+Possible values: [ text , multiline_text , check_box , radio_button ]
+title_ru string nullable
+Option name (RU)
+title_en string nullable
+Option name (EN)
+comment_ru string nullable
+Option comment (RU)
+comment_en string nullable
+Option comment (EN)
+is_required boolean
+Whether the option is required
+Default value: false
+is_price_modifier_hidden boolean
+Whether price modifiers are hidden
+Default value: false
+has_splitted_products boolean
+Whether splitted products exist
+position integer
+Option position ASC
+Default value: 0
+variants object[]
+-
+Array [
+id integer
+Variant ID
+title_ru string nullable
+Variant name (RU)
+title_en string nullable
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+status string
+active - variant is active hidden - variant is hidden
+Possible values: [ active , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+-
+]
+{
+"data" : [
+{
+"id" : 0 ,
+"status" : "active" ,
+"type" : "text" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"comment_ru" : "string" ,
+"comment_en" : "string" ,
+"is_required" : false ,
+"is_price_modifier_hidden" : false ,
+"has_splitted_products" : true ,
+"position" : 0 ,
+"variants" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : true ,
+"status" : "active" ,
+"position" : 0
+}
+]
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"options\": [\n {\n \"id\": 0,\n \"type\": \"text\",\n \"status\": \"active\",\n \"has_splitted_products\": true,\n \"title_ru\": \"string\",\n \"title_en\": \"string\",\n \"comment_ru\": \"string\",\n \"comment_en\": \"string\",\n \"is_required\": false,\n \"is_price_modifier_hidden\": false,\n \"position\": 0\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+Body
+- Example (from schema)
+- option_regular_check_box
+- option_regular_radio_button
+- option_regular_text
+- option_regular_multiline_text
+- option_with_splitted_products
+{ "options" : [ { "id" : 0 , "type" : "text" , "status" : "active" , "has_splitted_products" : true , "title_ru" : "string" , "title_en" : "string" , "comment_ru" : "string" , "comment_en" : "string" , "is_required" : false , "is_price_modifier_hidden" : false , "position" : 0 } ] }
+
+
+# PAGE: create-offer
+SOURCE: https://seller.ggsel.com/docs/v2/create-offer
+
+Create offer
+POST
+/api_sellers/v2/offers
+Create offer
+Request ​
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru string
+Product cover image in Base64 format (RU)
+cover_image_en string nullable
+Product cover image in Base64 format (EN)
+price number
+Product price
+currency string nullable
+Product price is always in RUB
+Possible values: [ RUB ]
+is_autoselling boolean nullable
+Whether automatic product delivery is enabled
+Default value: false
+category_id integer
+Category ID compatible with V1 API
+min_quantity integer nullable
+Minimum purchase quantity
+Default value: 1
+max_quantity integer nullable
+Maximum purchase quantity
+Default value: 1
+quantity integer nullable
+Quantity in stock
+is_unlimited_quantity boolean nullable
+Whether stock quantity is unlimited
+Default value: false
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+Default value:
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+Responses ​
+- 200
+- 401
+- 422
+Offer created
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object
+id integer
+Product ID
+status string
+draft - offer is draft active - offer can be bought paused - offer cannot be bought archived - offer is deleted
+Possible values: [ draft , active , paused , archived ]
+is_autoselling boolean
+Whether automatic product delivery is enabled
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru_url string
+Product cover image URL
+cover_image_en_url string nullable
+Product cover image URL
+category object
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+price number
+Product price
+currency string
+Product currency, always RUB
+Possible values: [ RUB ]
+quantity integer
+Products in stock
+is_unlimited_quantity boolean
+Whether stock is unlimited
+Default value: false
+min_quantity integer nullable
+Minimum quantity per purchase
+max_quantity integer nullable
+Maximum quantity per purchase
+sold_splitted_products_count integer
+Sales count with splitted products
+sold_products_count integer
+Sales count without splitted products
+in_stock_products_count integer
+Products in stock (without splitted products)
+Default value: 0
+in_stock_splitted_products_count integer
+Splitted products in stock
+Default value: 0
+has_splitted_products boolean
+Whether splitted products exist
+updated_at string
+Last updated time (MSK)
+created_at string
+Creation time (MSK)
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+{
+"data" : {
+"id" : 0 ,
+"status" : "draft" ,
+"is_autoselling" : true ,
+"delivery" : "auto" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"description_ru" : "string" ,
+"description_en" : "string" ,
+"instructions_ru" : "string" ,
+"instructions_en" : "string" ,
+"cover_image_ru_url" : "string" ,
+"cover_image_en_url" : "string" ,
+"category" : {
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+} ,
+"price" : 0 ,
+"currency" : "RUB" ,
+"quantity" : 0 ,
+"is_unlimited_quantity" : false ,
+"min_quantity" : 0 ,
+"max_quantity" : 0 ,
+"sold_splitted_products_count" : 0 ,
+"sold_products_count" : 0 ,
+"in_stock_products_count" : 0 ,
+"in_stock_splitted_products_count" : 0 ,
+"has_splitted_products" : true ,
+"updated_at" : "string" ,
+"created_at" : "string" ,
+"post_payment_url" : "string" ,
+"pre_payment_settings" : {
+"is_enabled" : false ,
+"url" : "string" ,
+"allow_payment" : true
+} ,
+"notification_settings" : {
+"type" : "email" ,
+"url" : "string" ,
+"email" : "string" ,
+"http_method" : "GET" ,
+"is_disabled" : false ,
+"is_default" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"title_ru\": \"string\",\n \"title_en\": \"string\",\n \"description_ru\": \"string\",\n \"description_en\": \"string\",\n \"instructions_ru\": \"string\",\n \"instructions_en\": \"string\",\n \"cover_image_ru\": \"string\",\n \"cover_image_en\": \"string\",\n \"price\": 0,\n \"currency\": \"RUB\",\n \"is_autoselling\": false,\n \"category_id\": 0,\n \"min_quantity\": 1,\n \"max_quantity\": 1,\n \"quantity\": 0,\n \"is_unlimited_quantity\": false,\n \"post_payment_url\": \"\",\n \"delivery\": \"auto\",\n \"pre_payment_settings\": {\n \"is_enabled\": false,\n \"url\": \"string\",\n \"allow_payment\": true\n },\n \"notification_settings\": {\n \"type\": \"email\",\n \"url\": \"string\",\n \"email\": \"string\",\n \"http_method\": \"GET\",\n \"is_disabled\": false,\n \"is_default\": true\n }\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+locale — header
+Body
+- Example (from schema)
+- regular_offer
+- autoselling_offer
+- unlimited_quantity_offer
+- offer_with_email_notifications
+- offer_with_http_notifications
+- offer_with_pre_and_post_payment
+{ "title_ru" : "string" , "title_en" : "string" , "description_ru" : "string" , "description_en" : "string" , "instructions_ru" : "string" , "instructions_en" : "string" , "cover_image_ru" : "string" , "cover_image_en" : "string" , "price" : 0 , "currency" : "RUB" , "is_autoselling" : false , "category_id" : 0 , "min_quantity" : 1 , "max_quantity" : 1 , "quantity" : 0 , "is_unlimited_quantity" : false , "post_payment_url" : "" , "delivery" : "auto" , "pre_payment_settings" : { "is_enabled" : false , "url" : "string" , "allow_payment" : true } , "notification_settings" : { "type" : "email" , "url" : "string" , "email" : "string" , "http_method" : "GET" , "is_disabled" : false , "is_default" : true } }
+
+
+# PAGE: create-or-update-variants
+SOURCE: https://seller.ggsel.com/docs/v2/create-or-update-variants
+
+Create or update variants
+POST
+/api_sellers/v2/offers/:offer_id/options/:option_id/variants
+Create or update variants
+Request ​
+Path Parameters
+offer_id integer required
+option_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+variants object[]
+-
+Array [
+id integer
+Record ID; if absent, a new record is created
+title_ru string
+Variant name (RU)
+title_en string
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+Default value: false
+status string
+active - variant is active archived - variant is disable hidden - variant is hidden
+Possible values: [ active , archived , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+Responses ​
+- 200
+- 401
+- 404
+- 422
+All created or updated
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Variant ID
+title_ru string nullable
+Variant name (RU)
+title_en string nullable
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+status string
+active - variant is active hidden - variant is hidden
+Possible values: [ active , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+{
+"data" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : true ,
+"status" : "active" ,
+"position" : 0
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options/:option_id/variants");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"variants\": [\n {\n \"id\": 0,\n \"title_ru\": \"string\",\n \"title_en\": \"string\",\n \"price\": 0,\n \"discount_type\": \"fixed\",\n \"impact_type\": \"increase\",\n \"is_default\": false,\n \"status\": \"active\",\n \"position\": 0\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+option_id — path required
+locale — header
+Body
+- Example (from schema)
+- regular_variant
+- splitted_products_variant
+- check_box_variants_with_default
+- check_box_variants_without_default
+{ "variants" : [ { "id" : 0 , "title_ru" : "string" , "title_en" : "string" , "price" : 0 , "discount_type" : "fixed" , "impact_type" : "increase" , "is_default" : false , "status" : "active" , "position" : 0 } ] }
+
+
+# PAGE: create-products
+SOURCE: https://seller.ggsel.com/docs/v2/create-products
+
+Create products
+POST
+/api_sellers/v2/offers/:offer_id/products
+Create products
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+products object[]
+-
+Array [
+value string
+Product content
+-
+]
+Responses ​
+- 204
+- 401
+- 404
+- 422
+Operation succeeded
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/products");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"products\": [\n {\n \"value\": \"string\"\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+Body
+{ "products" : [ { "value" : "string" } ] }
+
+
+# PAGE: create-splitted-products
+SOURCE: https://seller.ggsel.com/docs/v2/create-splitted-products
+
+Create splitted products
+POST
+/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products
+Create splitted products
+Request ​
+Path Parameters
+offer_id integer required
+variant_id intger required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+products object[]
+-
+Array [
+value string
+Product content
+-
+]
+Responses ​
+- 204
+- 401
+- 404
+- 422
+Operation succeeded
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"products\": [\n {\n \"value\": \"string\"\n }\n ]\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+variant_id — path required
+locale — header
+Body
+{ "products" : [ { "value" : "string" } ] }
+
+
+# PAGE: get-async-job-result
+SOURCE: https://seller.ggsel.com/docs/v2/get-async-job-result
+
+Get async job result
+GET
+/api_sellers/v2/async_job_results/:job_id
+Get async job result
+Request ​
+Path Parameters
+job_id string required
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+- 404
+Async job result
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object
+job_id string required
+Background job identifier
+status string required
+Task execution status
+Possible values: [ pending , completed , failed ]
+results object required
+Execution results (structure depends on operation type)
+property name* any
+Execution results (structure depends on operation type)
+{
+"data" : {
+"job_id" : "string" ,
+"status" : "pending" ,
+"results" : { }
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/async_job_results/:job_id");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+job_id — path required
+locale — header
+
+
+# PAGE: get-offer
+SOURCE: https://seller.ggsel.com/docs/v2/get-offer
+
+Get offer
+GET
+/api_sellers/v2/offers/:id
+Get offer
+Request ​
+Path Parameters
+id integer required
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+- 404
+Shows offer
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object
+id integer
+Product ID
+status string
+draft - offer is draft active - offer can be bought paused - offer cannot be bought archived - offer is deleted
+Possible values: [ draft , active , paused , archived ]
+is_autoselling boolean
+Whether automatic product delivery is enabled
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru_url string
+Product cover image URL
+cover_image_en_url string nullable
+Product cover image URL
+category object
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+price number
+Product price
+currency string
+Product currency, always RUB
+Possible values: [ RUB ]
+quantity integer
+Products in stock
+is_unlimited_quantity boolean
+Whether stock is unlimited
+Default value: false
+min_quantity integer nullable
+Minimum quantity per purchase
+max_quantity integer nullable
+Maximum quantity per purchase
+sold_splitted_products_count integer
+Sales count with splitted products
+sold_products_count integer
+Sales count without splitted products
+in_stock_products_count integer
+Products in stock (without splitted products)
+Default value: 0
+in_stock_splitted_products_count integer
+Splitted products in stock
+Default value: 0
+has_splitted_products boolean
+Whether splitted products exist
+updated_at string
+Last updated time (MSK)
+created_at string
+Creation time (MSK)
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+{
+"data" : {
+"id" : 0 ,
+"status" : "draft" ,
+"is_autoselling" : true ,
+"delivery" : "auto" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"description_ru" : "string" ,
+"description_en" : "string" ,
+"instructions_ru" : "string" ,
+"instructions_en" : "string" ,
+"cover_image_ru_url" : "string" ,
+"cover_image_en_url" : "string" ,
+"category" : {
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+} ,
+"price" : 0 ,
+"currency" : "RUB" ,
+"quantity" : 0 ,
+"is_unlimited_quantity" : false ,
+"min_quantity" : 0 ,
+"max_quantity" : 0 ,
+"sold_splitted_products_count" : 0 ,
+"sold_products_count" : 0 ,
+"in_stock_products_count" : 0 ,
+"in_stock_splitted_products_count" : 0 ,
+"has_splitted_products" : true ,
+"updated_at" : "string" ,
+"created_at" : "string" ,
+"post_payment_url" : "string" ,
+"pre_payment_settings" : {
+"is_enabled" : false ,
+"url" : "string" ,
+"allow_payment" : true
+} ,
+"notification_settings" : {
+"type" : "email" ,
+"url" : "string" ,
+"email" : "string" ,
+"http_method" : "GET" ,
+"is_disabled" : false ,
+"is_default" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers/:id");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+id — path required
+locale — header
+
+
+# PAGE: list-of-categories
+SOURCE: https://seller.ggsel.com/docs/v2/list-of-categories
+
+List of categories
+GET
+/api_sellers/v2/categories
+List of categories
+Request ​
+Query Parameters
+parent_id integer
+page integer
+limit integer
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+list of categories
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/categories");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+parent_id — query
+page — query
+limit — query
+locale — header
+
+
+# PAGE: list-offer-options-visible-to-seller
+SOURCE: https://seller.ggsel.com/docs/v2/list-offer-options-visible-to-seller
+
+List offer options visible to seller
+GET
+/api_sellers/v2/offers/:offer_id/options
+List offer options visible to seller
+Request ​
+Path Parameters
+offer_id integer required
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+- 404
+List of seller-visible options
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Option ID
+status string
+active - option is active hidden - option is hidden
+Possible values: [ active , hidden ]
+type string
+Option type
+Possible values: [ text , multiline_text , check_box , radio_button ]
+title_ru string nullable
+Option name (RU)
+title_en string nullable
+Option name (EN)
+comment_ru string nullable
+Option comment (RU)
+comment_en string nullable
+Option comment (EN)
+is_required boolean
+Whether the option is required
+Default value: false
+is_price_modifier_hidden boolean
+Whether price modifiers are hidden
+Default value: false
+has_splitted_products boolean
+Whether splitted products exist
+position integer
+Option position ASC
+Default value: 0
+variants object[]
+-
+Array [
+id integer
+Variant ID
+title_ru string nullable
+Variant name (RU)
+title_en string nullable
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+status string
+active - variant is active hidden - variant is hidden
+Possible values: [ active , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+-
+]
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"status" : "active" ,
+"type" : "text" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"comment_ru" : "string" ,
+"comment_en" : "string" ,
+"is_required" : false ,
+"is_price_modifier_hidden" : false ,
+"has_splitted_products" : true ,
+"position" : 0 ,
+"variants" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : true ,
+"status" : "active" ,
+"position" : 0
+}
+]
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+locale — header
+
+
+# PAGE: list-offers
+SOURCE: https://seller.ggsel.com/docs/v2/list-offers
+
+List offers
+GET
+/api_sellers/v2/offers
+List offers
+Request ​
+Query Parameters
+page integer
+Default value: 1
+limit integer
+Default value: 100
+search string
+category_id integer
+status string
+Possible values: [ active , paused , draft ]
+sort string
+Possible values: [ price_asc , price_desc , sales_count_asc , sales_count_desc , products_count_asc , products_count_desc ]
+delivery string
+Possible values: [ auto , manual ]
+updated_at_from date_time
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+List of offers
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Product ID in merchant system
+status string
+draft - offer is draft active - offer can be bought paused - offer cannot be bought archived - offer is deleted
+Possible values: [ draft , active , paused , archived ]
+title_ru string nullable
+Product title (RU)
+title_en string nullable
+Product title (EN)
+description_ru string nullable
+Product description (RU)
+description_en string nullable
+Product description (EN)
+price number nullable
+currency string
+Product currency
+Possible values: [ RUB ]
+is_autoselling boolean nullable
+Whether automatic product delivery is enabled
+category object
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+min_quantity integer nullable
+Minimum product quantity
+max_quantity integer nullable
+Maximum product quantity
+quantity integer nullable
+Product quantity
+is_unlimited_quantity boolean nullable
+Whether stock is unlimited
+instructions_ru string nullable
+Product instructions (RU)
+instructions_en string nullable
+Product instructions (EN)
+post_payment_url string nullable
+Unique code validation URL
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+cover_image_ru_url string
+Product cover image
+cover_image_en_url string nullable
+Product cover image
+has_options boolean
+Whether options exist
+has_products boolean
+Whether products not including splitted products exist
+has_splitted_products boolean
+Whether splitted products exists
+created_at string
+Creation date
+updated_at string
+Last update date
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"status" : "draft" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"description_ru" : "string" ,
+"description_en" : "string" ,
+"price" : 0 ,
+"currency" : "RUB" ,
+"is_autoselling" : true ,
+"category" : {
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+} ,
+"min_quantity" : 0 ,
+"max_quantity" : 0 ,
+"quantity" : 0 ,
+"is_unlimited_quantity" : true ,
+"instructions_ru" : "string" ,
+"instructions_en" : "string" ,
+"post_payment_url" : "string" ,
+"delivery" : "auto" ,
+"cover_image_ru_url" : "string" ,
+"cover_image_en_url" : "string" ,
+"has_options" : true ,
+"has_products" : true ,
+"has_splitted_products" : true ,
+"created_at" : "string" ,
+"updated_at" : "string" ,
+"pre_payment_settings" : {
+"is_enabled" : false ,
+"url" : "string" ,
+"allow_payment" : true
+} ,
+"notification_settings" : {
+"type" : "email" ,
+"url" : "string" ,
+"email" : "string" ,
+"http_method" : "GET" ,
+"is_disabled" : false ,
+"is_default" : true
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+page — query
+limit — query
+search — query
+category_id — query
+status — query
+--- active paused draft
+sort — query
+--- price_asc price_desc sales_count_asc sales_count_desc products_count_asc products_count_desc
+delivery — query
+--- auto manual
+updated_at_from — query
+locale — header
+
+
+# PAGE: list-products
+SOURCE: https://seller.ggsel.com/docs/v2/list-products
+
+List products
+GET
+/api_sellers/v2/offers/:offer_id/products
+List products
+Request ​
+Path Parameters
+offer_id integer required
+Query Parameters
+status string
+Possible values: [ in_stock , sold ]
+Default value: in_stock
+sort_column string
+Default value: created_at
+sort_direction string
+Default value: desc
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+success
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Record ID
+value string
+content
+status string
+Possible values: [ in_stock , sold , archived ]
+created_at string
+Creation date
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"value" : "string" ,
+"status" : "in_stock" ,
+"created_at" : "string"
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/products");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+status — query
+--- in_stock sold
+sort_column — query
+sort_direction — query
+locale — header
+
+
+# PAGE: list-splitted-products
+SOURCE: https://seller.ggsel.com/docs/v2/list-splitted-products
+
+List splitted products
+GET
+/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products
+List splitted products
+Request ​
+Path Parameters
+offer_id integer required
+variant_id integer required
+Query Parameters
+status string
+Possible values: [ in_stock , sold ]
+Default value: in_stock
+sort_column string
+Default value: created_at
+sort_direction string
+Default value: desc
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+- 404
+success
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Record ID
+value string
+content
+status string
+Possible values: [ in_stock , sold , archived ]
+created_at string
+Creation date
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"value" : "string" ,
+"status" : "in_stock" ,
+"created_at" : "string"
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/variants/:variant_id/splitted_products");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+variant_id — path required
+status — query
+--- in_stock sold
+sort_column — query
+sort_direction — query
+locale — header
+
+
+# PAGE: patch-offer
+SOURCE: https://seller.ggsel.com/docs/v2/patch-offer
+
+Patch offer
+PATCH
+/api_sellers/v2/offers/:id
+Patch offer
+Request ​
+Path Parameters
+id integer required
+Header Parameters
+locale string
+Default value: ru
+- application/json
+Body
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru string
+Product cover image in Base64 format (RU)
+cover_image_en string nullable
+Product cover image in Base64 format (EN)
+price number
+Product price
+currency string nullable
+Product price is always in RUB
+Possible values: [ RUB ]
+is_autoselling boolean nullable
+Whether automatic product delivery is enabled
+Default value: false
+category_id integer
+Category ID compatible with V1 API
+min_quantity integer nullable
+Minimum purchase quantity
+Default value: 1
+max_quantity integer nullable
+Maximum purchase quantity
+Default value: 1
+quantity integer nullable
+Quantity in stock
+is_unlimited_quantity boolean nullable
+Whether stock quantity is unlimited
+Default value: false
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+Default value:
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+Responses ​
+- 200
+- 401
+- 404
+- 422
+Offer updated
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object
+id integer
+Product ID
+status string
+draft - offer is draft active - offer can be bought paused - offer cannot be bought archived - offer is deleted
+Possible values: [ draft , active , paused , archived ]
+is_autoselling boolean
+Whether automatic product delivery is enabled
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru_url string
+Product cover image URL
+cover_image_en_url string nullable
+Product cover image URL
+category object
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+price number
+Product price
+currency string
+Product currency, always RUB
+Possible values: [ RUB ]
+quantity integer
+Products in stock
+is_unlimited_quantity boolean
+Whether stock is unlimited
+Default value: false
+min_quantity integer nullable
+Minimum quantity per purchase
+max_quantity integer nullable
+Maximum quantity per purchase
+sold_splitted_products_count integer
+Sales count with splitted products
+sold_products_count integer
+Sales count without splitted products
+in_stock_products_count integer
+Products in stock (without splitted products)
+Default value: 0
+in_stock_splitted_products_count integer
+Splitted products in stock
+Default value: 0
+has_splitted_products boolean
+Whether splitted products exist
+updated_at string
+Last updated time (MSK)
+created_at string
+Creation time (MSK)
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+{
+"data" : {
+"id" : 0 ,
+"status" : "draft" ,
+"is_autoselling" : true ,
+"delivery" : "auto" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"description_ru" : "string" ,
+"description_en" : "string" ,
+"instructions_ru" : "string" ,
+"instructions_en" : "string" ,
+"cover_image_ru_url" : "string" ,
+"cover_image_en_url" : "string" ,
+"category" : {
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+} ,
+"price" : 0 ,
+"currency" : "RUB" ,
+"quantity" : 0 ,
+"is_unlimited_quantity" : false ,
+"min_quantity" : 0 ,
+"max_quantity" : 0 ,
+"sold_splitted_products_count" : 0 ,
+"sold_products_count" : 0 ,
+"in_stock_products_count" : 0 ,
+"in_stock_splitted_products_count" : 0 ,
+"has_splitted_products" : true ,
+"updated_at" : "string" ,
+"created_at" : "string" ,
+"post_payment_url" : "string" ,
+"pre_payment_settings" : {
+"is_enabled" : false ,
+"url" : "string" ,
+"allow_payment" : true
+} ,
+"notification_settings" : {
+"type" : "email" ,
+"url" : "string" ,
+"email" : "string" ,
+"http_method" : "GET" ,
+"is_disabled" : false ,
+"is_default" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Unprocessable content
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Patch, "https://seller.ggsel.com/api_sellers/v2/offers/:id");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var content = new StringContent("{\n \"title_ru\": \"string\",\n \"title_en\": \"string\",\n \"description_ru\": \"string\",\n \"description_en\": \"string\",\n \"instructions_ru\": \"string\",\n \"instructions_en\": \"string\",\n \"cover_image_ru\": \"string\",\n \"cover_image_en\": \"string\",\n \"price\": 0,\n \"currency\": \"RUB\",\n \"is_autoselling\": false,\n \"category_id\": 0,\n \"min_quantity\": 1,\n \"max_quantity\": 1,\n \"quantity\": 0,\n \"is_unlimited_quantity\": false,\n \"post_payment_url\": \"\",\n \"delivery\": \"auto\",\n \"pre_payment_settings\": {\n \"is_enabled\": false,\n \"url\": \"string\",\n \"allow_payment\": true\n },\n \"notification_settings\": {\n \"type\": \"email\",\n \"url\": \"string\",\n \"email\": \"string\",\n \"http_method\": \"GET\",\n \"is_disabled\": false,\n \"is_default\": true\n }\n}", null, "application/json");
+request.Content = content;
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+id — path required
+locale — header
+Body
+- Example (from schema)
+- offer_update_autoselling
+- offer_update_category
+- offer_disable_notifications
+- offer_switch_notifications
+- offer_change_pre_payment_settings
+- offer_pre_payment_settings_disallow_on_error
+{ "title_ru" : "string" , "title_en" : "string" , "description_ru" : "string" , "description_en" : "string" , "instructions_ru" : "string" , "instructions_en" : "string" , "cover_image_ru" : "string" , "cover_image_en" : "string" , "price" : 0 , "currency" : "RUB" , "is_autoselling" : false , "category_id" : 0 , "min_quantity" : 1 , "max_quantity" : 1 , "quantity" : 0 , "is_unlimited_quantity" : false , "post_payment_url" : "" , "delivery" : "auto" , "pre_payment_settings" : { "is_enabled" : false , "url" : "string" , "allow_payment" : true } , "notification_settings" : { "type" : "email" , "url" : "string" , "email" : "string" , "http_method" : "GET" , "is_disabled" : false , "is_default" : true } }
+
+
+# PAGE: schemas/async-job-result-object
+SOURCE: https://seller.ggsel.com/docs/v2/schemas/async-job-result-object
+
+async_job_result_object
+job_id string required
+Background job identifier
+status string required
+Task execution status
+Possible values: [ pending , completed , failed ]
+results object required
+Execution results (structure depends on operation type)
+property name* any
+Execution results (structure depends on operation type)
+async_job_result_object
+{
+"job_id" : "string" ,
+"status" : "pending" ,
+"results" : { }
+}
+
+
+# PAGE: schemas/create-offer-request-object
+SOURCE: https://seller.ggsel.com/docs/v2/schemas/create-offer-request-object
+
+create_offer_request_object
+title_ru string
+Product title (RU)
+title_en string
+Product title (EN)
+description_ru string
+Product description (RU)
+description_en string
+Product description (EN)
+instructions_ru string
+Product instructions (RU)
+instructions_en string
+Product instructions (EN)
+cover_image_ru string
+Product cover image in Base64 format (RU)
+cover_image_en string nullable
+Product cover image in Base64 format (EN)
+price number
+Product price
+currency string nullable
+Product price is always in RUB
+Possible values: [ RUB ]
+is_autoselling boolean nullable
+Whether automatic product delivery is enabled
+Default value: false
+category_id integer
+Category ID compatible with V1 API
+min_quantity integer nullable
+Minimum purchase quantity
+Default value: 1
+max_quantity integer nullable
+Maximum purchase quantity
+Default value: 1
+quantity integer nullable
+Quantity in stock
+is_unlimited_quantity boolean nullable
+Whether stock quantity is unlimited
+Default value: false
+post_payment_url string nullable
+Product fulfillment URL in merchant system
+Default value:
+delivery string nullable
+auto - automatically set delivery status together with fulfillment time manual - manual delivery status update
+Possible values: [ auto , manual ]
+Default value: auto
+pre_payment_settings object nullable
+is_enabled boolean
+Whether pre-payment validation settings are enabled
+Default value: false
+url string nullable
+Merchant notification URL
+allow_payment boolean
+Allow payment when validation request fails
+Default value: true
+notification_settings object nullable
+type string nullable
+Merchant notification type for new order
+Possible values: [ email , url ]
+Default value: email
+url string nullable
+Merchant notification URL
+email string nullable
+Merchant notification email
+http_method string nullable
+Notification HTTP method
+Possible values: [ GET , POST ]
+is_disabled boolean
+Whether notifications are disabled
+Default value: false
+is_default boolean
+If true, notifications will be sent only by email
+Default value: true
+create_offer_request_object
+{
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"description_ru" : "string" ,
+"description_en" : "string" ,
+"instructions_ru" : "string" ,
+"instructions_en" : "string" ,
+"cover_image_ru" : "string" ,
+"cover_image_en" : "string" ,
+"price" : 0 ,
+"currency" : "RUB" ,
+"is_autoselling" : false ,
+"category_id" : 0 ,
+"min_quantity" : 1 ,
+"max_quantity" : 1 ,
+"quantity" : 0 ,
+"is_unlimited_quantity" : false ,
+"post_payment_url" : "" ,
+"delivery" : "auto" ,
+"pre_payment_settings" : {
+"is_enabled" : false ,
+"url" : "string" ,
+"allow_payment" : true
+} ,
+"notification_settings" : {
+"type" : "email" ,
+"url" : "string" ,
+"email" : "string" ,
+"http_method" : "GET" ,
+"is_disabled" : false ,
+"is_default" : true
+}
+
+
+# PAGE: schemas/error-with-entity-object
+SOURCE: https://seller.ggsel.com/docs/v2/schemas/error-with-entity-object
+
+error_with_entity_object
+errors object[]
+-
+Array [
+code string required
+Example: NOT_FOUND
+entity object
+id integer nullable
+Record ID
+resource string nullable
+REST resource name
+description string nullable required
+Error description
+-
+]
+error_with_entity_object
+{
+"errors" : [
+{
+"code" : "NOT_FOUND" ,
+"entity" : {
+"id" : 0 ,
+"resource" : "string" ,
+"description" : "string"
+}
+]
+}
+
+
+# PAGE: schemas/general-error-object
+SOURCE: https://seller.ggsel.com/docs/v2/schemas/general-error-object
+
+general_error_object
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+general_error_object
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+
+
+# PAGE: schemas/pagination-object
+SOURCE: https://seller.ggsel.com/docs/v2/schemas/pagination-object
+
+pagination_object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+pagination_object
+{
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+
+
+# PAGE: search-categories
+SOURCE: https://seller.ggsel.com/docs/v2/search-categories
+
+Search categories
+GET
+/api_sellers/v2/categories/search
+Search categories
+Request ​
+Query Parameters
+page integer
+limit integer
+q string required
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+search categories
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object[]
+-
+Array [
+id integer
+Category ID compatible with V1 API
+title string
+Localized category name
+content_type string
+Category content type
+fee number
+Category commission percentage as decimal
+payment_fee number
+Payment commission percentage as decimal
+tree string
+Full category path
+has_children boolean
+Whether child categories exist
+-
+]
+pagination object
+page integer
+current page number
+limit integer
+items per page
+has_next_page boolean
+is next page available
+has_previous_page boolean
+is previous page available
+total_pages integer deprecated
+use has_next_page and has_previous_page for navigation
+total_count integer nullable deprecated
+use has_next_page and has_previous_page for navigation
+{
+"data" : [
+{
+"id" : 0 ,
+"title" : "string" ,
+"content_type" : "string" ,
+"fee" : 0 ,
+"payment_fee" : 0 ,
+"tree" : "string" ,
+"has_children" : true
+}
+] ,
+"pagination" : {
+"page" : 0 ,
+"limit" : 0 ,
+"has_next_page" : true ,
+"has_previous_page" : true
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/categories/search");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+q — query required
+page — query
+limit — query
+locale — header
+
+
+# PAGE: seller-api-v-2
+SOURCE: https://seller.ggsel.com/docs/v2/seller-api-v-2
+
+Version: v2
+Seller API V2
+This API uses api key for auth that is issued from seller admin page. Either all or specific api_sellers/v2 permissions will work
+Authentication ​
+- API Key: api_key
+Your API key
+|
+Security Scheme Type:
+|
+apiKey
+|
+Header parameter name:
+|
+Authorization
+
+
+# PAGE: view-option
+SOURCE: https://seller.ggsel.com/docs/v2/view-option
+
+View option
+GET
+/api_sellers/v2/offers/:offer_id/options/:id
+View option
+Request ​
+Path Parameters
+offer_id integer required
+id integer required
+Header Parameters
+locale string
+Default value: ru
+Responses ​
+- 200
+- 401
+- 404
+Show option
+- application/json
+- Schema
+- Example (auto)
+Schema
+data object
+id integer
+Record ID
+type string
+Option type
+Possible values: [ text , multiline_text , check_box , radio_button ]
+status string
+active - option is active archived - option is disabled hidden - option is hidden
+Possible values: [ active , archived , hidden ]
+title_ru string
+Option name (RU)
+title_en string
+Option name (EN)
+comment_ru string
+Option comment (RU)
+comment_en string nullable
+Option comment (EN)
+is_required boolean
+Whether the option is required
+Default value: false
+is_price_modifier_hidden boolean
+Whether price modifiers are hidden
+Default value: false
+position integer
+Option position ASC
+Default value: 0
+has_splitted_products boolean
+Whether splitted products exist
+Default value: false
+variants object[]
+-
+Array [
+id integer
+Record ID
+title_ru string
+Variant name (RU)
+title_en string
+Variant name (EN)
+price number
+Variant price
+discount_type string
+fixed - absolute value percent - percent value
+Possible values: [ fixed , percent ]
+impact_type string
+increase - increase price decrease - decrease price
+Possible values: [ increase , decrease ]
+is_default boolean
+Whether the variant is selected by default
+Default value: false
+status string
+active - variant is active archived - variant is disabled hidden - variant is hidden
+Possible values: [ active , archived , hidden ]
+position integer
+Variant position ASC
+Default value: 0
+in_stock_products_count integer
+Quantity of splitted products in stock
+Default value: 0
+sold_products_count integer
+Quantity of sold splitted products
+Default value: 0
+-
+]
+{
+"data" : {
+"id" : 0 ,
+"type" : "text" ,
+"status" : "active" ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"comment_ru" : "string" ,
+"comment_en" : "string" ,
+"is_required" : false ,
+"is_price_modifier_hidden" : false ,
+"position" : 0 ,
+"has_splitted_products" : false ,
+"variants" : [
+{
+"id" : 0 ,
+"title_ru" : "string" ,
+"title_en" : "string" ,
+"price" : 0 ,
+"discount_type" : "fixed" ,
+"impact_type" : "increase" ,
+"is_default" : false ,
+"status" : "active" ,
+"position" : 0 ,
+"in_stock_products_count" : 0 ,
+"sold_products_count" : 0
+}
+]
+}
+Unauthorized
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Not found
+- application/json
+- Schema
+- Example (auto)
+Schema
+errors object[]
+-
+Array [
+code string
+Example: NOT_FOUND
+-
+]
+{
+"errors" : [
+{
+"code" : "NOT_FOUND"
+}
+]
+}
+Authorization: Authorization
+name: Authorization type: apiKey in: header description: Your API key
+- csharp
+- curl
+- dart
+- go
+- http
+- java
+- javascript
+- kotlin
+- c
+- nodejs
+- objective-c
+- ocaml
+- php
+- powershell
+- python
+- r
+- ruby
+- rust
+- shell
+- swift
+- HTTPCLIENT
+- RESTSHARP
+var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Get, "https://seller.ggsel.com/api_sellers/v2/offers/:offer_id/options/:id");
+request.Headers.Add("Accept", "application/json");
+request.Headers.Add("Authorization", "<Authorization>");
+var response = await client.SendAsync(request);
+response.EnsureSuccessStatusCode();
+Console.WriteLine(await response.Content.ReadAsStringAsync());
+Request Collapse all
+Auth
+api_key
+Parameters
+offer_id — path required
+id — path required
+locale — header

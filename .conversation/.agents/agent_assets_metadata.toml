@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "bYI21GEZPvJgmUzleRLuF"
+uri = "file://GGSEL_SELLER_API_V2.md"
+type = "text"
+title = "GGsel Seller API V2 — полный справочник"
+description = "Русскоязычная рабочая памятка по всем 24 HTTP-методам, схемам, параметрам, ответам, async jobs, примерам curl и неоднозначностям официальной документации."
+logical_id = "7e8b489c-b4c5-4ce3-9692-fbde15de0ae5"
+content_hash = "sha256:0edc6b5753c8a287358a385706576c84d5c6b701c1be669613e925041ec6a9db"
+size = 21382
+mtime_ms = 1789078063755
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/conversation:a197ed28-7c8c-4c8d-9e90-e5c9678ea724/7e8b489c-b4c5-4ce3-9692-fbde15de0ae5/a75c974b-7cb9-4179-b940-2c2e3da49f2e"
+storage_version_token = "1789078077907516"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "fsDHsLacc7Wb9fZ7WF-28"
+uri = "file://GPAY_RESALE_INTEGRATION_PLAN.md"
+type = "text"
+title = "GPay Market → внешние площадки"
+description = "Технический разбор каталога, цен, заказов, наценки, рисков и рекомендуемого MVP для перепродажи товаров через GGsel и другие площадки."
+logical_id = "db939ab0-5ef4-4a39-8941-d240e6c85b93"
+content_hash = "sha256:e8b580006ae773fd566317f312437b0855e5b7905b5b4f88906add3532181725"
+size = 7117
+mtime_ms = 1789078449008
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/conversation:a197ed28-7c8c-4c8d-9e90-e5c9678ea724/db939ab0-5ef4-4a39-8941-d240e6c85b93/c75e4a93-a40a-4ce5-a64c-d484ea92493e"
+storage_version_token = "1789078452987631"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "TyWYFL03NKcF1Cr6TCBVM"
+uri = "file://GPAY_TO_DIGISELLER_PLAN.md"
+type = "text"
+title = "GPay Market → Digiseller"
+description = "План синхронизации каталога, цен, статусов, заказов и цифровой выдачи на основе официальных API обеих площадок."
+logical_id = "564eb276-f311-452f-a142-3b52a18464a0"
+content_hash = "sha256:f3fd1277b4de6b6b8a90bfa01b43295b1c5e3acc37354fa7dc1aab8f21c41de2"
+size = 6864
+mtime_ms = 1789078615182
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/conversation:a197ed28-7c8c-4c8d-9e90-e5c9678ea724/564eb276-f311-452f-a142-3b52a18464a0/3ae93d68-074b-40a7-9b54-c95f76f15d96"
+storage_version_token = "1789078619014363"
+content_type = "text/markdown"
