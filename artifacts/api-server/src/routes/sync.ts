@@ -27,7 +27,7 @@ import {
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
 import { fetchGPayProducts, loginGPay } from "../lib/gpay";
-import { loginDigiseller } from "../lib/digiseller";
+import { createDigisellerProduct, loginDigiseller } from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 
 const router: IRouter = Router();
@@ -173,18 +173,42 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Only available products can be published" });
     return;
   }
+  if (current.digisellerId) {
+    res.json(PublishProductResponse.parse({ ...current, updatedAt: current.updatedAt.toISOString() }));
+    return;
+  }
+  try {
+    const digisellerId = await createDigisellerProduct({
+      name: current.name,
+      description: [
+        current.name,
+        "",
+        `Регион: ${current.region}.`,
+        current.productType === "1"
+          ? "Поставка Steam Gift после проверки наличия и цены."
+          : "Поставка цифрового ключа после проверки наличия и цены.",
+      ].join("\n"),
+      priceRub: current.salePriceRub,
+      productType: current.productType,
+    });
   const [updated] = await db
     .update(productsTable)
-    .set({ publicationStatus: "published", updatedAt: new Date() })
+      .set({ digisellerId, publicationStatus: "published", updatedAt: new Date() })
     .where(eq(productsTable.id, params.data.id))
     .returning();
   await db.insert(activitiesTable).values({
     type: "publish",
     title: "Товар готов к публикации",
-    description: `${updated.name} переведен в статус публикации. Реальная отправка карточки будет включена после проверки категории и контента.`,
+      description: `${updated.name} создан в Digiseller, ID ${digisellerId}.`,
     status: "success",
   });
   res.json(PublishProductResponse.parse({ ...updated, updatedAt: updated.updatedAt.toISOString() }));
+  } catch (error) {
+    req.log.error({ err: error, productId: current.id }, "Digiseller product publication failed");
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Digiseller publication failed",
+    });
+  }
 });
 
 router.post("/sync/catalog", async (req, res): Promise<void> => {

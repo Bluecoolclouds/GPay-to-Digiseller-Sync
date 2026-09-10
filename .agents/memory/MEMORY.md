@@ -1,0 +1,1 @@
+- [Digiseller product type for manual fulfillment](digiseller-manual-fulfillment.md) — use Arbitrary with Form; UniqueFixed rejects Form content.
