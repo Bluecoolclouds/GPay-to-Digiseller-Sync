@@ -195,6 +195,14 @@ export interface Connections {
   checkedAt: string;
 }
 
+export interface ExchangeRate {
+  usdRub: number;
+  source: string;
+  effectiveDate: string;
+  fetchedAt: string;
+  isFallback: boolean;
+}
+
 export type ListProductsParams = {
 search?: string;
 status?: ListProductsStatus;

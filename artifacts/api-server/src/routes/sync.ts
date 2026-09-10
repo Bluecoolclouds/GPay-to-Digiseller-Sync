@@ -9,6 +9,7 @@ import {
 import {
   GetConnectionsResponse,
   GetDashboardResponse,
+  GetExchangeRateResponse,
   GetSettingsResponse,
   ListActivitiesQueryParams,
   ListActivitiesResponse,
@@ -27,6 +28,7 @@ import {
 } from "@workspace/api-zod";
 import { fetchGPayProducts, loginGPay } from "../lib/gpay";
 import { loginDigiseller } from "../lib/digiseller";
+import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 
 const router: IRouter = Router();
 
@@ -172,7 +174,15 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const settings = await getSettingsRow();
+    let settings = await getSettingsRow();
+    const rate = await getOfficialUsdRubRate(settings.usdRubRate);
+    if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
+      [settings] = await db
+        .update(settingsTable)
+        .set({ usdRubRate: rate.usdRub, updatedAt: new Date() })
+        .where(eq(settingsTable.id, 1))
+        .returning();
+    }
     const data = await fetchGPayProducts(parsed.data.pageSize);
     let imported = 0;
     let updated = 0;
@@ -275,6 +285,18 @@ router.post("/connections/test", async (_req, res): Promise<void> => {
       checkedAt: new Date().toISOString(),
     }),
   );
+});
+
+router.get("/exchange-rate", async (_req, res): Promise<void> => {
+  const settings = await getSettingsRow();
+  const rate = await getOfficialUsdRubRate(settings.usdRubRate);
+  if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
+    await db
+      .update(settingsTable)
+      .set({ usdRubRate: rate.usdRub, updatedAt: new Date() })
+      .where(eq(settingsTable.id, 1));
+  }
+  res.json(GetExchangeRateResponse.parse(rate));
 });
 
 export default router;

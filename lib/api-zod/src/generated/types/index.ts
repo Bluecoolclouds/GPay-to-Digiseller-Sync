@@ -14,6 +14,7 @@ export * from './connections';
 export * from './connectionState';
 export * from './dashboard';
 export * from './dashboardAutomationMode';
+export * from './exchangeRate';
 export * from './healthStatus';
 export * from './listActivitiesParams';
 export * from './listProductsParams';

@@ -249,3 +249,15 @@ export const TestConnectionsResponse = zod.object({
 })
 
 
+/**
+ * @summary Current official USD to RUB rate
+ */
+export const GetExchangeRateResponse = zod.object({
+  "usdRub": zod.number(),
+  "source": zod.string(),
+  "effectiveDate": zod.string(),
+  "fetchedAt": zod.coerce.date(),
+  "isFallback": zod.boolean()
+})
+
+

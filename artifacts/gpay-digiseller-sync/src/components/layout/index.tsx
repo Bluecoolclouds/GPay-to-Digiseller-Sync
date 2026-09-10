@@ -1,11 +1,22 @@
 import { Link, useLocation } from "wouter"
 import { cn } from "@/lib/utils"
 import { LayoutDashboard, Package, Settings } from "lucide-react"
-import { getHealthCheckQueryKey, useHealthCheck } from "@workspace/api-client-react"
+import {
+  getGetExchangeRateQueryKey,
+  getHealthCheckQueryKey,
+  useGetExchangeRate,
+  useHealthCheck,
+} from "@workspace/api-client-react"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
   const { data: health } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 60000 } })
+  const { data: exchangeRate } = useGetExchangeRate({
+    query: {
+      queryKey: getGetExchangeRateQueryKey(),
+      refetchInterval: 60 * 60 * 1000,
+    },
+  })
   
   const navItems = [
     { href: "/", label: "Дашборд", icon: LayoutDashboard },
@@ -39,7 +50,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
-        <div className="p-4 mt-auto border-t">
+        <div className="p-4 mt-auto border-t space-y-4">
+          <div className="rounded-md border bg-muted/40 px-3 py-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Курс доллара
+            </div>
+            <div className="mt-1 font-mono text-xl font-semibold text-foreground">
+              {exchangeRate ? `${exchangeRate.usdRub.toFixed(2)} ₽` : "—"}
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              {exchangeRate
+                ? `${exchangeRate.source} · ${exchangeRate.effectiveDate}`
+                : "Получаем курс…"}
+            </div>
+          </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground px-2 font-medium">
             <div className={cn("w-2 h-2 rounded-full", health?.status === "ok" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-destructive")}></div>
             Система {health?.status === "ok" ? "онлайн" : "офлайн"}

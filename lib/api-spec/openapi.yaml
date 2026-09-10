@@ -188,6 +188,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Connections"
+  /exchange-rate:
+    get:
+      operationId: getExchangeRate
+      tags: [dashboard]
+      summary: Current official USD to RUB rate
+      responses:
+        "200":
+          description: Latest official exchange rate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRate"
 components:
   schemas:
     HealthStatus:
@@ -306,3 +318,12 @@ components:
         gpay: { $ref: "#/components/schemas/ConnectionState" }
         digiseller: { $ref: "#/components/schemas/ConnectionState" }
         checkedAt: { type: string, format: date-time }
+    ExchangeRate:
+      type: object
+      required: [usdRub, source, effectiveDate, fetchedAt, isFallback]
+      properties:
+        usdRub: { type: number }
+        source: { type: string }
+        effectiveDate: { type: string }
+        fetchedAt: { type: string, format: date-time }
+        isFallback: { type: boolean }
