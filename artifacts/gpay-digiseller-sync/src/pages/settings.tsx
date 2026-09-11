@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { useForm } from "react-hook-form"
-import { useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, SettingsInput } from "@workspace/api-client-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { getGetConnectionsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, SettingsInput } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,12 +12,18 @@ import { ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function SettingsPage() {
+  const queryClient = useQueryClient()
   const { data: settings, isLoading: settingsLoading } = useGetSettings()
-  const { data: connections, isLoading: connectionsLoading, refetch: refetchConnections } = useGetConnections()
+  const { data: connections, isLoading: connectionsLoading } = useGetConnections()
   const updateMutation = useUpdateSettings()
   const testConnectionsMutation = useTestConnections()
 
-  const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>()
+  const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>({
+    defaultValues: {
+      exchangeRateMode: "cbr",
+      disableOnUnavailable: true,
+    },
+  })
 
   useEffect(() => {
     if (settings) {
@@ -47,9 +54,9 @@ export default function SettingsPage() {
 
   const handleTestConnections = () => {
     testConnectionsMutation.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: (result) => {
+        queryClient.setQueryData(getGetConnectionsQueryKey(), result)
         toast.success("Подключения проверены")
-        refetchConnections()
       },
       onError: () => toast.error("Ошибка проверки подключений")
     })
