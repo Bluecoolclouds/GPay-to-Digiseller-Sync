@@ -494,7 +494,7 @@ function getMarketplaceCategoryOverride(name: string): number | null {
     normalized.includes("game time") ||
     normalized.includes("тайм карта") ||
     normalized.includes("игровое время");
-  return isWorldOfWarcraft && isGameTime ? 132455 : null;
+  return isWorldOfWarcraft && isGameTime ? 22352 : null;
 }
 
 async function resolveProductCategories(
