@@ -86,7 +86,13 @@ export async function fetchGPayProducts(
 
   const firstPage = await fetchPage(1);
   const totalPages = Math.ceil(firstPage.totalCount / pageSize);
-  const products = [...(firstPage.products ?? [])];
+  const productsById = new Map<number, GPayProduct>();
+  const addProducts = (products: GPayProduct[] | null | undefined) => {
+    for (const product of products ?? []) {
+      if (!productsById.has(product.id)) productsById.set(product.id, product);
+    }
+  };
+  addProducts(firstPage.products);
   const concurrency = 5;
 
   for (let start = 2; start <= totalPages; start += concurrency) {
@@ -95,12 +101,12 @@ export async function fetchGPayProducts(
       (_, index) => start + index,
     );
     const results = await Promise.all(pages.map(fetchPage));
-    for (const result of results) products.push(...(result.products ?? []));
+    for (const result of results) addProducts(result.products);
   }
 
   return {
     ...firstPage,
-    products,
+    products: [...productsById.values()],
     page: 1,
     pageSize,
   };

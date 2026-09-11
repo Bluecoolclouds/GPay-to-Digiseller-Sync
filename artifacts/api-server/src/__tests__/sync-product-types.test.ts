@@ -29,6 +29,22 @@ const catalog = [
     region: "Global",
   },
   {
+    id: keyGpayId,
+    name: "Regression key duplicate should be ignored",
+    productType: 2,
+    currentPartnerPrice: 99,
+    isAvailable: true,
+    region: "Duplicate",
+  },
+  {
+    id: giftGpayId,
+    name: "Regression gift duplicate should be ignored",
+    productType: 1,
+    currentPartnerPrice: 99,
+    isAvailable: true,
+    region: "Duplicate",
+  },
+  {
     id: unknownGpayId,
     name: "Regression unknown updated",
     productType: 77,
@@ -183,7 +199,7 @@ test("list endpoint filters key, gift, all, and unknown product types", async ()
   }
 });
 
-test("key sync updates keys without changing gifts or unknown products", async () => {
+test("key sync counts repeated key pages once without changing other types", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
@@ -198,7 +214,7 @@ test("key sync updates keys without changing gifts or unknown products", async (
   assert.equal(names.get(unknownGpayId), "Regression unknown original");
 });
 
-test("gift sync updates gifts without changing keys or unknown products", async () => {
+test("gift sync counts repeated gift pages once without changing other types", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
@@ -213,7 +229,7 @@ test("gift sync updates gifts without changing keys or unknown products", async 
   assert.equal(names.get(unknownGpayId), "Regression unknown original");
 });
 
-test("all sync persists key, gift, and unknown product types", async () => {
+test("all sync persists and counts unique key, gift, and unknown products", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
