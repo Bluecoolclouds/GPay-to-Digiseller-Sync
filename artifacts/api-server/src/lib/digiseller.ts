@@ -22,6 +22,23 @@ type AddImageResult = {
   content?: Array<{ preview_id?: number; url?: string }>;
 };
 
+type PriceUpdateTaskResult = {
+  taskId?: string;
+  TaskId?: string;
+  retval?: number;
+  retdesc?: string;
+  errors?: Array<{ message?: string; description?: string }>;
+};
+
+type PriceUpdateTaskStatus = {
+  TaskId?: string;
+  Status?: number;
+  SuccessCount?: number;
+  ErrorCount?: number;
+  TotalCount?: number;
+  ErrorsDescriptions?: Array<{ Key?: string; Value?: string }>;
+};
+
 type DigisellerErrorResult = {
   retdesc?: string;
   errors?: Array<{ message?: string; description?: string }>;
@@ -82,6 +99,93 @@ export async function loginDigiseller(): Promise<string> {
     throw new Error(json.desc || `Digiseller API returned ${response.status}`);
   }
   return json.token;
+}
+
+export async function updateDigisellerProductPrices(
+  prices: Array<{ productId: number; priceRub: number }>,
+  providedToken?: string,
+): Promise<Map<number, string>> {
+  const failures = new Map<number, string>();
+  if (prices.length === 0) return failures;
+
+  const token = providedToken ?? (await loginDigiseller());
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/edit/prices?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(
+        prices.map(({ productId, priceRub }) => ({
+          product_id: productId,
+          price: Math.ceil(priceRub),
+        })),
+      ),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const taskBody = await response.text();
+  let task: PriceUpdateTaskResult = {};
+  let taskId: string | undefined;
+  try {
+    task = JSON.parse(taskBody) as PriceUpdateTaskResult;
+    taskId = task.taskId ?? task.TaskId;
+  } catch {
+    const plainTaskId = taskBody.trim().replace(/^"|"$/g, "");
+    if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(plainTaskId)) {
+      taskId = plainTaskId;
+    }
+  }
+  if (!response.ok || !taskId) {
+    throw new Error(
+      getDigisellerError(
+        task,
+        taskBody || `Не удалось запустить обновление цен (${response.status})`,
+      ),
+    );
+  }
+
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const statusUrl = new URL(
+      "https://api.digiseller.com/api/product/edit/UpdateProductsTaskStatus",
+    );
+    statusUrl.searchParams.set("taskId", taskId);
+    statusUrl.searchParams.set("token", token);
+    const statusResponse = await fetch(statusUrl, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const status = (await statusResponse.json()) as PriceUpdateTaskStatus;
+    if (!statusResponse.ok) {
+      throw new Error(`Не удалось проверить обновление цен (${statusResponse.status})`);
+    }
+    if (status.Status === 0 || status.Status === 1) continue;
+
+    for (const error of status.ErrorsDescriptions ?? []) {
+      const productId = Number(error.Key);
+      if (Number.isInteger(productId)) {
+        failures.set(productId, error.Value || "Digiseller не обновил цену");
+      }
+    }
+    if ((status.ErrorCount ?? failures.size) > failures.size) {
+      throw new Error(
+        `Digiseller сообщил об ошибках обновления цен: ${status.ErrorCount}`,
+      );
+    }
+    if (status.Status === 2 && failures.size === 0) {
+      throw new Error("Digiseller завершил задачу обновления цен с ошибкой");
+    }
+    if (status.Status !== 3 && status.Status !== 2) {
+      throw new Error(`Неизвестный статус обновления цен: ${status.Status}`);
+    }
+    return failures;
+  }
+
+  throw new Error("Digiseller не завершил обновление цен за 60 секунд");
 }
 
 export async function createDigisellerProduct(input: {

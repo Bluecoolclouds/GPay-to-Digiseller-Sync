@@ -506,7 +506,15 @@ router.get("/activities", async (req, res): Promise<void> => {
     return;
   }
   const rows = await db.select().from(activitiesTable).orderBy(desc(activitiesTable.createdAt)).limit(parsed.data.limit ?? 20);
-  res.json(ListActivitiesResponse.parse(rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }))));
+  res.json(
+    ListActivitiesResponse.parse(
+      rows.map((row) => ({
+        ...row,
+        type: row.type === "price-sync" ? "price" : row.type,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    ),
+  );
 });
 
 router.get("/settings", async (_req, res): Promise<void> => {
