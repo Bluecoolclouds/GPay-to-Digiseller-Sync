@@ -10,6 +10,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { getListProductsQueryKey } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
 
+function getMutationErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return `${fallback}: ${error.message}`
+  }
+  return fallback
+}
+
 export default function ProductsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
@@ -90,7 +97,10 @@ export default function ProductsPage() {
             toast.success(`Опубликовано ${result.succeeded} товаров`)
           }
         },
-        onError: () => toast.error("Пакетная публикация не выполнена"),
+        onError: (error) =>
+          toast.error(
+            getMutationErrorMessage(error, "Пакетная публикация не выполнена"),
+          ),
       },
     )
   }
@@ -318,7 +328,10 @@ function ProductRow({
           toast.success("Товар опубликован в Digiseller")
         }
       },
-      onError: () => toast.error("Не удалось опубликовать товар")
+      onError: (error) =>
+        toast.error(
+          getMutationErrorMessage(error, "Не удалось опубликовать товар"),
+        )
     })
   }
 

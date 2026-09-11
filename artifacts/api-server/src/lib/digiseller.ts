@@ -55,7 +55,8 @@ type DigisellerErrorResult = {
 
 type ProductInput = {
   name: string;
-  description: string;
+  descriptionRu: string;
+  descriptionEn: string;
   priceRub: number;
   productType: string;
 };
@@ -209,7 +210,8 @@ export async function updateDigisellerProductPrices(
 
 export async function createDigisellerProduct(input: {
   name: string;
-  description: string;
+  descriptionRu: string;
+  descriptionEn: string;
   priceRub: number;
   productType: string;
 }, providedToken?: string): Promise<number> {
@@ -500,8 +502,8 @@ function buildProductPayload(input: ProductInput, cataloguerCategoryId: number) 
       { locale: "en-US", value: input.name.slice(0, 500) },
     ],
     description: [
-      { locale: "ru-RU", value: input.description },
-      { locale: "en-US", value: input.description },
+      { locale: "ru-RU", value: input.descriptionRu },
+      { locale: "en-US", value: input.descriptionEn },
     ],
     add_info: [
       { locale: "ru-RU", value: additionalInfoRu },
