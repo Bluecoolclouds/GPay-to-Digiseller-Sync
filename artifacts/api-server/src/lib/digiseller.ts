@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateAiProductImage } from "./ai-product-image";
+import { selectCategoryWithAi } from "./ai-category";
 import { logger } from "./logger";
 
 type DigiLoginResponse = {
@@ -458,12 +459,54 @@ function findBestCataloguerMatch(
     )[0]?.category;
 }
 
+function shortlistCataloguerCategories(
+  categories: CataloguerCategory[],
+  searchName: string,
+) {
+  const searchTokens = new Set(
+    normalizeCataloguerName(searchName)
+      .split(" ")
+      .filter((token) => token.length >= 3),
+  );
+  const scored = new Map<number, { id: number; name: string; score: number }>();
+  for (const category of categories) {
+    for (const localizedName of category.name ?? []) {
+      const name = localizedName.value?.trim();
+      if (!name) continue;
+      const normalizedName = normalizeCataloguerName(name);
+      const categoryTokens = normalizedName
+        .split(" ")
+        .filter((token) => token.length >= 3);
+      const overlap = categoryTokens.filter((token) =>
+        searchTokens.has(token),
+      ).length;
+      if (overlap === 0) continue;
+      const score =
+        overlap * 10 +
+        (normalizeCataloguerName(searchName).includes(normalizedName) ? 20 : 0);
+      const existing = scored.get(category.category_id);
+      if (!existing || score > existing.score) {
+        scored.set(category.category_id, {
+          id: category.category_id,
+          name,
+          score,
+        });
+      }
+    }
+  }
+  return [...scored.values()]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 60)
+    .map(({ id, name }) => ({ id, name }));
+}
+
 async function findCataloguerCategoryId(name: string, token: string): Promise<number> {
   const searchName = getCataloguerSearchName(name);
   const cached = cataloguerCategoryCache.get(searchName);
   if (cached) return cached;
 
   const pagesPerBatch = 6;
+  const allCategories: CataloguerCategory[] = [];
   for (let startPage = 1; startPage <= 60; startPage += pagesPerBatch) {
     const pages = Array.from(
       { length: Math.min(pagesPerBatch, 61 - startPage) },
@@ -473,12 +516,28 @@ async function findCataloguerCategoryId(name: string, token: string): Promise<nu
       pages.map((page) => fetchCataloguerCategoryPage(page, token)),
     );
     const categories = results.flat();
+    allCategories.push(...categories);
     const match = findBestCataloguerMatch(categories, searchName);
     if (match) {
       cataloguerCategoryCache.set(searchName, match.category_id);
       return match.category_id;
     }
     if (results.some((pageCategories) => pageCategories.length === 0)) break;
+  }
+  try {
+    const aiCategoryId = await selectCategoryWithAi(
+      searchName,
+      shortlistCataloguerCategories(allCategories, searchName),
+    );
+    if (aiCategoryId) {
+      cataloguerCategoryCache.set(searchName, aiCategoryId);
+      return aiCategoryId;
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, productName: name },
+      "AI category selection failed",
+    );
   }
   throw new Error(`Категория Plati.Market для «${searchName}» не найдена`);
 }

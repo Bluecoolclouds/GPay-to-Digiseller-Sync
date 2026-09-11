@@ -3,4 +3,5 @@
 - [Digiseller product images](digiseller-product-images.md) — images are uploaded after product creation; generate a labeled fallback when GPay has no artwork.
 - [Digiseller Plati publication](digiseller-plati-publication.md) — retry paged category lookup and include both ru-RU and en-US localizations.
 - [Digiseller bulk price tasks](digiseller-bulk-price-tasks.md) — price updates return a plain task UUID; poll until status 3, while status 2 means error.
+- [AI category selection safety](ai-category-selection-safety.md) — apinet gpt-5.5 may ignore requested JSON fields; accept only unambiguous IDs from the supplied category shortlist.
 - [Isolated PostgreSQL API tests](isolated-postgres-api-tests.md) — create test tables explicitly in a unique schema; schema push may inspect public despite search_path.
