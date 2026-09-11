@@ -4,12 +4,14 @@
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Use Replit's Run button to start the managed web dashboard and API workflows
+- `pnpm --filter @workspace/api-server run dev` — run the API server manually (requires `PORT=8080`)
+- `pnpm --filter @workspace/gpay-digiseller-sync run dev` — run the dashboard manually (requires `PORT=20581` and `BASE_PATH=/`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` plus the GPay and Digiseller credentials stored in Replit Secrets
 
 ## Stack
 
