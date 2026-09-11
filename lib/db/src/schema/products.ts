@@ -28,6 +28,7 @@ export const productsTable = pgTable("sync_products", {
   isAvailable: boolean("is_available").notNull().default(false),
   publicationStatus: text("publication_status").notNull().default("draft"),
   publicationError: text("publication_error"),
+  publicationFailureStage: text("publication_failure_stage"),
   region: text("region").notNull().default("Не указан"),
   warningMessage: text("warning_message"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

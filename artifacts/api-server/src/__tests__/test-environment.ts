@@ -68,6 +68,7 @@ try {
       is_available boolean not null default false,
       publication_status text not null default 'draft',
       publication_error text,
+      publication_failure_stage text,
       region text not null default 'Не указан',
       warning_message text,
       updated_at timestamptz not null default now()

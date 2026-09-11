@@ -456,12 +456,20 @@ function ProductRow({
               data-testid={`status-publication-error-${product.id}`}
             >
               <div className="font-medium">
-                Ошибка Digiseller{product.digisellerId ? ` · DS ${product.digisellerId}` : ""}
+                {product.publicationFailureStage === "image"
+                  ? "Не удалось загрузить изображение"
+                  : product.publicationFailureStage === "category"
+                    ? "Ошибка категории Digiseller"
+                    : "Ошибка Digiseller"}
+                {product.digisellerId ? ` · DS ${product.digisellerId}` : ""}
               </div>
               <div className="mt-1 break-words">{product.publicationError}</div>
+              {product.publicationFailureStage === "image" && (
+                <div className="mt-1 font-medium">Повторите публикацию, чтобы загрузить изображение.</div>
+              )}
             </div>
           )}
-          {(product.publicationError || product.platiCategoryId) && (
+          {(product.publicationFailureStage === "category" || product.platiCategoryId) && (
             <div className="flex items-center gap-1.5">
               <Input
                 type="number"

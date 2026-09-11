@@ -127,7 +127,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
 });
 
 router.get("/products", async (req, res): Promise<void> => {
-  const parsed = ListProductsQueryParams.safeParse(req.query);
+  const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -154,13 +154,7 @@ router.get("/products", async (req, res): Promise<void> => {
   }
   const where = filters.length ? and(...filters) : undefined;
   const [countRow] = await db.select({ total: sql<number>`count(*)::int` }).from(productsTable).where(where);
-  const rows = await db
-    .select()
-    .from(productsTable)
-    .where(where)
-    .orderBy(desc(productsTable.updatedAt))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
+  const rows = await db.select().from(activitiesTable).orderBy(desc(activitiesTable.createdAt)).limit(parsed.data.limit ?? 20);
   res.json(
     ListProductsResponse.parse({
       items: rows.map((row) => ({
@@ -176,21 +170,24 @@ router.get("/products", async (req, res): Promise<void> => {
 });
 
 router.patch("/products/:id", async (req, res): Promise<void> => {
-  const params = UpdateProductParams.safeParse(req.params);
-  const body = UpdateProductBody.safeParse(req.body);
+  const params = PublishProductParams.safeParse(req.params);
+  const body = PublishProductsBatchBody.safeParse(req.body);
   if (!params.success || !body.success) {
     const error = !params.success ? params.error.message : !body.success ? body.error.message : "Invalid request";
     res.status(400).json({ error });
     return;
   }
   const settings = await getSettingsRow();
-  const [current] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.id));
+  const [current] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, params.data.id));
   if (!current) {
     res.status(404).json({ error: "Product not found" });
     return;
   }
-  const marginPercent = body.data.marginPercent ?? current.marginPercent;
-  const calculated = calculatePrice(current.supplierPriceUsd, settings, marginPercent);
+      const marginPercent = existing?.marginPercent ?? settings.defaultMarginPercent;
+      const calculated = calculatePrice(product.currentPartnerPrice, settings, marginPercent);
   const categoryChanged =
     body.data.platiCategoryId !== undefined &&
     body.data.platiCategoryId !== current.platiCategoryId;
@@ -201,7 +198,11 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
       marginPercent,
       ...calculated,
       ...(categoryChanged
-        ? { publicationStatus: "draft", publicationError: null }
+        ? {
+            publicationStatus: "draft",
+            publicationError: null,
+            publicationFailureStage: null,
+          }
         : {}),
       updatedAt: new Date(),
     })
@@ -344,6 +345,7 @@ async function publishProductRecord(current: ProductRecord) {
       digisellerImageUploaded,
       publicationStatus: imageStatus === "failed" ? "error" : "published",
       publicationError: imageError,
+      publicationFailureStage: imageStatus === "failed" ? "image" : null,
       updatedAt: new Date(),
     })
     .where(eq(productsTable.id, current.id))
@@ -359,10 +361,7 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
   }
 
   const ids = body.data.productIds;
-  const rows = await db
-    .select()
-    .from(productsTable)
-    .where(inArray(productsTable.id, ids));
+  const rows = await db.select().from(activitiesTable).orderBy(desc(activitiesTable.createdAt)).limit(parsed.data.limit ?? 20);
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const items: Array<{
     productId: number;
@@ -407,6 +406,7 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
           .set({
             publicationStatus: "error",
             publicationError: message,
+            publicationFailureStage: "category",
             updatedAt: new Date(),
           })
           .where(eq(productsTable.id, current.id))
@@ -489,6 +489,7 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
       .set({
         publicationStatus: "error",
         publicationError: message,
+        publicationFailureStage: "category",
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
@@ -503,14 +504,14 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
 });
 
 router.post("/sync/catalog", async (req, res): Promise<void> => {
-  const parsed = SyncCatalogBody.safeParse(req.body);
+  const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
   try {
-    let settings = await getSettingsRow();
-    const rate = await getOfficialUsdRubRate(settings.usdRubRate);
+  const settings = await getSettingsRow();
+  const rate = await getOfficialUsdRubRate(settings.usdRubRate);
     if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
       [settings] = await db
         .update(settingsTable)
@@ -597,7 +598,7 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
 });
 
 router.get("/activities", async (req, res): Promise<void> => {
-  const parsed = ListActivitiesQueryParams.safeParse(req.query);
+  const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;

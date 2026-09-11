@@ -30,6 +30,7 @@ export * from './priceTimeoutWarning';
 export * from './product';
 export * from './productPage';
 export * from './productProductKind';
+export * from './productPublicationFailureStage';
 export * from './productPublicationStatus';
 export * from './productUpdate';
 export * from './productUpdatePublicationStatus';

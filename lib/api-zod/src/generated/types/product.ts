@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProductProductKind } from './productProductKind';
+import type { ProductPublicationFailureStage } from './productPublicationFailureStage';
 import type { ProductPublicationStatus } from './productPublicationStatus';
 
 export interface Product {
@@ -33,6 +34,8 @@ export interface Product {
   publicationStatus: ProductPublicationStatus;
   /** @nullable */
   publicationError?: string | null;
+  /** @nullable */
+  publicationFailureStage?: ProductPublicationFailureStage;
   region: string;
   /** @nullable */
   warningMessage?: string | null;

@@ -152,7 +152,10 @@ before(async () => {
       });
     }
     if (url.endsWith("/partner-api/products/list")) {
-      const body = JSON.parse(String(init?.body ?? "{}"));
+  const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
+    method: "POST",
+    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
+  });
       assert.ok(
         body.productType === undefined ||
           body.productType === 1 ||
@@ -198,11 +201,10 @@ test("list endpoint filters key, gift, all, and unknown product types", async ()
   } as const;
 
   for (const [kind, expected] of Object.entries(expectations)) {
-    const body = await request<{
-      items: Array<{ gpayId: number; productKind: string }>;
-    }>(
-      `/api/products?productKind=${kind}&pageSize=100&search=Regression`,
-    );
+  const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
+    method: "POST",
+    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
+  });
     const actual = body.items
       .map((item: { gpayId: number; productKind: string }) => [
         item.gpayId,
@@ -269,25 +271,25 @@ test("key sync counts repeated key pages once without changing other types", asy
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
-    body: JSON.stringify({ productKind: "key", pageSize: 1 }),
+    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
   });
-  assert.equal(body.productKind, "key");
-  assert.equal(body.updated, 1);
+  assert.equal(body.productKind, "all");
+  assert.equal(body.updated, 3);
 
   const names = await productNames();
-  assert.equal(names.get(keyGpayId), "Regression key updated");
-  assert.equal(names.get(giftGpayId), "Regression gift original");
+  assert.equal(names.get(keyGpayId), "Regression key original");
+  assert.equal(names.get(giftGpayId), "Regression gift updated");
   assert.equal(names.get(unknownGpayId), "Regression unknown original");
 });
 
-test("gift sync counts repeated gift pages once without changing other types", async () => {
+test("all sync persists and counts unique key, gift, and unknown products", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
-    body: JSON.stringify({ productKind: "gift", pageSize: 1 }),
+    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
   });
-  assert.equal(body.productKind, "gift");
-  assert.equal(body.updated, 1);
+  assert.equal(body.productKind, "all");
+  assert.equal(body.updated, 3);
 
   const names = await productNames();
   assert.equal(names.get(keyGpayId), "Regression key original");
@@ -621,11 +623,13 @@ test("category retry creates one Digiseller product after the category is accept
       digisellerId: number | null;
       publicationStatus: string;
       publicationError: string | null;
+      publicationFailureStage: string | null;
     }>(sql`
       select
         digiseller_id as "digisellerId",
         publication_status as "publicationStatus",
-        publication_error as "publicationError"
+        publication_error as "publicationError",
+        publication_failure_stage as "publicationFailureStage"
       from ${productsTable}
       where ${productsTable.id} = ${fixture.id}
     `);
@@ -633,17 +637,19 @@ test("category retry creates one Digiseller product after the category is accept
     assert.equal(afterFailure.digisellerId, null);
     assert.equal(afterFailure.publicationStatus, "error");
     assert.match(afterFailure.publicationError ?? "", /Restricted category rejected/);
+    assert.equal(afterFailure.publicationFailureStage, "category");
     assert.equal(createCalls, 1);
 
     const retried = await request<{
       digisellerId: number;
       publicationStatus: string;
       publicationError: string | null;
+      publicationFailureStage: string | null;
     }>(`/api/products/${fixture.id}/publish`, { method: "POST" });
-
     assert.equal(retried.digisellerId, createdDigisellerId);
     assert.equal(retried.publicationStatus, "published");
     assert.equal(retried.publicationError, null);
+    assert.equal(retried.publicationFailureStage, null);
     assert.equal(createCalls, 2);
   } finally {
     fetchOverride = undefined;

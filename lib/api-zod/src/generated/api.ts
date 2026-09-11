@@ -69,6 +69,7 @@ export const ListProductsResponse = zod.object({
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -114,6 +115,7 @@ export const UpdateProductResponse = zod.object({
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -143,6 +145,7 @@ export const PublishProductResponse = zod.object({
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()

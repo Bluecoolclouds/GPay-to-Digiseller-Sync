@@ -54,6 +54,17 @@ export const ProductPublicationStatus = {
   error: 'error',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ProductPublicationFailureStage = typeof ProductPublicationFailureStage[keyof typeof ProductPublicationFailureStage] | null;
+
+
+export const ProductPublicationFailureStage = {
+  category: 'category',
+  image: 'image',
+} as const;
+
 export interface Product {
   id: number;
   gpayId: number;
@@ -79,6 +90,8 @@ export interface Product {
   publicationStatus: ProductPublicationStatus;
   /** @nullable */
   publicationError?: string | null;
+  /** @nullable */
+  publicationFailureStage?: ProductPublicationFailureStage;
   region: string;
   /** @nullable */
   warningMessage?: string | null;
