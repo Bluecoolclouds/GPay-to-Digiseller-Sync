@@ -192,9 +192,20 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
   }
   const marginPercent = body.data.marginPercent ?? current.marginPercent;
   const calculated = calculatePrice(current.supplierPriceUsd, settings, marginPercent);
+  const categoryChanged =
+    body.data.platiCategoryId !== undefined &&
+    body.data.platiCategoryId !== current.platiCategoryId;
   const [updated] = await db
     .update(productsTable)
-    .set({ ...body.data, marginPercent, ...calculated, updatedAt: new Date() })
+    .set({
+      ...body.data,
+      marginPercent,
+      ...calculated,
+      ...(categoryChanged
+        ? { publicationStatus: "draft", publicationError: null }
+        : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(productsTable.id, params.data.id))
     .returning();
   res.json(
@@ -286,19 +297,32 @@ async function publishProductRecord(current: ProductRecord) {
   const input = getDigisellerProductInput(current);
   let digisellerId = current.digisellerId;
   if (digisellerId) {
-    await addDigisellerProductToPlati(digisellerId, input, token);
+    await addDigisellerProductToPlati(
+      digisellerId,
+      input,
+      token,
+      current.platiCategoryId,
+    );
   } else {
-    digisellerId = await createDigisellerProduct(input, token);
+    digisellerId = await createDigisellerProduct(input, token, true);
     await db
       .update(productsTable)
       .set({ digisellerId, updatedAt: new Date() })
       .where(eq(productsTable.id, current.id));
+    await addDigisellerProductToPlati(
+      digisellerId,
+      input,
+      token,
+      current.platiCategoryId,
+    );
   }
-  await addDigisellerProductToMarketplaceCategory(
-    digisellerId,
-    current.name,
-    token,
-  );
+  if (current.platiCategoryId) {
+    await addDigisellerProductToMarketplaceCategory(
+      digisellerId,
+      current.platiCategoryId,
+      token,
+    );
+  }
 
   let imageStatus: "uploaded" | "skipped" | "failed" = "skipped";
   let imageError: string | null = null;
@@ -330,6 +354,7 @@ async function publishProductRecord(current: ProductRecord) {
       digisellerId,
       digisellerImageUploaded,
       publicationStatus: imageStatus === "failed" ? "error" : "published",
+      publicationError: imageError,
       updatedAt: new Date(),
     })
     .where(eq(productsTable.id, current.id))
@@ -386,6 +411,17 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
           error: result.imageError,
         });
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Ошибка публикации";
+        const [failedProduct] = await db
+          .update(productsTable)
+          .set({
+            publicationStatus: "error",
+            publicationError: message,
+            updatedAt: new Date(),
+          })
+          .where(eq(productsTable.id, current.id))
+          .returning();
         req.log.error(
           { err: error, productId },
           "Batch Digiseller product publication failed",
@@ -394,9 +430,9 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
           productId,
           name: current.name,
           status: "failed",
-          digisellerId: current.digisellerId,
+          digisellerId: failedProduct?.digisellerId ?? current.digisellerId,
           imageStatus: "skipped",
-          error: error instanceof Error ? error.message : "Ошибка публикации",
+          error: message,
         });
       }
     }
@@ -457,12 +493,22 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     });
     res.json(PublishProductResponse.parse(toProductResponse(result.product)));
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Digiseller publication failed";
+    await db
+      .update(productsTable)
+      .set({
+        publicationStatus: "error",
+        publicationError: message,
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
     req.log.error(
       { err: error, productId: current.id },
       "Digiseller product publication failed",
     );
     res.status(502).json({
-      error: error instanceof Error ? error.message : "Digiseller publication failed",
+      error: message,
     });
   }
 });

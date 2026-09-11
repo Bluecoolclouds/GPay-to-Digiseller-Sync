@@ -60,6 +60,8 @@ export interface Product {
   /** @nullable */
   digisellerId?: number | null;
   /** @nullable */
+  platiCategoryId?: number | null;
+  /** @nullable */
   appId?: number | null;
   /** @nullable */
   subId?: number | null;
@@ -75,6 +77,8 @@ export interface Product {
   profitRub?: number;
   isAvailable: boolean;
   publicationStatus: ProductPublicationStatus;
+  /** @nullable */
+  publicationError?: string | null;
   region: string;
   /** @nullable */
   warningMessage?: string | null;
@@ -104,6 +108,11 @@ export interface ProductUpdate {
      */
   marginPercent?: number;
   publicationStatus?: ProductUpdatePublicationStatus;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  platiCategoryId?: number | null;
 }
 
 export interface BatchPublishInput {

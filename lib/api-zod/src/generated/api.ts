@@ -54,6 +54,7 @@ export const ListProductsResponse = zod.object({
   "id": zod.number().int(),
   "gpayId": zod.number().int(),
   "digisellerId": zod.number().int().nullish(),
+  "platiCategoryId": zod.number().int().nullish(),
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
@@ -67,6 +68,7 @@ export const ListProductsResponse = zod.object({
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationError": zod.string().nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -86,15 +88,18 @@ export const updateProductBodyMarginPercentMax = 500;
 
 
 
+
 export const UpdateProductBody = zod.object({
   "marginPercent": zod.number().min(updateProductBodyMarginPercentMin).max(updateProductBodyMarginPercentMax).optional(),
-  "publicationStatus": zod.enum(['draft', 'published', 'paused']).optional()
+  "publicationStatus": zod.enum(['draft', 'published', 'paused']).optional(),
+  "platiCategoryId": zod.number().int().min(1).nullish()
 })
 
 export const UpdateProductResponse = zod.object({
   "id": zod.number().int(),
   "gpayId": zod.number().int(),
   "digisellerId": zod.number().int().nullish(),
+  "platiCategoryId": zod.number().int().nullish(),
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
@@ -108,6 +113,7 @@ export const UpdateProductResponse = zod.object({
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationError": zod.string().nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -122,6 +128,7 @@ export const PublishProductResponse = zod.object({
   "id": zod.number().int(),
   "gpayId": zod.number().int(),
   "digisellerId": zod.number().int().nullish(),
+  "platiCategoryId": zod.number().int().nullish(),
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
@@ -135,6 +142,7 @@ export const PublishProductResponse = zod.object({
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
   "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationError": zod.string().nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()

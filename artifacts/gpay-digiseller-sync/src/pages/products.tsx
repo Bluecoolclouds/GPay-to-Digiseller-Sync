@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images } from "lucide-react"
+import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images, Save } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { getListProductsQueryKey } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
@@ -282,7 +282,9 @@ function ProductRow({
   selected: boolean
   onSelectionChange: (selected: boolean) => void
 }) {
+  const queryClient = useQueryClient()
   const [margin, setMargin] = useState(product.marginPercent.toString())
+  const [categoryId, setCategoryId] = useState(product.platiCategoryId?.toString() ?? "")
   const updateMutation = useUpdateProduct()
   const publishMutation = usePublishProduct()
 
@@ -318,6 +320,29 @@ function ProductRow({
     }
   }, [product.marginPercent])
 
+  useEffect(() => {
+    setCategoryId(product.platiCategoryId?.toString() ?? "")
+  }, [product.platiCategoryId])
+
+  const handleSaveCategory = () => {
+    const parsedCategoryId = Number(categoryId)
+    if (!Number.isInteger(parsedCategoryId) || parsedCategoryId < 1) {
+      toast.error("Введите корректный ID категории Plati")
+      return
+    }
+    updateMutation.mutate(
+      { id: product.id, data: { platiCategoryId: parsedCategoryId } },
+      {
+        onSuccess: (res) => {
+          onUpdateRef.current(res)
+          toast.success("Категория сохранена. Повторите публикацию для проверки.")
+        },
+        onError: (error) =>
+          toast.error(getMutationErrorMessage(error, "Не удалось сохранить категорию")),
+      },
+    )
+  }
+
   const handlePublish = () => {
     publishMutation.mutate({ id: product.id }, {
       onSuccess: (res) => {
@@ -329,9 +354,12 @@ function ProductRow({
         }
       },
       onError: (error) =>
-        toast.error(
+        {
+          queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+          toast.error(
           getMutationErrorMessage(error, "Не удалось опубликовать товар"),
-        )
+          )
+        }
     })
   }
 
@@ -421,7 +449,45 @@ function ProductRow({
         </div>
       </td>
       <td className="px-4 py-3 text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-col items-end gap-2">
+          {product.publicationError && (
+            <div
+              className="max-w-xs rounded-md border border-destructive/30 bg-destructive/5 p-2 text-left text-xs text-destructive"
+              data-testid={`status-publication-error-${product.id}`}
+            >
+              <div className="font-medium">
+                Ошибка Digiseller{product.digisellerId ? ` · DS ${product.digisellerId}` : ""}
+              </div>
+              <div className="mt-1 break-words">{product.publicationError}</div>
+            </div>
+          )}
+          {(product.publicationError || product.platiCategoryId) && (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                min="1"
+                placeholder="ID категории Plati"
+                aria-label={`ID категории Plati для ${product.name}`}
+                data-testid={`input-plati-category-${product.id}`}
+                className="h-8 w-40 text-xs"
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={handleSaveCategory}
+                disabled={updateMutation.isPending}
+                data-testid={`button-save-plati-category-${product.id}`}
+              >
+                <Save className="h-3.5 w-3.5" />
+                <span className="sr-only">Сохранить категорию</span>
+              </Button>
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2">
           {product.warningMessage && (
             <span title={product.warningMessage}>
               <AlertTriangle className="w-4 h-4 text-amber-500" aria-label={product.warningMessage} />
@@ -441,6 +507,7 @@ function ProductRow({
                <Play className="w-3 h-3" /> Опубликовать
              </Button>
           )}
+          </div>
         </div>
       </td>
     </tr>

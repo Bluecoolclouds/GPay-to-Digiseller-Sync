@@ -54,6 +54,7 @@ try {
       id serial primary key,
       gpay_id integer not null unique,
       digiseller_id integer,
+      plati_category_id integer,
       app_id integer,
       sub_id integer,
       name text not null,
@@ -66,6 +67,7 @@ try {
       profit_rub double precision not null,
       is_available boolean not null default false,
       publication_status text not null default 'draft',
+      publication_error text,
       region text not null default 'Не указан',
       warning_message text,
       updated_at timestamptz not null default now()

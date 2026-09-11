@@ -215,9 +215,11 @@ export async function createDigisellerProduct(input: {
   descriptionEn: string;
   priceRub: number;
   productType: string;
-}, providedToken?: string): Promise<number> {
+}, providedToken?: string, deferCategoryAssignment = false): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = await resolveProductCategories(input.name, token);
+  const categories = deferCategoryAssignment
+    ? []
+    : await resolveProductCategories(input.name, token);
   const payload = buildProductPayload(input, categories);
   const response = await fetch(
     `https://api.digiseller.com/api/product/create/arbitrary?token=${encodeURIComponent(token)}`,
@@ -545,23 +547,12 @@ async function findCataloguerCategoryId(name: string, token: string): Promise<nu
 type ProductCategory =
   | { owner: 0; category_id: number }
   | { owner: 1; cataloguer_category_id: number };
-
-function getMarketplaceCategoryOverride(name: string): number | null {
-  const normalized = normalizeCataloguerName(name);
-  const isWorldOfWarcraft = normalized.includes("world of warcraft");
-  const isGameTime =
-    normalized.includes("game time") ||
-    normalized.includes("тайм карта") ||
-    normalized.includes("игровое время");
-  return isWorldOfWarcraft && isGameTime ? 22352 : null;
-}
-
 async function resolveProductCategories(
   name: string,
   token: string,
+  platiCategoryId?: number | null,
 ): Promise<ProductCategory[]> {
-  const marketplaceCategoryId = getMarketplaceCategoryOverride(name);
-  if (marketplaceCategoryId) {
+  if (platiCategoryId) {
     return [];
   }
   const cataloguerCategoryId = await findCataloguerCategoryId(name, token);
@@ -573,12 +564,9 @@ async function resolveProductCategories(
 
 export async function addDigisellerProductToMarketplaceCategory(
   productId: number,
-  name: string,
+  categoryId: number,
   providedToken?: string,
 ): Promise<void> {
-  const categoryId = getMarketplaceCategoryOverride(name);
-  if (!categoryId) return;
-
   const token = providedToken ?? (await loginDigiseller());
   const response = await fetch(
     `https://api.digiseller.com/api/product/platform/category/add/${productId}/${categoryId}?token=${encodeURIComponent(token)}`,
@@ -647,9 +635,14 @@ export async function addDigisellerProductToPlati(
   productId: number,
   input: ProductInput,
   providedToken?: string,
+  platiCategoryId?: number | null,
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = await resolveProductCategories(input.name, token);
+  const categories = await resolveProductCategories(
+    input.name,
+    token,
+    platiCategoryId,
+  );
   const payload = buildProductPayload(input, categories);
   const response = await fetch(
     `https://api.digiseller.com/api/product/edit/arbitrary/${productId}?token=${encodeURIComponent(token)}`,

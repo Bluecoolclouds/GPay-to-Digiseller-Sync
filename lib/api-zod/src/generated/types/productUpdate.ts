@@ -14,4 +14,9 @@ export interface ProductUpdate {
      */
   marginPercent?: number;
   publicationStatus?: ProductUpdatePublicationStatus;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  platiCategoryId?: number | null;
 }
