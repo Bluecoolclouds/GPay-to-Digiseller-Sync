@@ -34,7 +34,6 @@ import {
   loginGPay,
 } from "../lib/gpay";
 import {
-  addDigisellerProductToMarketplaceCategory,
   addDigisellerProductToPlati,
   createDigisellerProduct,
   loginDigiseller,
@@ -304,26 +303,16 @@ async function publishProductRecord(current: ProductRecord) {
       current.platiCategoryId,
     );
   } else {
-    digisellerId = await createDigisellerProduct(input, token, true);
-    await db
-      .update(productsTable)
-      .set({ digisellerId, updatedAt: new Date() })
-      .where(eq(productsTable.id, current.id));
-    await addDigisellerProductToPlati(
-      digisellerId,
+    digisellerId = await createDigisellerProduct(
       input,
       token,
       current.platiCategoryId,
     );
+    await db
+      .update(productsTable)
+      .set({ digisellerId, updatedAt: new Date() })
+      .where(eq(productsTable.id, current.id));
   }
-  if (current.platiCategoryId) {
-    await addDigisellerProductToMarketplaceCategory(
-      digisellerId,
-      current.platiCategoryId,
-      token,
-    );
-  }
-
   let imageStatus: "uploaded" | "skipped" | "failed" = "skipped";
   let imageError: string | null = null;
   let digisellerImageUploaded = current.digisellerImageUploaded;

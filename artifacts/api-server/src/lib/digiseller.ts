@@ -215,11 +215,13 @@ export async function createDigisellerProduct(input: {
   descriptionEn: string;
   priceRub: number;
   productType: string;
-}, providedToken?: string, deferCategoryAssignment = false): Promise<number> {
+}, providedToken?: string, platiCategoryId?: number | null): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = deferCategoryAssignment
-    ? []
-    : await resolveProductCategories(input.name, token);
+  const categories = await resolveProductCategories(
+    input.name,
+    token,
+    platiCategoryId,
+  );
   const payload = buildProductPayload(input, categories);
   const response = await fetch(
     `https://api.digiseller.com/api/product/create/arbitrary?token=${encodeURIComponent(token)}`,
@@ -553,7 +555,7 @@ async function resolveProductCategories(
   platiCategoryId?: number | null,
 ): Promise<ProductCategory[]> {
   if (platiCategoryId) {
-    return [];
+    return [{ owner: 0, category_id: platiCategoryId }];
   }
   const cataloguerCategoryId = await findCataloguerCategoryId(name, token);
   return [
@@ -599,17 +601,14 @@ function buildProductPayload(
   input: ProductInput,
   categories: ProductCategory[],
 ) {
-  const supplierRequisites = "89033784036@mail.ru";
-  const fulfillmentInfoRu =
+  const additionalInfoRu =
     input.productType === "1"
       ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
       : "Заказ обрабатывается вручную после проверки цены и наличия у поставщика.";
-  const fulfillmentInfoEn =
+  const additionalInfoEn =
     input.productType === "1"
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
       : "The order is processed manually after checking price and supplier availability.";
-  const additionalInfoRu = `${fulfillmentInfoRu}\n\nРеквизиты поставщика: ${supplierRequisites}`;
-  const additionalInfoEn = `${fulfillmentInfoEn}\n\nSupplier contact: ${supplierRequisites}`;
   return {
     content_type: "Form",
     ...(categories.length > 0 ? { categories } : {}),

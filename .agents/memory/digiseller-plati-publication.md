@@ -7,6 +7,8 @@ Plati category lookup is paginated and can have transient timeouts. Fetch pages 
 
 Marketplace dictionary entries marked `can_add` are not guaranteed to be assignable through the product category API for this seller. A cataloguer category may also exist but be restricted for the account. Preserve the created Digiseller ID before category assignment so retries cannot create duplicates.
 
-**Why:** A sequential lookup timed out before reaching the needed category. Once found, product creation was rejected because Plati requires both ru-RU and en-US localizations. For WoW game time, both the exact subscription leaf and an approved general WoW leaf appeared addable in the public dictionary but the live category API rejected them as not found.
+Arbitrary product creation rejects an empty category list with `category-0`. A verified marketplace category must be included in the create/edit payload as `{ owner: 0, category_id }`; do not defer all category assignment until after creation.
 
-**How to apply:** Include ru-RU and en-US entries for localized product fields whenever a Plati-owned category is attached. Keep category matching conservative, store IDs from partially completed creation, and require manual category assignment when the seller account rejects all exact safe categories.
+**Why:** A sequential lookup timed out before reaching the needed category. Once found, product creation was rejected because Plati requires both ru-RU and en-US localizations. For WoW game time, both the exact subscription leaf and an approved general WoW leaf appeared addable in the public dictionary but the live category API rejected them as not found. Live creation also proved that category assignment is mandatory at creation time.
+
+**How to apply:** Include ru-RU and en-US entries for localized product fields whenever a Plati-owned category is attached. Keep category matching conservative. Send manually verified marketplace IDs as owner 0 during creation; a rejected create has no product ID to preserve. Require manual category selection when the seller rejects all exact safe categories.

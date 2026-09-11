@@ -331,7 +331,7 @@ async function preparePublishedPriceFixture() {
 }
 
 function usePriceSyncResponses(status: Record<string, unknown>) {
-  fetchOverride = async (input) => {
+  fetchOverride = async (input, init) => {
     const url = String(input);
     if (url.includes("cbr.ru")) return new Response("", { status: 503 });
     if (url.endsWith("/partner-api/auth/login")) {
@@ -551,13 +551,11 @@ test("a failed price batch does not prevent later batches from saving", async ()
   }
 });
 
-test("category retry edits the saved Digiseller product instead of creating a duplicate", async () => {
+test("category retry creates one Digiseller product after the category is accepted", async () => {
   const retryGpayId = 2_140_001_021;
   const createdDigisellerId = 1_940_001_021;
   const verifiedCategoryId = 87_654;
   let createCalls = 0;
-  let editCalls = 0;
-  let categoryCalls = 0;
 
   await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
   const [fixture] = await db
@@ -572,45 +570,38 @@ test("category retry edits the saved Digiseller product instead of creating a du
       profitRub: 200,
       isAvailable: true,
       digisellerImageUploaded: true,
+      platiCategoryId: verifiedCategoryId,
     })
     .returning();
-  await db.execute(
-    sql`update ${productsTable}
-        set plati_category_id = ${verifiedCategoryId}
-        where ${productsTable.id} = ${fixture.id}`,
-  );
 
-  fetchOverride = async (input) => {
+  fetchOverride = async (input, init) => {
     const url = String(input);
     if (url.includes("/api/apilogin")) {
       return Response.json({ token: "digiseller-test-token" });
     }
     if (url.includes("/api/product/create/arbitrary")) {
       createCalls += 1;
-      return Response.json({
-        retval: 0,
-        content: { product_id: createdDigisellerId },
-      });
-    }
-    if (url.includes(`/api/product/edit/arbitrary/${createdDigisellerId}`)) {
-      editCalls += 1;
-      if (editCalls === 1) {
+      const payload = JSON.parse(
+        input instanceof Request
+          ? await input.clone().text()
+          : typeof init?.body === "string"
+            ? init.body
+            : "{}",
+      ) as {
+        categories?: Array<{ owner?: number; category_id?: number }>;
+      };
+      assert.deepEqual(payload.categories, [
+        { owner: 0, category_id: verifiedCategoryId },
+      ]);
+      if (createCalls === 1) {
         return Response.json({
           retval: 1,
           retdesc: "Restricted category rejected",
         });
       }
-      return Response.json({ retval: 0 });
-    }
-    if (
-      url.includes(
-        `/api/product/platform/category/add/${createdDigisellerId}/${verifiedCategoryId}`,
-      )
-    ) {
-      categoryCalls += 1;
       return Response.json({
         retval: 0,
-        content: { status: "success" },
+        content: { product_id: createdDigisellerId },
       });
     }
     throw new Error(`Unexpected outbound request: ${url}`);
@@ -639,12 +630,10 @@ test("category retry edits the saved Digiseller product instead of creating a du
       where ${productsTable.id} = ${fixture.id}
     `);
     const afterFailure = afterFailureResult.rows[0];
-    assert.equal(afterFailure.digisellerId, createdDigisellerId);
+    assert.equal(afterFailure.digisellerId, null);
     assert.equal(afterFailure.publicationStatus, "error");
     assert.match(afterFailure.publicationError ?? "", /Restricted category rejected/);
     assert.equal(createCalls, 1);
-    assert.equal(editCalls, 1);
-    assert.equal(categoryCalls, 0);
 
     const retried = await request<{
       digisellerId: number;
@@ -655,9 +644,7 @@ test("category retry edits the saved Digiseller product instead of creating a du
     assert.equal(retried.digisellerId, createdDigisellerId);
     assert.equal(retried.publicationStatus, "published");
     assert.equal(retried.publicationError, null);
-    assert.equal(createCalls, 1);
-    assert.equal(editCalls, 2);
-    assert.equal(categoryCalls, 1);
+    assert.equal(createCalls, 2);
   } finally {
     fetchOverride = undefined;
     await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
