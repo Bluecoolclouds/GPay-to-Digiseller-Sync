@@ -216,8 +216,8 @@ export async function createDigisellerProduct(input: {
   productType: string;
 }, providedToken?: string): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
-  const cataloguerCategoryId = await findCataloguerCategoryId(input.name, token);
-  const payload = buildProductPayload(input, cataloguerCategoryId);
+  const categories = await resolveProductCategories(input.name, token);
+  const payload = buildProductPayload(input, categories);
   const response = await fetch(
     `https://api.digiseller.com/api/product/create/arbitrary?token=${encodeURIComponent(token)}`,
     {
@@ -449,7 +449,8 @@ function findBestCataloguerMatch(
       (candidate) =>
         candidate.normalizedName.length >= 8 &&
         (normalizedSearch.startsWith(`${candidate.normalizedName} `) ||
-          candidate.normalizedName.startsWith(`${normalizedSearch} `)),
+          candidate.normalizedName.startsWith(`${normalizedSearch} `) ||
+          normalizedSearch.endsWith(` ${candidate.normalizedName}`)),
     )
     .sort(
       (left, right) =>
@@ -482,7 +483,75 @@ async function findCataloguerCategoryId(name: string, token: string): Promise<nu
   throw new Error(`Категория Plati.Market для «${searchName}» не найдена`);
 }
 
-function buildProductPayload(input: ProductInput, cataloguerCategoryId: number) {
+type ProductCategory =
+  | { owner: 0; category_id: number }
+  | { owner: 1; cataloguer_category_id: number };
+
+function getMarketplaceCategoryOverride(name: string): number | null {
+  const normalized = normalizeCataloguerName(name);
+  const isWorldOfWarcraft = normalized.includes("world of warcraft");
+  const isGameTime =
+    normalized.includes("game time") ||
+    normalized.includes("тайм карта") ||
+    normalized.includes("игровое время");
+  return isWorldOfWarcraft && isGameTime ? 132455 : null;
+}
+
+async function resolveProductCategories(
+  name: string,
+  token: string,
+): Promise<ProductCategory[]> {
+  const marketplaceCategoryId = getMarketplaceCategoryOverride(name);
+  if (marketplaceCategoryId) {
+    return [];
+  }
+  const cataloguerCategoryId = await findCataloguerCategoryId(name, token);
+  return [
+    { owner: 0, category_id: 0 },
+    { owner: 1, cataloguer_category_id: cataloguerCategoryId },
+  ];
+}
+
+export async function addDigisellerProductToMarketplaceCategory(
+  productId: number,
+  name: string,
+  providedToken?: string,
+): Promise<void> {
+  const categoryId = getMarketplaceCategoryOverride(name);
+  if (!categoryId) return;
+
+  const token = providedToken ?? (await loginDigiseller());
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/platform/category/add/${productId}/${categoryId}?token=${encodeURIComponent(token)}`,
+    {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const json = (await response.json()) as {
+    retval?: number;
+    retdesc?: string;
+    errors?: Array<{ message?: string; description?: string }>;
+    content?: { status?: string };
+  };
+  if (
+    !response.ok ||
+    json.retval !== 0 ||
+    json.content?.status !== "success"
+  ) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось добавить товар в категорию Plati.Market (${response.status})`,
+      ),
+    );
+  }
+}
+
+function buildProductPayload(
+  input: ProductInput,
+  categories: ProductCategory[],
+) {
   const additionalInfoRu =
     input.productType === "1"
       ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
@@ -493,10 +562,7 @@ function buildProductPayload(input: ProductInput, cataloguerCategoryId: number) 
       : "The order is processed manually after checking price and supplier availability.";
   return {
     content_type: "Form",
-    categories: [
-      { owner: 0, category_id: 0 },
-      { owner: 1, cataloguer_category_id: cataloguerCategoryId },
-    ],
+    ...(categories.length > 0 ? { categories } : {}),
     name: [
       { locale: "ru-RU", value: input.name.slice(0, 500) },
       { locale: "en-US", value: input.name.slice(0, 500) },
@@ -524,8 +590,8 @@ export async function addDigisellerProductToPlati(
   providedToken?: string,
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
-  const categoryId = await findCataloguerCategoryId(input.name, token);
-  const payload = buildProductPayload(input, categoryId);
+  const categories = await resolveProductCategories(input.name, token);
+  const payload = buildProductPayload(input, categories);
   const response = await fetch(
     `https://api.digiseller.com/api/product/edit/arbitrary/${productId}?token=${encodeURIComponent(token)}`,
     {
