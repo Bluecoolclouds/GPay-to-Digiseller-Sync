@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { AddressInfo } from "node:net";
 import { inArray, sql } from "drizzle-orm";
-import { db, pool, productsTable } from "@workspace/db";
+import { db, pool, productsTable, settingsTable } from "@workspace/db";
 import app from "../app";
+import { syncKeyPrices } from "../lib/price-sync";
 
 const fixtureIds = [2_140_001_001, 2_140_001_002, 2_140_001_003];
 const [keyGpayId, giftGpayId, unknownGpayId] = fixtureIds;
 const originalFetch = globalThis.fetch;
 let baseUrl = "";
 let server: ReturnType<typeof app.listen>;
+let fetchOverride:
+  | ((
+      input: Parameters<typeof fetch>[0],
+      init?: RequestInit,
+    ) => Promise<Response>)
+  | undefined;
 
 const catalog = [
   {
@@ -129,6 +136,7 @@ before(async () => {
   process.env.GPAY_LOGIN ||= "test-login";
   process.env.GPAY_PASSWORD ||= "test-password";
   globalThis.fetch = async (input, init) => {
+    if (fetchOverride) return fetchOverride(input, init);
     const url = String(input);
     if (url.includes("cbr.ru")) return new Response("", { status: 503 });
     if (url.endsWith("/partner-api/auth/login")) {
@@ -242,4 +250,113 @@ test("all sync persists and counts unique key, gift, and unknown products", asyn
   assert.equal(names.get(keyGpayId), "Regression key updated");
   assert.equal(names.get(giftGpayId), "Regression gift updated");
   assert.equal(names.get(unknownGpayId), "Regression unknown updated");
+});
+
+async function preparePublishedPriceFixture() {
+  await seedProducts();
+  await db
+    .update(productsTable)
+    .set({
+      digisellerId: 1_914_001_001,
+      publicationStatus: "published",
+      supplierPriceUsd: 11,
+      salePriceRub: 1100,
+    })
+    .where(inArray(productsTable.gpayId, [keyGpayId]));
+  await db
+    .insert(settingsTable)
+    .values({ id: 1, automationMode: "automatic" })
+    .onConflictDoUpdate({
+      target: settingsTable.id,
+      set: { automationMode: "automatic" },
+    });
+}
+
+function usePriceSyncResponses(status: Record<string, unknown>) {
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          products: [
+            {
+              id: keyGpayId,
+              name: "Regression key original",
+              productType: 2,
+              currentPartnerPrice: 21,
+              isAvailable: true,
+              region: "Global",
+            },
+          ],
+          totalCount: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/prices")) {
+      return new Response("12345678-1234-1234-1234-123456789abc");
+    }
+    if (url.includes("/UpdateProductsTaskStatus")) {
+      return Response.json(status);
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+}
+
+test("published price is saved locally only after Digiseller confirms success", async () => {
+  await preparePublishedPriceFixture();
+  usePriceSyncResponses({ Status: 3, ErrorCount: 0 });
+
+  try {
+    const result = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(inArray(productsTable.gpayId, [keyGpayId]));
+
+    assert.equal(result.digisellerUpdated, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(saved.supplierPriceUsd, 21);
+    assert.notEqual(saved.salePriceRub, 1100);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("per-product Digiseller failure leaves the previous local price unchanged", async () => {
+  await preparePublishedPriceFixture();
+  usePriceSyncResponses({
+    Status: 2,
+    ErrorCount: 1,
+    ErrorsDescriptions: [
+      { Key: "1914001001", Value: "Digiseller rejected this product" },
+    ],
+  });
+
+  try {
+    const result = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(inArray(productsTable.gpayId, [keyGpayId]));
+
+    assert.equal(result.digisellerUpdated, 0);
+    assert.equal(result.failed, 1);
+    assert.equal(saved.supplierPriceUsd, 11);
+    assert.equal(saved.salePriceRub, 1100);
+  } finally {
+    fetchOverride = undefined;
+  }
 });

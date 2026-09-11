@@ -41,6 +41,13 @@ type PriceUpdateTaskStatus = {
   ErrorsDescriptions?: Array<{ Key?: string; Value?: string }>;
 };
 
+type PriceUpdatePollingOptions = {
+  pollIntervalMs?: number;
+  timeoutMs?: number;
+  now?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
+};
+
 type DigisellerErrorResult = {
   retdesc?: string;
   errors?: Array<{ message?: string; description?: string }>;
@@ -106,6 +113,7 @@ export async function loginDigiseller(): Promise<string> {
 export async function updateDigisellerProductPrices(
   prices: Array<{ productId: number; priceRub: number }>,
   providedToken?: string,
+  polling: PriceUpdatePollingOptions = {},
 ): Promise<Map<number, string>> {
   const failures = new Map<number, string>();
   if (prices.length === 0) return failures;
@@ -149,9 +157,16 @@ export async function updateDigisellerProductPrices(
     );
   }
 
-  const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  const now = polling.now ?? Date.now;
+  const sleep =
+    polling.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const timeoutMs = polling.timeoutMs ?? 60_000;
+  const pollIntervalMs = polling.pollIntervalMs ?? 1_000;
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
+    await sleep(pollIntervalMs);
     const statusUrl = new URL(
       "https://api.digiseller.com/api/product/edit/UpdateProductsTaskStatus",
     );
@@ -187,7 +202,9 @@ export async function updateDigisellerProductPrices(
     return failures;
   }
 
-  throw new Error("Digiseller не завершил обновление цен за 60 секунд");
+  throw new Error(
+    `Digiseller не завершил обновление цен за ${Math.ceil(timeoutMs / 1_000)} секунд`,
+  );
 }
 
 export async function createDigisellerProduct(input: {

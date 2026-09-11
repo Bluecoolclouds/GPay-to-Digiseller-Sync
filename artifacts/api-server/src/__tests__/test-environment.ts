@@ -14,6 +14,7 @@ databaseUrl.searchParams.set("options", `-c search_path=${schema}`);
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
+const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
 const isolatedEnvironment = {
   ...process.env,
   DATABASE_URL: databaseUrl.toString(),
@@ -33,6 +34,7 @@ function run(command: string, args: string[]) {
 }
 
 try {
+  run(process.execPath, ["--test", priceTaskTestFile]);
   await pool.query(`create schema "${schema}"`);
   await pool.query(`
     create table "${schema}".sync_settings (
