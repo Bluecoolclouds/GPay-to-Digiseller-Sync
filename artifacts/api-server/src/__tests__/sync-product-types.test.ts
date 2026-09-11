@@ -152,10 +152,7 @@ before(async () => {
       });
     }
     if (url.endsWith("/partner-api/products/list")) {
-  const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
-    method: "POST",
-    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
-  });
+      const body = JSON.parse(String(init?.body ?? "{}"));
       assert.ok(
         body.productType === undefined ||
           body.productType === 1 ||
@@ -201,10 +198,11 @@ test("list endpoint filters key, gift, all, and unknown product types", async ()
   } as const;
 
   for (const [kind, expected] of Object.entries(expectations)) {
-  const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
-    method: "POST",
-    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
-  });
+    const body = await request<{
+      items: Array<{ gpayId: number; productKind: string }>;
+    }>(
+      `/api/products?productKind=${kind}&pageSize=100&search=Regression`,
+    );
     const actual = body.items
       .map((item: { gpayId: number; productKind: string }) => [
         item.gpayId,
@@ -271,25 +269,25 @@ test("key sync counts repeated key pages once without changing other types", asy
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
-    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
+    body: JSON.stringify({ productKind: "key", pageSize: 1 }),
   });
-  assert.equal(body.productKind, "all");
-  assert.equal(body.updated, 3);
+  assert.equal(body.productKind, "key");
+  assert.equal(body.updated, 1);
 
   const names = await productNames();
-  assert.equal(names.get(keyGpayId), "Regression key original");
-  assert.equal(names.get(giftGpayId), "Regression gift updated");
+  assert.equal(names.get(keyGpayId), "Regression key updated");
+  assert.equal(names.get(giftGpayId), "Regression gift original");
   assert.equal(names.get(unknownGpayId), "Regression unknown original");
 });
 
-test("all sync persists and counts unique key, gift, and unknown products", async () => {
+test("gift sync counts repeated gift pages once without changing other types", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
-    body: JSON.stringify({ productKind: "all", pageSize: 1 }),
+    body: JSON.stringify({ productKind: "gift", pageSize: 1 }),
   });
-  assert.equal(body.productKind, "all");
-  assert.equal(body.updated, 3);
+  assert.equal(body.productKind, "gift");
+  assert.equal(body.updated, 1);
 
   const names = await productNames();
   assert.equal(names.get(keyGpayId), "Regression key original");
