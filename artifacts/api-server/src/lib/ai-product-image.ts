@@ -38,7 +38,9 @@ export async function generateAiProductImage(input: {
   const prompt = [
     "Create a square 1:1 minimalist premium product card for a digital game marketplace.",
     `Product: "${title}". Type: "${typeLabel}". Region: "${region}".`,
-    "Use an original abstract visual inspired only by the product name: bold geometric shapes, subtle depth, controlled cinematic lighting, clean composition, dark modern background with one vivid accent color.",
+    "First infer what the named product actually is from the title: a video game, DLC or expansion, subscription or game time, in-game currency or item, software, or another kind of digital product.",
+    "Build the visual concept around that inferred product category. If it is a video game, reflect its recognizable genre, setting, mood, era, and gameplay themes. If it is not a game, depict the correct service or digital-product concept instead of inventing game artwork.",
+    "Use an original visual interpretation with bold geometric shapes, subtle depth, controlled cinematic lighting, a clean composition, and a dark modern background with one vivid accent color.",
     `Include only this exact short typography: "${title}" as the main title, plus "${typeLabel}" and "${region}" as small secondary keywords.`,
     "Keep all text large, crisp, correctly spelled, and inside the central safe area.",
     "No logos, no storefront UI, no price, no buttons, no borders, no screenshots, no characters copied from existing game artwork, no watermarks, and no extra words.",
