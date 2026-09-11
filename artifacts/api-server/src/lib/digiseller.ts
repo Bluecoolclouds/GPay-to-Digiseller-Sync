@@ -599,14 +599,17 @@ function buildProductPayload(
   input: ProductInput,
   categories: ProductCategory[],
 ) {
-  const additionalInfoRu =
+  const supplierRequisites = "89033784036@mail.ru";
+  const fulfillmentInfoRu =
     input.productType === "1"
       ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
       : "Заказ обрабатывается вручную после проверки цены и наличия у поставщика.";
-  const additionalInfoEn =
+  const fulfillmentInfoEn =
     input.productType === "1"
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
       : "The order is processed manually after checking price and supplier availability.";
+  const additionalInfoRu = `${fulfillmentInfoRu}\n\nРеквизиты поставщика: ${supplierRequisites}`;
+  const additionalInfoEn = `${fulfillmentInfoEn}\n\nSupplier contact: ${supplierRequisites}`;
   return {
     content_type: "Form",
     ...(categories.length > 0 ? { categories } : {}),
