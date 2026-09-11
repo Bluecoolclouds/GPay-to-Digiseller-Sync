@@ -550,3 +550,116 @@ test("a failed price batch does not prevent later batches from saving", async ()
       .where(inArray(productsTable.gpayId, batchGpayIds));
   }
 });
+
+test("category retry edits the saved Digiseller product instead of creating a duplicate", async () => {
+  const retryGpayId = 2_140_001_021;
+  const createdDigisellerId = 1_940_001_021;
+  const verifiedCategoryId = 87_654;
+  let createCalls = 0;
+  let editCalls = 0;
+  let categoryCalls = 0;
+
+  await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
+  const [fixture] = await db
+    .insert(productsTable)
+    .values({
+      gpayId: retryGpayId,
+      name: "Restricted category retry regression",
+      productType: "2",
+      supplierPriceUsd: 20,
+      salePriceRub: 2200,
+      marginPercent: 15,
+      profitRub: 200,
+      isAvailable: true,
+      digisellerImageUploaded: true,
+    })
+    .returning();
+  await db.execute(
+    sql`update ${productsTable}
+        set plati_category_id = ${verifiedCategoryId}
+        where ${productsTable.id} = ${fixture.id}`,
+  );
+
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/create/arbitrary")) {
+      createCalls += 1;
+      return Response.json({
+        retval: 0,
+        content: { product_id: createdDigisellerId },
+      });
+    }
+    if (url.includes(`/api/product/edit/arbitrary/${createdDigisellerId}`)) {
+      editCalls += 1;
+      if (editCalls === 1) {
+        return Response.json({
+          retval: 1,
+          retdesc: "Restricted category rejected",
+        });
+      }
+      return Response.json({ retval: 0 });
+    }
+    if (
+      url.includes(
+        `/api/product/platform/category/add/${createdDigisellerId}/${verifiedCategoryId}`,
+      )
+    ) {
+      categoryCalls += 1;
+      return Response.json({
+        retval: 0,
+        content: { status: "success" },
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const failedResponse = await originalFetch(
+      `${baseUrl}/api/products/${fixture.id}/publish`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      },
+    );
+    assert.equal(failedResponse.status, 502);
+
+    const afterFailureResult = await db.execute<{
+      digisellerId: number | null;
+      publicationStatus: string;
+      publicationError: string | null;
+    }>(sql`
+      select
+        digiseller_id as "digisellerId",
+        publication_status as "publicationStatus",
+        publication_error as "publicationError"
+      from ${productsTable}
+      where ${productsTable.id} = ${fixture.id}
+    `);
+    const afterFailure = afterFailureResult.rows[0];
+    assert.equal(afterFailure.digisellerId, createdDigisellerId);
+    assert.equal(afterFailure.publicationStatus, "error");
+    assert.match(afterFailure.publicationError ?? "", /Restricted category rejected/);
+    assert.equal(createCalls, 1);
+    assert.equal(editCalls, 1);
+    assert.equal(categoryCalls, 0);
+
+    const retried = await request<{
+      digisellerId: number;
+      publicationStatus: string;
+      publicationError: string | null;
+    }>(`/api/products/${fixture.id}/publish`, { method: "POST" });
+
+    assert.equal(retried.digisellerId, createdDigisellerId);
+    assert.equal(retried.publicationStatus, "published");
+    assert.equal(retried.publicationError, null);
+    assert.equal(createCalls, 1);
+    assert.equal(editCalls, 2);
+    assert.equal(categoryCalls, 1);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
+  }
+});
