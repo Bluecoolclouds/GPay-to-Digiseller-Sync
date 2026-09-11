@@ -556,6 +556,7 @@ test("category retry creates one Digiseller product after the category is accept
   const createdDigisellerId = 1_940_001_021;
   const verifiedCategoryId = 87_654;
   let createCalls = 0;
+  let contentCalls = 0;
 
   await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
   const [fixture] = await db
@@ -579,7 +580,7 @@ test("category retry creates one Digiseller product after the category is accept
     if (url.includes("/api/apilogin")) {
       return Response.json({ token: "digiseller-test-token" });
     }
-    if (url.includes("/api/product/create/arbitrary")) {
+    if (url.includes("/api/product/create/uniquefixed")) {
       createCalls += 1;
       const payload = JSON.parse(
         input instanceof Request
@@ -589,7 +590,9 @@ test("category retry creates one Digiseller product after the category is accept
             : "{}",
       ) as {
         categories?: Array<{ owner?: number; category_id?: number }>;
+        content_type?: string;
       };
+      assert.equal(payload.content_type, "text");
       assert.deepEqual(payload.categories, [
         { owner: 0, category_id: verifiedCategoryId },
       ]);
@@ -603,6 +606,23 @@ test("category retry creates one Digiseller product after the category is accept
         retval: 0,
         content: { product_id: createdDigisellerId },
       });
+    }
+    if (url.includes("/api/product/content/add/text")) {
+      contentCalls += 1;
+      const payload = JSON.parse(
+        input instanceof Request
+          ? await input.clone().text()
+          : typeof init?.body === "string"
+            ? init.body
+            : "{}",
+      ) as {
+        product_id?: number;
+        content?: Array<{ value?: string; id_v?: number }>;
+      };
+      assert.equal(payload.product_id, createdDigisellerId);
+      assert.equal(payload.content?.length, 100);
+      assert.match(payload.content?.[0]?.value ?? "", /ключ будет отправлен в чат/i);
+      return Response.json({ retval: 0, content: [{ content_id: 1 }] });
     }
     throw new Error(`Unexpected outbound request: ${url}`);
   };
@@ -649,8 +669,107 @@ test("category retry creates one Digiseller product after the category is accept
     assert.equal(retried.publicationError, null);
     assert.equal(retried.publicationFailureStage, null);
     assert.equal(createCalls, 2);
+    assert.equal(contentCalls, 1);
   } finally {
     fetchOverride = undefined;
     await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
+  }
+});
+
+test("key migration prepares Text product before disabling legacy Form product", async () => {
+  const migrationGpayId = 2_140_001_022;
+  const legacyDigisellerId = 1_940_001_022;
+  const newDigisellerId = 1_940_001_023;
+  const verifiedCategoryId = 87_655;
+  const calls: string[] = [];
+
+  await db.delete(productsTable).where(eq(productsTable.gpayId, migrationGpayId));
+  const [fixture] = await db
+    .insert(productsTable)
+    .values({
+      gpayId: migrationGpayId,
+      digisellerId: legacyDigisellerId,
+      name: "Legacy Form key migration",
+      imageUrl: "https://images.test/key.png",
+      digisellerImageUploaded: true,
+      productType: "2",
+      supplierPriceUsd: 20,
+      salePriceRub: 2200,
+      marginPercent: 15,
+      profitRub: 200,
+      isAvailable: true,
+      publicationStatus: "published",
+      platiCategoryId: verifiedCategoryId,
+    })
+    .returning();
+
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/create/uniquefixed")) {
+      calls.push("create-text");
+      const payload = JSON.parse(String(init?.body)) as {
+        content_type?: string;
+        enabled?: boolean;
+      };
+      assert.equal(payload.content_type, "text");
+      assert.equal(payload.enabled, true);
+      return Response.json({
+        retval: 0,
+        content: { product_id: newDigisellerId },
+      });
+    }
+    if (url.includes("/api/product/content/add/text")) {
+      calls.push("stock-text");
+      return Response.json({ retval: 0, content: [{ content_id: 1 }] });
+    }
+    if (url === "https://images.test/key.png") {
+      calls.push("download-image");
+      return new Response(Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+        headers: { "content-type": "image/png" },
+      });
+    }
+    if (url.includes(`/api/product/preview/add/images/${newDigisellerId}`)) {
+      calls.push("upload-image");
+      return Response.json({ retval: 0, content: [{ preview_id: 1 }] });
+    }
+    if (url.includes(`/api/product/edit/arbitrary/${legacyDigisellerId}`)) {
+      calls.push("disable-legacy");
+      const payload = JSON.parse(String(init?.body)) as { enabled?: boolean };
+      assert.equal(payload.enabled, false);
+      return Response.json({ retval: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const published = await request<{
+      digisellerId: number;
+      publicationStatus: string;
+    }>(`/api/products/${fixture.id}/publish`, { method: "POST" });
+    assert.equal(published.digisellerId, newDigisellerId);
+    assert.equal(published.publicationStatus, "published");
+    assert.deepEqual(calls, [
+      "create-text",
+      "stock-text",
+      "download-image",
+      "upload-image",
+      "disable-legacy",
+    ]);
+
+    const [migrated] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, fixture.id));
+    assert.equal(migrated.digisellerId, newDigisellerId);
+    assert.equal(migrated.previousDigisellerId, null);
+    assert.equal(migrated.digisellerDeliveryType, "text");
+    assert.equal(migrated.digisellerTextStocked, true);
+    assert.equal(migrated.digisellerImageUploaded, true);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(productsTable).where(eq(productsTable.gpayId, migrationGpayId));
   }
 });

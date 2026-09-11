@@ -223,8 +223,9 @@ export async function createDigisellerProduct(input: {
     platiCategoryId,
   );
   const payload = buildProductPayload(input, categories);
+  const productKind = input.productType === "2" ? "uniquefixed" : "arbitrary";
   const response = await fetch(
-    `https://api.digiseller.com/api/product/create/arbitrary?token=${encodeURIComponent(token)}`,
+    `https://api.digiseller.com/api/product/create/${productKind}?token=${encodeURIComponent(token)}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -600,6 +601,7 @@ export async function addDigisellerProductToMarketplaceCategory(
 function buildProductPayload(
   input: ProductInput,
   categories: ProductCategory[],
+  enabled = true,
 ) {
   const additionalInfoRu =
     input.productType === "1"
@@ -610,7 +612,7 @@ function buildProductPayload(
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
       : "The order is processed manually after checking price and supplier availability.";
   return {
-    content_type: "Form",
+    content_type: input.productType === "2" ? "text" : "Form",
     ...(categories.length > 0 ? { categories } : {}),
     name: [
       { locale: "ru-RU", value: input.name.slice(0, 500) },
@@ -625,7 +627,7 @@ function buildProductPayload(
       { locale: "en-US", value: additionalInfoEn },
     ],
     price: { price: Math.ceil(input.priceRub), currency: "RUB" },
-    enabled: true,
+    enabled,
     address_required: false,
     online_checkout_name: input.name.slice(0, 128),
     online_checkout_category: "IntellectualPropertyGrant",
@@ -638,6 +640,7 @@ export async function addDigisellerProductToPlati(
   input: ProductInput,
   providedToken?: string,
   platiCategoryId?: number | null,
+  deliveryType?: "form" | "text",
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
   const categories = await resolveProductCategories(
@@ -646,6 +649,82 @@ export async function addDigisellerProductToPlati(
     platiCategoryId,
   );
   const payload = buildProductPayload(input, categories);
+  const productKind =
+    deliveryType === "text" || (!deliveryType && input.productType === "2")
+      ? "uniquefixed"
+      : "arbitrary";
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/edit/${productKind}/${productId}?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const json = (await response.json()) as CreateProductResult;
+  if (!response.ok || json.retval !== 0) {
+    throw new Error(
+      getDigisellerError(json, `Не удалось добавить товар на Plati.Market (${response.status})`),
+    );
+  }
+}
+
+const TEXT_DELIVERY_NOTICE =
+  "Благодарим за заказ! Ваш ключ будет отправлен в чат ниже в течение 5 минут.\n\nThank you for your order! Your key will be sent in the chat below within 5 minutes.";
+
+export async function addDigisellerTextStock(
+  productId: number,
+  providedToken?: string,
+  count = 100,
+): Promise<void> {
+  const token = providedToken ?? (await loginDigiseller());
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/content/add/text?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        product_id: productId,
+        content: Array.from({ length: count }, () => ({
+          value: TEXT_DELIVERY_NOTICE,
+          id_v: 0,
+        })),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const json = (await response.json()) as CreateProductResult;
+  if (!response.ok || json.retval !== 0) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось добавить Text-содержимое (${response.status})`,
+      ),
+    );
+  }
+}
+
+export async function disableLegacyDigisellerProduct(
+  productId: number,
+  input: ProductInput,
+  providedToken?: string,
+  platiCategoryId?: number | null,
+): Promise<void> {
+  const token = providedToken ?? (await loginDigiseller());
+  const categories = await resolveProductCategories(
+    input.name,
+    token,
+    platiCategoryId,
+  );
+  const payload = buildProductPayload(
+    { ...input, productType: "1" },
+    categories,
+    false,
+  );
   const response = await fetch(
     `https://api.digiseller.com/api/product/edit/arbitrary/${productId}?token=${encodeURIComponent(token)}`,
     {
@@ -658,7 +737,10 @@ export async function addDigisellerProductToPlati(
   const json = (await response.json()) as CreateProductResult;
   if (!response.ok || json.retval !== 0) {
     throw new Error(
-      getDigisellerError(json, `Не удалось добавить товар на Plati.Market (${response.status})`),
+      getDigisellerError(
+        json,
+        `Не удалось отключить старый товар (${response.status})`,
+      ),
     );
   }
 }

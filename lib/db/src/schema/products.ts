@@ -12,6 +12,11 @@ export const productsTable = pgTable("sync_products", {
   id: serial("id").primaryKey(),
   gpayId: integer("gpay_id").notNull().unique(),
   digisellerId: integer("digiseller_id"),
+  previousDigisellerId: integer("previous_digiseller_id"),
+  digisellerDeliveryType: text("digiseller_delivery_type"),
+  digisellerTextStocked: boolean("digiseller_text_stocked")
+    .notNull()
+    .default(false),
   platiCategoryId: integer("plati_category_id"),
   appId: integer("app_id"),
   subId: integer("sub_id"),

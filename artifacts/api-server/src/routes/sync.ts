@@ -34,8 +34,10 @@ import {
   loginGPay,
 } from "../lib/gpay";
 import {
+  addDigisellerTextStock,
   addDigisellerProductToPlati,
   createDigisellerProduct,
+  disableLegacyDigisellerProduct,
   loginDigiseller,
   uploadDigisellerProductImage,
 } from "../lib/digiseller";
@@ -301,13 +303,41 @@ async function publishProductRecord(current: ProductRecord) {
 
   const token = await loginDigiseller();
   const input = getDigisellerProductInput(current);
+  const isKey = classifyGPayProductType(current.productType) === "key";
   let digisellerId = current.digisellerId;
-  if (digisellerId) {
+  let previousDigisellerId = current.previousDigisellerId;
+  let deliveryType = current.digisellerDeliveryType;
+  let digisellerTextStocked = current.digisellerTextStocked;
+  let digisellerImageUploaded = current.digisellerImageUploaded;
+
+  if (isKey && digisellerId && deliveryType !== "text") {
+    previousDigisellerId = digisellerId;
+    digisellerId = await createDigisellerProduct(
+      input,
+      token,
+      current.platiCategoryId,
+    );
+    deliveryType = "text";
+    digisellerTextStocked = false;
+    digisellerImageUploaded = false;
+    await db
+      .update(productsTable)
+      .set({
+        digisellerId,
+        previousDigisellerId,
+        digisellerDeliveryType: deliveryType,
+        digisellerTextStocked,
+        digisellerImageUploaded,
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
+  } else if (digisellerId) {
     await addDigisellerProductToPlati(
       digisellerId,
       input,
       token,
       current.platiCategoryId,
+      deliveryType === "text" ? "text" : "form",
     );
   } else {
     digisellerId = await createDigisellerProduct(
@@ -315,14 +345,26 @@ async function publishProductRecord(current: ProductRecord) {
       token,
       current.platiCategoryId,
     );
+    deliveryType = isKey ? "text" : "form";
     await db
       .update(productsTable)
-      .set({ digisellerId, updatedAt: new Date() })
+      .set({
+        digisellerId,
+        digisellerDeliveryType: deliveryType,
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
+  }
+  if (isKey && !digisellerTextStocked) {
+    await addDigisellerTextStock(digisellerId, token);
+    digisellerTextStocked = true;
+    await db
+      .update(productsTable)
+      .set({ digisellerTextStocked: true, updatedAt: new Date() })
       .where(eq(productsTable.id, current.id));
   }
   let imageStatus: "uploaded" | "skipped" | "failed" = "skipped";
   let imageError: string | null = null;
-  let digisellerImageUploaded = current.digisellerImageUploaded;
   if (!digisellerImageUploaded) {
     try {
       await uploadDigisellerProductImage(
@@ -344,10 +386,23 @@ async function publishProductRecord(current: ProductRecord) {
     }
   }
 
+  if (previousDigisellerId && imageStatus !== "failed") {
+    await disableLegacyDigisellerProduct(
+      previousDigisellerId,
+      input,
+      token,
+      current.platiCategoryId,
+    );
+    previousDigisellerId = null;
+  }
+
   const [updated] = await db
     .update(productsTable)
     .set({
       digisellerId,
+      previousDigisellerId,
+      digisellerDeliveryType: deliveryType,
+      digisellerTextStocked,
       digisellerImageUploaded,
       publicationStatus: imageStatus === "failed" ? "error" : "published",
       publicationError: imageError,
