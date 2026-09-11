@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const handleSync = () => {
     syncMutation.mutate({ data: { pageSize: 100, productKind } }, {
       onSuccess: (res) => {
-        toast.success(`Синхронизация завершена. ${res.imported} импортировано, ${res.updated} обновлено.`)
+        toast.success(`${res.message}. Добавлено ${res.imported}, обновлено ${res.updated}.`)
         refetchDashboard()
         refetchActivities()
       },

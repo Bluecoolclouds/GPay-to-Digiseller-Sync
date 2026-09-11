@@ -5,12 +5,14 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { SyncResultProductKind } from './syncResultProductKind';
 
 export interface SyncResult {
   success: boolean;
   imported: number;
   updated: number;
   disabled: number;
+  productKind?: SyncResultProductKind;
   message: string;
   completedAt: Date;
 }

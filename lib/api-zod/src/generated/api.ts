@@ -175,6 +175,7 @@ export const SyncCatalogResponse = zod.object({
   "imported": zod.number().int(),
   "updated": zod.number().int(),
   "disabled": zod.number().int(),
+  "productKind": zod.enum(['all', 'key', 'gift']).optional(),
   "message": zod.string(),
   "completedAt": zod.coerce.date()
 })

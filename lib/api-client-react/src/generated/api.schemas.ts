@@ -162,11 +162,21 @@ export interface CatalogSyncInput {
   productKind?: CatalogSyncInputProductKind;
 }
 
+export type SyncResultProductKind = typeof SyncResultProductKind[keyof typeof SyncResultProductKind];
+
+
+export const SyncResultProductKind = {
+  all: 'all',
+  key: 'key',
+  gift: 'gift',
+} as const;
+
 export interface SyncResult {
   success: boolean;
   imported: number;
   updated: number;
   disabled: number;
+  productKind?: SyncResultProductKind;
   message: string;
   completedAt: string;
 }

@@ -422,6 +422,11 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         .returning();
     }
     const requestedProductKind = parsed.data.productKind ?? "all";
+    const productKindLabel = {
+      all: "все товары",
+      key: "ключи",
+      gift: "гифты",
+    }[requestedProductKind];
     const data = await fetchGPayProducts(
       parsed.data.pageSize,
       requestedProductKind,
@@ -474,7 +479,7 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
     await db.insert(activitiesTable).values({
       type: "sync",
       title: "Каталог GPay синхронизирован",
-      description: `Добавлено ${imported}, обновлено ${updated} товаров.`,
+      description: `Тип: ${productKindLabel}. Добавлено ${imported}, обновлено ${updated} товаров.`,
       status: "success",
     });
     res.json(
@@ -483,7 +488,8 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         imported,
         updated,
         disabled: 0,
-        message: `Получено ${data.products?.length ?? 0} из ${data.totalCount} товаров`,
+        productKind: requestedProductKind,
+        message: `Синхронизация завершена: ${productKindLabel}. Получено ${data.products?.length ?? 0} из ${data.totalCount} товаров`,
         completedAt: new Date().toISOString(),
       }),
     );

@@ -39,3 +39,4 @@ export * from './settingsInput';
 export * from './settingsInputAutomationMode';
 export * from './settingsInputExchangeRateMode';
 export * from './syncResult';
+export * from './syncResultProductKind';

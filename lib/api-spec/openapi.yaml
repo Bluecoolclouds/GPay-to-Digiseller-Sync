@@ -323,6 +323,7 @@ components:
         imported: { type: integer }
         updated: { type: integer }
         disabled: { type: integer }
+        productKind: { type: string, enum: [all, key, gift] }
         message: { type: string }
         completedAt: { type: string, format: date-time }
     Activity:
