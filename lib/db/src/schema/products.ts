@@ -16,6 +16,9 @@ export const productsTable = pgTable("sync_products", {
   subId: integer("sub_id"),
   name: text("name").notNull(),
   imageUrl: text("image_url"),
+  digisellerImageUploaded: boolean("digiseller_image_uploaded")
+    .notNull()
+    .default(false),
   productType: text("product_type").notNull(),
   supplierPriceUsd: doublePrecision("supplier_price_usd").notNull(),
   salePriceRub: doublePrecision("sale_price_rub").notNull(),

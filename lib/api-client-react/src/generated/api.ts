@@ -21,6 +21,8 @@ import type {
 
 import type {
   Activity,
+  BatchPublishInput,
+  BatchPublishResult,
   CatalogSyncInput,
   Connections,
   Dashboard,
@@ -418,6 +420,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getPublishProductMutationOptions(options));
+    }
+
+export const getPublishProductsBatchUrl = () => {
+
+
+
+
+  return `/api/products/publish-batch`
+}
+
+export const publishProductsBatch = async (batchPublishInput: BatchPublishInput, options?: Parameters<typeof customFetch>[1]): Promise<BatchPublishResult> => {
+
+  return customFetch<BatchPublishResult>(getPublishProductsBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(batchPublishInput)
+  }
+);}
+
+
+
+
+
+export const getPublishProductsBatchMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProductsBatch>>, TError,{data: BodyType<BatchPublishInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishProductsBatch>>, TError,{data: BodyType<BatchPublishInput>}, TContext> => {
+
+const mutationKey = ['publishProductsBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishProductsBatch>>, {data: BodyType<BatchPublishInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  publishProductsBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishProductsBatchMutationResult = NonNullable<Awaited<ReturnType<typeof publishProductsBatch>>>
+    export type PublishProductsBatchMutationBody = BodyType<BatchPublishInput>
+    export type PublishProductsBatchMutationError = ErrorType<unknown>
+
+    export const usePublishProductsBatch = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProductsBatch>>, TError,{data: BodyType<BatchPublishInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishProductsBatch>>,
+        TError,
+        {data: BodyType<BatchPublishInput>},
+        TContext
+      > => {
+      return useMutation(getPublishProductsBatchMutationOptions(options));
     }
 
 export const getSyncCatalogUrl = () => {

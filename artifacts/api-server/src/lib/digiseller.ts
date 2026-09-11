@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 type DigiLoginResponse = {
   token?: string;
@@ -13,6 +15,18 @@ type CreateProductResult = {
   content?: { product_id?: number };
 };
 
+type AddImageResult = {
+  retval?: number;
+  retdesc?: string;
+  errors?: Array<{ message?: string; description?: string }>;
+  content?: Array<{ preview_id?: number; url?: string }>;
+};
+
+type DigisellerErrorResult = {
+  retdesc?: string;
+  errors?: Array<{ message?: string; description?: string }>;
+};
+
 type ProductInput = {
   name: string;
   description: string;
@@ -22,7 +36,7 @@ type ProductInput = {
 
 const cataloguerCategoryCache = new Map<string, number>();
 
-function getDigisellerError(json: CreateProductResult, fallback: string) {
+function getDigisellerError(json: DigisellerErrorResult, fallback: string) {
   const details = json.errors
     ?.map((error) => {
       if (typeof error === "string") return error;
@@ -75,8 +89,8 @@ export async function createDigisellerProduct(input: {
   description: string;
   priceRub: number;
   productType: string;
-}): Promise<number> {
-  const token = await loginDigiseller();
+}, providedToken?: string): Promise<number> {
+  const token = providedToken ?? (await loginDigiseller());
   const cataloguerCategoryId = await findCataloguerCategoryId(input.name, token);
   const payload = buildProductPayload(input, cataloguerCategoryId);
   const response = await fetch(
@@ -94,6 +108,128 @@ export async function createDigisellerProduct(input: {
     throw new Error(getDigisellerError(json, `Digiseller API returned ${response.status}`));
   }
   return productId;
+}
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const execFileAsync = promisify(execFile);
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+export async function uploadDigisellerProductImage(
+  productId: number,
+  input: {
+    imageUrl: string | null;
+    name: string;
+    productKind: "key" | "gift";
+    region: string;
+  },
+  providedToken?: string,
+): Promise<void> {
+  let bytes: ArrayBuffer | Buffer | null = null;
+  let contentType = "image/png";
+  let extension = "png";
+
+  if (input.imageUrl) {
+    try {
+      const parsedUrl = new URL(input.imageUrl);
+      if (parsedUrl.protocol !== "https:") {
+        throw new Error("Изображение GPay должно использовать HTTPS");
+      }
+      const imageResponse = await fetch(parsedUrl, {
+        redirect: "follow",
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!imageResponse.ok) {
+        throw new Error(`Не удалось скачать изображение GPay (${imageResponse.status})`);
+      }
+      const responseType = imageResponse.headers
+        .get("content-type")
+        ?.split(";")[0]
+        .trim();
+      if (!responseType || !ALLOWED_IMAGE_TYPES.has(responseType)) {
+        throw new Error(`Неподдерживаемый формат изображения: ${responseType || "не указан"}`);
+      }
+      const declaredSize = Number(imageResponse.headers.get("content-length") || 0);
+      if (declaredSize > MAX_IMAGE_BYTES) {
+        throw new Error("Изображение GPay превышает 10 МБ");
+      }
+      const downloaded = await imageResponse.arrayBuffer();
+      if (downloaded.byteLength > MAX_IMAGE_BYTES) {
+        throw new Error("Изображение GPay превышает 10 МБ");
+      }
+      bytes = downloaded;
+      contentType = responseType;
+      extension = responseType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+    } catch {
+      bytes = null;
+    }
+  }
+
+  if (!bytes) {
+    const cleanName = input.name.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 110);
+    const subtitle = `${input.productKind === "key" ? "DIGITAL KEY" : "STEAM GIFT"}  •  ${input.region || "GLOBAL"}`;
+    const { stdout } = await execFileAsync(
+      "magick",
+      [
+        "-size", "1200x630",
+        "gradient:#0f172a-#2563eb",
+        "-fill", "#93c5fd",
+        "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "-pointsize", "34",
+        "-gravity", "northwest",
+        "-annotate", "+70+75", "SYNC CONSOLE",
+        "(",
+        "-size", "1040x300",
+        "-background", "none",
+        "-fill", "white",
+        "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "-pointsize", "54",
+        "-gravity", "center",
+        `caption:${cleanName}`,
+        ")",
+        "-gravity", "center",
+        "-geometry", "+0-10",
+        "-composite",
+        "-fill", "#bfdbfe",
+        "-pointsize", "30",
+        "-gravity", "south",
+        "-annotate", "+0+65", subtitle,
+        "-depth", "8",
+        "png:-",
+      ],
+      { encoding: "buffer", maxBuffer: MAX_IMAGE_BYTES },
+    );
+    bytes = stdout;
+  }
+
+  const uploadBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(uploadBuffer).set(new Uint8Array(bytes));
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([uploadBuffer], { type: contentType }),
+    `product-${productId}.${extension}`,
+  );
+
+  const token = providedToken ?? (await loginDigiseller());
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/preview/add/images/${productId}?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  const json = (await response.json()) as AddImageResult;
+  if (!response.ok || json.retval !== 0) {
+    throw new Error(
+      getDigisellerError(json, `Не удалось загрузить изображение (${response.status})`),
+    );
+  }
 }
 
 function getCataloguerSearchName(name: string) {
@@ -172,8 +308,9 @@ function buildProductPayload(input: ProductInput, cataloguerCategoryId: number) 
 export async function addDigisellerProductToPlati(
   productId: number,
   input: ProductInput,
+  providedToken?: string,
 ): Promise<void> {
-  const token = await loginDigiseller();
+  const token = providedToken ?? (await loginDigiseller());
   const categoryId = await findCataloguerCategoryId(input.name, token);
   const payload = buildProductPayload(input, categoryId);
   const response = await fetch(

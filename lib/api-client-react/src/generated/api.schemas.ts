@@ -58,7 +58,8 @@ export interface Product {
   subId?: number | null;
   name: string;
   /** @nullable */
-  imageUrl?: string | null;
+  imageUrl: string | null;
+  digisellerImageUploaded: boolean;
   productType: string;
   productKind: ProductProductKind;
   supplierPriceUsd: number;
@@ -96,6 +97,50 @@ export interface ProductUpdate {
      */
   marginPercent?: number;
   publicationStatus?: ProductUpdatePublicationStatus;
+}
+
+export interface BatchPublishInput {
+  /**
+     * @minItems 1
+     * @maxItems 50
+     * @items.minimum 1
+     */
+  productIds: number[];
+}
+
+export type BatchPublishItemStatus = typeof BatchPublishItemStatus[keyof typeof BatchPublishItemStatus];
+
+
+export const BatchPublishItemStatus = {
+  published: 'published',
+  failed: 'failed',
+} as const;
+
+export type BatchPublishItemImageStatus = typeof BatchPublishItemImageStatus[keyof typeof BatchPublishItemImageStatus];
+
+
+export const BatchPublishItemImageStatus = {
+  uploaded: 'uploaded',
+  skipped: 'skipped',
+  failed: 'failed',
+} as const;
+
+export interface BatchPublishItem {
+  productId: number;
+  name: string;
+  status: BatchPublishItemStatus;
+  /** @nullable */
+  digisellerId?: number | null;
+  imageStatus: BatchPublishItemImageStatus;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface BatchPublishResult {
+  requested: number;
+  succeeded: number;
+  failed: number;
+  items: BatchPublishItem[];
 }
 
 export type CatalogSyncInputProductKind = typeof CatalogSyncInputProductKind[keyof typeof CatalogSyncInputProductKind];

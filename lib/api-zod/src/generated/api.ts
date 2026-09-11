@@ -50,7 +50,8 @@ export const ListProductsResponse = zod.object({
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
-  "imageUrl": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "digisellerImageUploaded": zod.boolean(),
   "productType": zod.string(),
   "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
@@ -90,7 +91,8 @@ export const UpdateProductResponse = zod.object({
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
-  "imageUrl": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "digisellerImageUploaded": zod.boolean(),
   "productType": zod.string(),
   "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
@@ -116,7 +118,8 @@ export const PublishProductResponse = zod.object({
   "appId": zod.number().int().nullish(),
   "subId": zod.number().int().nullish(),
   "name": zod.string(),
-  "imageUrl": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "digisellerImageUploaded": zod.boolean(),
   "productType": zod.string(),
   "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
@@ -128,6 +131,30 @@ export const PublishProductResponse = zod.object({
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
+})
+
+
+
+export const publishProductsBatchBodyProductIdsMax = 50;
+
+
+
+export const PublishProductsBatchBody = zod.object({
+  "productIds": zod.array(zod.number().int().min(1)).min(1).max(publishProductsBatchBodyProductIdsMax)
+})
+
+export const PublishProductsBatchResponse = zod.object({
+  "requested": zod.number().int(),
+  "succeeded": zod.number().int(),
+  "failed": zod.number().int(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().int(),
+  "name": zod.string(),
+  "status": zod.enum(['published', 'failed']),
+  "digisellerId": zod.number().int().nullish(),
+  "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
+  "error": zod.string().nullish()
+}))
 })
 
 

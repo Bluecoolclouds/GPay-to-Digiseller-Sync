@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   activitiesTable,
   db,
@@ -7,6 +7,8 @@ import {
   settingsTable,
 } from "@workspace/db";
 import {
+  PublishProductsBatchBody,
+  PublishProductsBatchResponse,
   GetConnectionsResponse,
   GetDashboardResponse,
   GetExchangeRateResponse,
@@ -35,6 +37,7 @@ import {
   addDigisellerProductToPlati,
   createDigisellerProduct,
   loginDigiseller,
+  uploadDigisellerProductImage,
 } from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 
@@ -191,88 +194,211 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
   );
 });
 
+type ProductRecord = typeof productsTable.$inferSelect;
+
+function getDigisellerProductInput(current: ProductRecord) {
+  const productKind = classifyGPayProductType(current.productType);
+  return {
+    name: current.name,
+    description: [
+      current.name,
+      "",
+      `Регион: ${current.region}.`,
+      productKind === "gift"
+        ? "Поставка Steam Gift после проверки наличия и цены."
+        : "Поставка цифрового ключа после проверки наличия и цены.",
+    ].join("\n"),
+    priceRub: current.salePriceRub,
+    productType: current.productType,
+  };
+}
+
+function toProductResponse(current: ProductRecord) {
+  return {
+    ...current,
+    productKind: classifyGPayProductType(current.productType),
+    updatedAt: current.updatedAt.toISOString(),
+  };
+}
+
+async function publishProductRecord(current: ProductRecord) {
+  if (!current.isAvailable) {
+    throw new Error("Можно публиковать только доступные товары");
+  }
+  if (classifyGPayProductType(current.productType) === "unknown") {
+    throw new Error(`Неизвестный тип товара GPay: ${current.productType}`);
+  }
+
+  const token = await loginDigiseller();
+  const input = getDigisellerProductInput(current);
+  let digisellerId = current.digisellerId;
+  if (digisellerId) {
+    await addDigisellerProductToPlati(digisellerId, input, token);
+  } else {
+    digisellerId = await createDigisellerProduct(input, token);
+  }
+
+  let imageStatus: "uploaded" | "skipped" | "failed" = "skipped";
+  let imageError: string | null = null;
+  let digisellerImageUploaded = current.digisellerImageUploaded;
+  if (!digisellerImageUploaded) {
+    try {
+      await uploadDigisellerProductImage(
+        digisellerId,
+        {
+          imageUrl: current.imageUrl,
+          name: current.name,
+          productKind: classifyGPayProductType(current.productType) as "key" | "gift",
+          region: current.region,
+        },
+        token,
+      );
+      imageStatus = "uploaded";
+      digisellerImageUploaded = true;
+    } catch (error) {
+      imageStatus = "failed";
+      imageError =
+        error instanceof Error ? error.message : "Не удалось загрузить изображение";
+    }
+  }
+
+  const [updated] = await db
+    .update(productsTable)
+    .set({
+      digisellerId,
+      digisellerImageUploaded,
+      publicationStatus: imageStatus === "failed" ? "error" : "published",
+      updatedAt: new Date(),
+    })
+    .where(eq(productsTable.id, current.id))
+    .returning();
+  return { product: updated, imageStatus, imageError };
+}
+
+router.post("/products/publish-batch", async (req, res): Promise<void> => {
+  const body = PublishProductsBatchBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const ids = body.data.productIds;
+  const rows = await db
+    .select()
+    .from(productsTable)
+    .where(inArray(productsTable.id, ids));
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const items: Array<{
+    productId: number;
+    name: string;
+    status: "published" | "failed";
+    digisellerId: number | null;
+    imageStatus: "uploaded" | "skipped" | "failed";
+    error: string | null;
+  }> = [];
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (nextIndex < ids.length) {
+      const productId = ids[nextIndex++];
+      const current = rowsById.get(productId);
+      if (!current) {
+        items.push({
+          productId,
+          name: `Товар #${productId}`,
+          status: "failed",
+          digisellerId: null,
+          imageStatus: "skipped",
+          error: "Товар не найден",
+        });
+        continue;
+      }
+      try {
+        const result = await publishProductRecord(current);
+        items.push({
+          productId,
+          name: current.name,
+          status: result.imageStatus === "failed" ? "failed" : "published",
+          digisellerId: result.product.digisellerId,
+          imageStatus: result.imageStatus,
+          error: result.imageError,
+        });
+      } catch (error) {
+        req.log.error(
+          { err: error, productId },
+          "Batch Digiseller product publication failed",
+        );
+        items.push({
+          productId,
+          name: current.name,
+          status: "failed",
+          digisellerId: current.digisellerId,
+          imageStatus: "skipped",
+          error: error instanceof Error ? error.message : "Ошибка публикации",
+        });
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(2, ids.length) }, () => worker()),
+  );
+  items.sort(
+    (left, right) =>
+      ids.indexOf(left.productId) - ids.indexOf(right.productId),
+  );
+  const succeeded = items.filter((item) => item.status === "published").length;
+  const failed = items.length - succeeded;
+  const imageFailures = items.filter(
+    (item) => item.imageStatus === "failed",
+  ).length;
+  await db.insert(activitiesTable).values({
+    type: "publish",
+    title: "Пакетная публикация завершена",
+    description: `Опубликовано ${succeeded}, ошибок ${failed}, изображений не загружено ${imageFailures}.`,
+    status: failed > 0 || imageFailures > 0 ? "warning" : "success",
+  });
+  res.json(
+    PublishProductsBatchResponse.parse({
+      requested: ids.length,
+      succeeded,
+      failed,
+      items,
+    }),
+  );
+});
+
 router.post("/products/:id/publish", async (req, res): Promise<void> => {
   const params = PublishProductParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [current] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.id));
-  if (!current || !current.isAvailable) {
-    res.status(409).json({ error: "Only available products can be published" });
-    return;
-  }
-  const productKind = classifyGPayProductType(current.productType);
-  if (productKind === "unknown") {
-    res.status(409).json({
-      error: `Неизвестный тип товара GPay: ${current.productType}`,
-    });
-    return;
-  }
-  if (current.digisellerId) {
-    try {
-      await addDigisellerProductToPlati(current.digisellerId, {
-        name: current.name,
-        description: [
-          current.name,
-          "",
-          `Регион: ${current.region}.`,
-          productKind === "gift"
-            ? "Поставка Steam Gift после проверки наличия и цены."
-            : "Поставка цифрового ключа после проверки наличия и цены.",
-        ].join("\n"),
-        priceRub: current.salePriceRub,
-        productType: current.productType,
-      });
-      res.json(
-        PublishProductResponse.parse({
-          ...current,
-          productKind,
-          updatedAt: current.updatedAt.toISOString(),
-        }),
-      );
-    } catch (error) {
-      req.log.error({ err: error, productId: current.id }, "Plati.Market category assignment failed");
-      res.status(502).json({
-        error: error instanceof Error ? error.message : "Plati.Market category assignment failed",
-      });
-    }
+  const [current] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, params.data.id));
+  if (!current) {
+    res.status(404).json({ error: "Товар не найден" });
     return;
   }
   try {
-    const digisellerId = await createDigisellerProduct({
-      name: current.name,
-      description: [
-        current.name,
-        "",
-        `Регион: ${current.region}.`,
-        productKind === "gift"
-          ? "Поставка Steam Gift после проверки наличия и цены."
-          : "Поставка цифрового ключа после проверки наличия и цены.",
-      ].join("\n"),
-      priceRub: current.salePriceRub,
-      productType: current.productType,
+    const result = await publishProductRecord(current);
+    await db.insert(activitiesTable).values({
+      type: "publish",
+      title: "Товар готов к публикации",
+      description:
+        result.imageStatus === "failed"
+          ? `${result.product.name} опубликован, но изображение не загружено: ${result.imageError}`
+          : `${result.product.name} создан в Digiseller, ID ${result.product.digisellerId}.`,
+      status: result.imageStatus === "failed" ? "warning" : "success",
     });
-  const [updated] = await db
-    .update(productsTable)
-      .set({ digisellerId, publicationStatus: "published", updatedAt: new Date() })
-    .where(eq(productsTable.id, params.data.id))
-    .returning();
-  await db.insert(activitiesTable).values({
-    type: "publish",
-    title: "Товар готов к публикации",
-      description: `${updated.name} создан в Digiseller, ID ${digisellerId}.`,
-    status: "success",
-  });
-  res.json(
-    PublishProductResponse.parse({
-      ...updated,
-      productKind,
-      updatedAt: updated.updatedAt.toISOString(),
-    }),
-  );
+    res.json(PublishProductResponse.parse(toProductResponse(result.product)));
   } catch (error) {
-    req.log.error({ err: error, productId: current.id }, "Digiseller product publication failed");
+    req.log.error(
+      { err: error, productId: current.id },
+      "Digiseller product publication failed",
+    );
     res.status(502).json({
       error: error instanceof Error ? error.message : "Digiseller publication failed",
     });

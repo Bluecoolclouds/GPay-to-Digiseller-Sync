@@ -19,7 +19,8 @@ export interface Product {
   subId?: number | null;
   name: string;
   /** @nullable */
-  imageUrl?: string | null;
+  imageUrl: string | null;
+  digisellerImageUploaded: boolean;
   productType: string;
   productKind: ProductProductKind;
   supplierPriceUsd: number;

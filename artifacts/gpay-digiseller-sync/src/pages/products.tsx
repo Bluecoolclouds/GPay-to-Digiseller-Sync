@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react"
-import { useListProducts, useUpdateProduct, usePublishProduct, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
+import { useListProducts, useUpdateProduct, usePublishProduct, usePublishProductsBatch, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind, BatchPublishResult } from "@workspace/api-client-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, Play, Check, AlertTriangle, ArrowRight } from "lucide-react"
+import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { getListProductsQueryKey } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,9 @@ export default function ProductsPage() {
   const [status, setStatus] = useState<ListProductsStatus>("all")
   const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [batchResult, setBatchResult] = useState<BatchPublishResult | null>(null)
+  const batchMutation = usePublishProductsBatch()
   
   const [debouncedSearch, setDebouncedSearch] = useState("")
   useEffect(() => {
@@ -34,6 +37,64 @@ export default function ProductsPage() {
     productKind: productKind !== "all" ? productKind : undefined
   })
 
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setBatchResult(null)
+  }, [page, status, productKind, debouncedSearch])
+
+  const eligibleItems = (data?.items ?? []).filter(
+    (product) =>
+      product.isAvailable &&
+      product.publicationStatus !== ProductPublicationStatus.published &&
+      product.productKind !== ProductProductKind.unknown,
+  )
+  const allEligibleSelected =
+    eligibleItems.length > 0 &&
+    eligibleItems.every((product) => selectedIds.has(product.id))
+
+  const toggleAllEligible = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (allEligibleSelected) {
+        eligibleItems.forEach((product) => next.delete(product.id))
+      } else {
+        eligibleItems.forEach((product) => next.add(product.id))
+      }
+      return next
+    })
+  }
+
+  const handleBatchPublish = () => {
+    const productIds = Array.from(selectedIds)
+    if (
+      !window.confirm(
+        `Создать или обновить ${productIds.length} карточек в Digiseller? Это изменит внешний каталог. Изображения GPay будут загружены автоматически.`,
+      )
+    ) return
+
+    batchMutation.mutate(
+      { data: { productIds } },
+      {
+        onSuccess: (result) => {
+          setBatchResult(result)
+          setSelectedIds(new Set())
+          queryClient.invalidateQueries()
+          const imageFailures = result.items.filter(
+            (item) => item.imageStatus === "failed",
+          ).length
+          if (result.failed > 0 || imageFailures > 0) {
+            toast.warning(
+              `Опубликовано ${result.succeeded}, ошибок ${result.failed}, проблем с изображениями ${imageFailures}`,
+            )
+          } else {
+            toast.success(`Опубликовано ${result.succeeded} товаров`)
+          }
+        },
+        onError: () => toast.error("Пакетная публикация не выполнена"),
+      },
+    )
+  }
+
   const updateProductInCache = (updatedProduct: Product) => {
     queryClient.setQueryData(getListProductsQueryKey({ page, pageSize: 20, search: debouncedSearch || undefined, status: status !== "all" ? status : undefined, productKind: productKind !== "all" ? productKind : undefined }), (old: any) => {
       if (!old) return old;
@@ -46,9 +107,24 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Товары</h1>
-        <p className="text-muted-foreground mt-1">Управление маржой и публикация в Digiseller.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Товары</h1>
+          <p className="text-muted-foreground mt-1">Управление маржой и публикация в Digiseller.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Если GPay не прислал изображение, при публикации будет создана стандартная обложка.
+            </p>
+        </div>
+        <Button
+          onClick={handleBatchPublish}
+          disabled={selectedIds.size === 0 || batchMutation.isPending}
+          className="gap-2"
+        >
+          <Play className="h-4 w-4" />
+          {batchMutation.isPending
+            ? "Публикация..."
+            : `Опубликовать выбранные (${selectedIds.size})`}
+        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
@@ -97,11 +173,45 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {batchResult && (
+        <Card className="border-primary/20 bg-primary/5 p-4">
+          <div className="font-medium">
+            Пакет завершен: опубликовано {batchResult.succeeded} из {batchResult.requested}
+          </div>
+          {batchResult.items.some(
+            (item) => item.status === "failed" || item.imageStatus === "failed",
+          ) && (
+            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+              {batchResult.items
+                .filter(
+                  (item) =>
+                    item.status === "failed" || item.imageStatus === "failed",
+                )
+                .map((item) => (
+                  <div key={item.productId}>
+                    {item.name}: {item.error || "изображение не загружено"}
+                  </div>
+                ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card className="overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/40 border-b">
               <tr>
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Выбрать доступные товары на странице"
+                    checked={allEligibleSelected}
+                    onChange={toggleAllEligible}
+                    disabled={eligibleItems.length === 0}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">Товар</th>
                 <th className="px-4 py-3 font-medium">Доступность</th>
                 <th className="px-4 py-3 font-medium">Цены (USD → RUB)</th>
@@ -111,15 +221,24 @@ export default function ProductsPage() {
             </thead>
             <tbody className="divide-y divide-border/50">
               {isLoading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Загрузка каталога...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Загрузка каталога...</td></tr>
               ) : !data?.items?.length ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Товары не найдены.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Товары не найдены.</td></tr>
               ) : (
                 data.items.map(product => (
                   <ProductRow 
                     key={product.id} 
                     product={product} 
                     onUpdate={updateProductInCache}
+                    selected={selectedIds.has(product.id)}
+                    onSelectionChange={(selected) =>
+                      setSelectedIds((current) => {
+                        const next = new Set(current)
+                        if (selected) next.add(product.id)
+                        else next.delete(product.id)
+                        return next
+                      })
+                    }
                   />
                 ))
               )}
@@ -142,7 +261,17 @@ export default function ProductsPage() {
   )
 }
 
-function ProductRow({ product, onUpdate }: { product: Product, onUpdate: (p: Product) => void }) {
+function ProductRow({
+  product,
+  onUpdate,
+  selected,
+  onSelectionChange,
+}: {
+  product: Product
+  onUpdate: (p: Product) => void
+  selected: boolean
+  onSelectionChange: (selected: boolean) => void
+}) {
   const [margin, setMargin] = useState(product.marginPercent.toString())
   const updateMutation = useUpdateProduct()
   const publishMutation = usePublishProduct()
@@ -183,31 +312,68 @@ function ProductRow({ product, onUpdate }: { product: Product, onUpdate: (p: Pro
     publishMutation.mutate({ id: product.id }, {
       onSuccess: (res) => {
         onUpdateRef.current(res)
-        toast.success("Товар опубликован в Digiseller")
+        if (res.imageUrl && !res.digisellerImageUploaded) {
+          toast.warning("Товар опубликован, но изображение не загрузилось")
+        } else {
+          toast.success("Товар опубликован в Digiseller")
+        }
       },
       onError: () => toast.error("Не удалось опубликовать товар")
     })
   }
 
   const isPublished = product.publicationStatus === ProductPublicationStatus.published
+  const canSelect =
+    product.isAvailable &&
+    !isPublished &&
+    product.productKind !== ProductProductKind.unknown
 
   return (
     <tr className="hover:bg-muted/30 transition-colors group">
       <td className="px-4 py-3">
-        <div className="font-medium text-foreground max-w-[280px] sm:max-w-sm truncate" title={product.name}>{product.name}</div>
-        <div className="mt-1">
-          <Badge variant={product.productKind === ProductProductKind.unknown ? "destructive" : "secondary"}>
-            {product.productKind === ProductProductKind.key
-              ? "Ключ"
-              : product.productKind === ProductProductKind.gift
-                ? "Гифт"
-                : `Неизвестный тип (${product.productType})`}
-          </Badge>
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5 flex gap-2 font-mono">
-          <span>GPay: {product.gpayId}</span>
-          {product.digisellerId && <span>• DS: {product.digisellerId}</span>}
-          {product.region && <span>• {product.region}</span>}
+        <input
+          type="checkbox"
+          aria-label={`Выбрать ${product.name}`}
+          checked={selected}
+          onChange={(event) => onSelectionChange(event.target.checked)}
+          disabled={!canSelect}
+          className="h-4 w-4 rounded border-input"
+        />
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-start gap-3">
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt=""
+              loading="lazy"
+              className="h-12 w-12 shrink-0 rounded-md border bg-muted object-cover"
+            />
+          ) : (
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-muted">
+              <Images className="h-5 w-5 text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="font-medium text-foreground max-w-[280px] sm:max-w-sm truncate" title={product.name}>{product.name}</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <Badge variant={product.productKind === ProductProductKind.unknown ? "destructive" : "secondary"}>
+                {product.productKind === ProductProductKind.key
+                  ? "Ключ"
+                  : product.productKind === ProductProductKind.gift
+                    ? "Гифт"
+                    : `Неизвестный тип (${product.productType})`}
+              </Badge>
+              {product.digisellerImageUploaded && (
+                <Badge variant="outline">Изображение в DS</Badge>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 flex gap-2 font-mono">
+              <span>GPay: {product.gpayId}</span>
+              {product.digisellerId && <span>• DS: {product.digisellerId}</span>}
+              {product.region && <span>• {product.region}</span>}
+            </div>
+          </div>
         </div>
       </td>
       <td className="px-4 py-3">
