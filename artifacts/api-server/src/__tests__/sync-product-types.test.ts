@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { AddressInfo } from "node:net";
-import { inArray, sql } from "drizzle-orm";
-import { db, pool, productsTable, settingsTable } from "@workspace/db";
+import { desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  activitiesTable,
+  db,
+  pool,
+  productsTable,
+  settingsTable,
+} from "@workspace/db";
 import app from "../app";
 import { syncKeyPrices } from "../lib/price-sync";
 
@@ -358,5 +364,137 @@ test("per-product Digiseller failure leaves the previous local price unchanged",
     assert.equal(saved.salePriceRub, 1100);
   } finally {
     fetchOverride = undefined;
+  }
+});
+
+test("a failed price batch does not prevent later batches from saving", async () => {
+  const batchGpayIds = Array.from(
+    { length: 101 },
+    (_, index) => 2_130_000_000 + index,
+  );
+  const digisellerOffset = 1_920_000_000;
+  const previousSupplierPrice = 10;
+  const previousSalePrice = 1000;
+  const submittedBatches: number[][] = [];
+
+  await db.delete(productsTable).where(inArray(productsTable.gpayId, batchGpayIds));
+  await db.insert(productsTable).values(
+    batchGpayIds.map((gpayId, index) => ({
+      gpayId,
+      digisellerId: digisellerOffset + index,
+      name: `Batch regression product ${index + 1}`,
+      productType: "2",
+      publicationStatus: "published" as const,
+      supplierPriceUsd: previousSupplierPrice,
+      salePriceRub: previousSalePrice,
+      marginPercent: 15,
+      profitRub: 100,
+      isAvailable: true,
+    })),
+  );
+  await db
+    .insert(settingsTable)
+    .values({ id: 1, automationMode: "automatic" })
+    .onConflictDoUpdate({
+      target: settingsTable.id,
+      set: { automationMode: "automatic" },
+    });
+
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      const { page, pageSize } = JSON.parse(String(init?.body ?? "{}"));
+      const start = (page - 1) * pageSize;
+      return Response.json({
+        status: "success",
+        data: {
+          products: batchGpayIds.slice(start, start + pageSize).map((id, index) => ({
+            id,
+            name: `Batch regression product ${start + index + 1}`,
+            productType: 2,
+            currentPartnerPrice: 20 + (start + index) / 100,
+            isAvailable: true,
+            region: "Global",
+          })),
+          totalCount: batchGpayIds.length,
+          page,
+          pageSize,
+        },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/prices")) {
+      const submitted = JSON.parse(String(init?.body ?? "[]")) as Array<{
+        product_id: number;
+      }>;
+      submittedBatches.push(submitted.map(({ product_id }) => product_id));
+      if (submittedBatches.length === 1) {
+        return new Response("First batch unavailable", { status: 503 });
+      }
+      return new Response("12345678-1234-1234-1234-123456789abc");
+    }
+    if (url.includes("/UpdateProductsTaskStatus")) {
+      return Response.json({ Status: 3, ErrorCount: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const result = await syncKeyPrices();
+    const saved = await db
+      .select()
+      .from(productsTable)
+      .where(inArray(productsTable.gpayId, batchGpayIds));
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .where(eq(activitiesTable.type, "price"))
+      .orderBy(desc(activitiesTable.createdAt))
+      .limit(1);
+    const failedIds = new Set(submittedBatches[0]);
+    const successfulIds = new Set(submittedBatches[1]);
+
+    assert.deepEqual(
+      submittedBatches.map((batch) => batch.length),
+      [100, 1],
+    );
+    assert.equal(result.checked, 101);
+    assert.equal(result.changed, 101);
+    assert.equal(result.digisellerUpdated, 1);
+    assert.equal(result.failed, 100);
+    assert.equal(result.errors?.length, 100);
+    assert.match(result.errors?.[0] ?? "", /First batch unavailable/);
+
+    for (const product of saved) {
+      if (failedIds.has(product.digisellerId!)) {
+        assert.equal(product.supplierPriceUsd, previousSupplierPrice);
+        assert.equal(product.salePriceRub, previousSalePrice);
+      } else {
+        assert.ok(successfulIds.has(product.digisellerId!));
+        assert.notEqual(product.supplierPriceUsd, previousSupplierPrice);
+        assert.notEqual(product.salePriceRub, previousSalePrice);
+      }
+    }
+
+    assert.equal(activity.status, "warning");
+    assert.match(
+      activity.description,
+      /Проверено 101, изменилось 101, обновлено в Digiseller 1, ошибок 100\./,
+    );
+    assert.match(activity.description, /First batch unavailable/);
+  } finally {
+    fetchOverride = undefined;
+    await db
+      .delete(productsTable)
+      .where(inArray(productsTable.gpayId, batchGpayIds));
   }
 });
