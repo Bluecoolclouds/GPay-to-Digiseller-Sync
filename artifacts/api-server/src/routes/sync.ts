@@ -26,7 +26,11 @@ import {
   UpdateSettingsBody,
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
-import { fetchGPayProducts, loginGPay } from "../lib/gpay";
+import {
+  classifyGPayProductType,
+  fetchGPayProducts,
+  loginGPay,
+} from "../lib/gpay";
 import {
   addDigisellerProductToPlati,
   createDigisellerProduct,
@@ -114,7 +118,13 @@ router.get("/products", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { search, status = "all", page = 1, pageSize = 20 } = parsed.data;
+  const {
+    search,
+    status = "all",
+    productKind = "all",
+    page = 1,
+    pageSize = 20,
+  } = parsed.data;
   const filters = [];
   if (search) {
     filters.push(or(ilike(productsTable.name, `%${search}%`), sql`${productsTable.gpayId}::text ilike ${`%${search}%`}`));
@@ -123,6 +133,11 @@ router.get("/products", async (req, res): Promise<void> => {
   if (status === "unavailable") filters.push(eq(productsTable.isAvailable, false));
   if (status === "published") filters.push(eq(productsTable.publicationStatus, "published"));
   if (status === "draft") filters.push(eq(productsTable.publicationStatus, "draft"));
+  if (productKind === "key") filters.push(eq(productsTable.productType, "2"));
+  if (productKind === "gift") filters.push(eq(productsTable.productType, "1"));
+  if (productKind === "unknown") {
+    filters.push(sql`${productsTable.productType} not in ('1', '2')`);
+  }
   const where = filters.length ? and(...filters) : undefined;
   const [countRow] = await db.select({ total: sql<number>`count(*)::int` }).from(productsTable).where(where);
   const rows = await db
@@ -134,7 +149,11 @@ router.get("/products", async (req, res): Promise<void> => {
     .offset((page - 1) * pageSize);
   res.json(
     ListProductsResponse.parse({
-      items: rows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
+      items: rows.map((row) => ({
+        ...row,
+        productKind: classifyGPayProductType(row.productType),
+        updatedAt: row.updatedAt.toISOString(),
+      })),
       total: countRow.total,
       page,
       pageSize,
@@ -163,7 +182,13 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     .set({ ...body.data, marginPercent, ...calculated, updatedAt: new Date() })
     .where(eq(productsTable.id, params.data.id))
     .returning();
-  res.json(UpdateProductResponse.parse({ ...updated, updatedAt: updated.updatedAt.toISOString() }));
+  res.json(
+    UpdateProductResponse.parse({
+      ...updated,
+      productKind: classifyGPayProductType(updated.productType),
+      updatedAt: updated.updatedAt.toISOString(),
+    }),
+  );
 });
 
 router.post("/products/:id/publish", async (req, res): Promise<void> => {
@@ -177,6 +202,13 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Only available products can be published" });
     return;
   }
+  const productKind = classifyGPayProductType(current.productType);
+  if (productKind === "unknown") {
+    res.status(409).json({
+      error: `Неизвестный тип товара GPay: ${current.productType}`,
+    });
+    return;
+  }
   if (current.digisellerId) {
     try {
       await addDigisellerProductToPlati(current.digisellerId, {
@@ -185,14 +217,20 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
           current.name,
           "",
           `Регион: ${current.region}.`,
-          current.productType === "1"
+          productKind === "gift"
             ? "Поставка Steam Gift после проверки наличия и цены."
             : "Поставка цифрового ключа после проверки наличия и цены.",
         ].join("\n"),
         priceRub: current.salePriceRub,
         productType: current.productType,
       });
-      res.json(PublishProductResponse.parse({ ...current, updatedAt: current.updatedAt.toISOString() }));
+      res.json(
+        PublishProductResponse.parse({
+          ...current,
+          productKind,
+          updatedAt: current.updatedAt.toISOString(),
+        }),
+      );
     } catch (error) {
       req.log.error({ err: error, productId: current.id }, "Plati.Market category assignment failed");
       res.status(502).json({
@@ -208,7 +246,7 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
         current.name,
         "",
         `Регион: ${current.region}.`,
-        current.productType === "1"
+        productKind === "gift"
           ? "Поставка Steam Gift после проверки наличия и цены."
           : "Поставка цифрового ключа после проверки наличия и цены.",
       ].join("\n"),
@@ -226,7 +264,13 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
       description: `${updated.name} создан в Digiseller, ID ${digisellerId}.`,
     status: "success",
   });
-  res.json(PublishProductResponse.parse({ ...updated, updatedAt: updated.updatedAt.toISOString() }));
+  res.json(
+    PublishProductResponse.parse({
+      ...updated,
+      productKind,
+      updatedAt: updated.updatedAt.toISOString(),
+    }),
+  );
   } catch (error) {
     req.log.error({ err: error, productId: current.id }, "Digiseller product publication failed");
     res.status(502).json({
@@ -251,11 +295,22 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         .where(eq(settingsTable.id, 1))
         .returning();
     }
-    const data = await fetchGPayProducts(parsed.data.pageSize);
+    const requestedProductKind = parsed.data.productKind ?? "all";
+    const data = await fetchGPayProducts(
+      parsed.data.pageSize,
+      requestedProductKind,
+    );
     let imported = 0;
     let updated = 0;
     for (const product of data.products ?? []) {
       if (parsed.data.availableOnly && product.isAvailable !== true) continue;
+      const productKind = classifyGPayProductType(product.productType);
+      if (
+        requestedProductKind !== "all" &&
+        productKind !== requestedProductKind
+      ) {
+        continue;
+      }
       const [existing] = await db.select().from(productsTable).where(eq(productsTable.gpayId, product.id));
       const marginPercent = existing?.marginPercent ?? settings.defaultMarginPercent;
       const calculated = calculatePrice(product.currentPartnerPrice, settings, marginPercent);
@@ -271,7 +326,15 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         ...calculated,
         isAvailable: product.isAvailable === true,
         region: product.region || "Не указан",
-        warningMessage: product.warningMessage ?? null,
+        warningMessage:
+          productKind === "unknown"
+            ? [
+                product.warningMessage,
+                `Неизвестный тип товара GPay: ${String(product.productType)}`,
+              ]
+                .filter(Boolean)
+                .join(". ")
+            : (product.warningMessage ?? null),
         updatedAt: new Date(),
       };
       if (existing) {

@@ -37,6 +37,7 @@ export const listProductsQueryPageSizeMax = 100;
 export const ListProductsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "status": zod.enum(['all', 'available', 'unavailable', 'published', 'draft']).optional(),
+  "productKind": zod.enum(['all', 'key', 'gift', 'unknown']).optional(),
   "page": zod.coerce.number().int().min(1).default(listProductsQueryPageDefault),
   "pageSize": zod.coerce.number().int().min(1).max(listProductsQueryPageSizeMax).default(listProductsQueryPageSizeDefault)
 })
@@ -51,6 +52,7 @@ export const ListProductsResponse = zod.object({
   "name": zod.string(),
   "imageUrl": zod.string().nullish(),
   "productType": zod.string(),
+  "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
   "salePriceRub": zod.number(),
   "marginPercent": zod.number(),
@@ -90,6 +92,7 @@ export const UpdateProductResponse = zod.object({
   "name": zod.string(),
   "imageUrl": zod.string().nullish(),
   "productType": zod.string(),
+  "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
   "salePriceRub": zod.number(),
   "marginPercent": zod.number(),
@@ -115,6 +118,7 @@ export const PublishProductResponse = zod.object({
   "name": zod.string(),
   "imageUrl": zod.string().nullish(),
   "productType": zod.string(),
+  "productKind": zod.enum(['key', 'gift', 'unknown']),
   "supplierPriceUsd": zod.number(),
   "salePriceRub": zod.number(),
   "marginPercent": zod.number(),
@@ -131,10 +135,12 @@ export const syncCatalogBodyPageSizeDefault = 100;
 export const syncCatalogBodyPageSizeMax = 100;
 
 export const syncCatalogBodyAvailableOnlyDefault = true;
+export const syncCatalogBodyProductKindDefault = `all`;
 
 export const SyncCatalogBody = zod.object({
   "pageSize": zod.number().int().min(1).max(syncCatalogBodyPageSizeMax).default(syncCatalogBodyPageSizeDefault),
-  "availableOnly": zod.boolean().default(syncCatalogBodyAvailableOnlyDefault)
+  "availableOnly": zod.boolean().default(syncCatalogBodyAvailableOnlyDefault),
+  "productKind": zod.enum(['all', 'key', 'gift']).default(syncCatalogBodyProductKindDefault)
 })
 
 export const SyncCatalogResponse = zod.object({

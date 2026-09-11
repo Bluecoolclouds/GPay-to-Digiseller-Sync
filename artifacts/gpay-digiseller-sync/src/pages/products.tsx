@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { useListProducts, useUpdateProduct, usePublishProduct, Product, ListProductsStatus, ProductPublicationStatus } from "@workspace/api-client-react"
+import { useListProducts, useUpdateProduct, usePublishProduct, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ export default function ProductsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<ListProductsStatus>("all")
+  const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
   
   const [debouncedSearch, setDebouncedSearch] = useState("")
@@ -29,11 +30,12 @@ export default function ProductsPage() {
     page,
     pageSize: 20,
     search: debouncedSearch || undefined,
-    status: status !== "all" ? status : undefined
+    status: status !== "all" ? status : undefined,
+    productKind: productKind !== "all" ? productKind : undefined
   })
 
   const updateProductInCache = (updatedProduct: Product) => {
-    queryClient.setQueryData(getListProductsQueryKey({ page, pageSize: 20, search: debouncedSearch || undefined, status: status !== "all" ? status : undefined }), (old: any) => {
+    queryClient.setQueryData(getListProductsQueryKey({ page, pageSize: 20, search: debouncedSearch || undefined, status: status !== "all" ? status : undefined, productKind: productKind !== "all" ? productKind : undefined }), (old: any) => {
       if (!old) return old;
       return {
         ...old,
@@ -64,6 +66,20 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+          <select
+            aria-label="Тип товара"
+            className="h-9 rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={productKind}
+            onChange={(e) => {
+              setProductKind(e.target.value as ListProductsProductKind)
+              setPage(1)
+            }}
+          >
+            <option value="all">Все типы</option>
+            <option value="key">Ключи</option>
+            <option value="gift">Гифты</option>
+            <option value="unknown">Неизвестные</option>
+          </select>
           <select 
             className="h-9 rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             value={status}
@@ -179,6 +195,15 @@ function ProductRow({ product, onUpdate }: { product: Product, onUpdate: (p: Pro
     <tr className="hover:bg-muted/30 transition-colors group">
       <td className="px-4 py-3">
         <div className="font-medium text-foreground max-w-[280px] sm:max-w-sm truncate" title={product.name}>{product.name}</div>
+        <div className="mt-1">
+          <Badge variant={product.productKind === ProductProductKind.unknown ? "destructive" : "secondary"}>
+            {product.productKind === ProductProductKind.key
+              ? "Ключ"
+              : product.productKind === ProductProductKind.gift
+                ? "Гифт"
+                : `Неизвестный тип (${product.productType})`}
+          </Badge>
+        </div>
         <div className="text-xs text-muted-foreground mt-0.5 flex gap-2 font-mono">
           <span>GPay: {product.gpayId}</span>
           {product.digisellerId && <span>• DS: {product.digisellerId}</span>}
@@ -232,7 +257,7 @@ function ProductRow({ product, onUpdate }: { product: Product, onUpdate: (p: Pro
                size="sm" 
                className="h-7 text-xs px-3 gap-1.5"
                onClick={handlePublish}
-               disabled={publishMutation.isPending || !product.isAvailable}
+               disabled={publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
              >
                <Play className="w-3 h-3" /> Опубликовать
              </Button>

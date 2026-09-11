@@ -1,4 +1,5 @@
-import { useGetDashboard, useListActivities, useSyncCatalog, ActivityStatus, DashboardAutomationMode } from "@workspace/api-client-react"
+import { useState } from "react"
+import { useGetDashboard, useListActivities, useSyncCatalog, ActivityStatus, DashboardAutomationMode, CatalogSyncInputProductKind } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,12 +8,13 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 
 export default function DashboardPage() {
+  const [productKind, setProductKind] = useState<CatalogSyncInputProductKind>(CatalogSyncInputProductKind.all)
   const { data: dashboard, isLoading: dashboardLoading, refetch: refetchDashboard } = useGetDashboard()
   const { data: activities, isLoading: activitiesLoading, refetch: refetchActivities } = useListActivities({ limit: 10 })
   const syncMutation = useSyncCatalog()
 
   const handleSync = () => {
-    syncMutation.mutate({ data: { pageSize: 50 } }, {
+    syncMutation.mutate({ data: { pageSize: 100, productKind } }, {
       onSuccess: (res) => {
         toast.success(`Синхронизация завершена. ${res.imported} импортировано, ${res.updated} обновлено.`)
         refetchDashboard()
@@ -33,10 +35,23 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Дашборд</h1>
           <p className="text-muted-foreground mt-1">Обзор синхронизации вашего каталога.</p>
         </div>
-        <Button onClick={handleSync} disabled={syncMutation.isPending} className="gap-2 shrink-0">
-          <RefreshCw className={cn("w-4 h-4", syncMutation.isPending && "animate-spin")} />
-          Синхронизировать
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Тип товаров для синхронизации"
+            className="h-9 rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm focus:ring-1 focus:ring-ring focus:outline-none"
+            value={productKind}
+            onChange={(event) => setProductKind(event.target.value as CatalogSyncInputProductKind)}
+            disabled={syncMutation.isPending}
+          >
+            <option value="all">Все товары</option>
+            <option value="key">Только ключи</option>
+            <option value="gift">Только гифты</option>
+          </select>
+          <Button onClick={handleSync} disabled={syncMutation.isPending} className="gap-2 shrink-0">
+            <RefreshCw className={cn("w-4 h-4", syncMutation.isPending && "animate-spin")} />
+            Синхронизировать
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

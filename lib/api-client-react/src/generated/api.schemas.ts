@@ -28,6 +28,15 @@ export interface Dashboard {
   automationMode: DashboardAutomationMode;
 }
 
+export type ProductProductKind = typeof ProductProductKind[keyof typeof ProductProductKind];
+
+
+export const ProductProductKind = {
+  key: 'key',
+  gift: 'gift',
+  unknown: 'unknown',
+} as const;
+
 export type ProductPublicationStatus = typeof ProductPublicationStatus[keyof typeof ProductPublicationStatus];
 
 
@@ -51,6 +60,7 @@ export interface Product {
   /** @nullable */
   imageUrl?: string | null;
   productType: string;
+  productKind: ProductProductKind;
   supplierPriceUsd: number;
   salePriceRub: number;
   marginPercent: number;
@@ -88,6 +98,15 @@ export interface ProductUpdate {
   publicationStatus?: ProductUpdatePublicationStatus;
 }
 
+export type CatalogSyncInputProductKind = typeof CatalogSyncInputProductKind[keyof typeof CatalogSyncInputProductKind];
+
+
+export const CatalogSyncInputProductKind = {
+  all: 'all',
+  key: 'key',
+  gift: 'gift',
+} as const;
+
 export interface CatalogSyncInput {
   /**
      * @minimum 1
@@ -95,6 +114,7 @@ export interface CatalogSyncInput {
      */
   pageSize: number;
   availableOnly?: boolean;
+  productKind?: CatalogSyncInputProductKind;
 }
 
 export interface SyncResult {
@@ -232,6 +252,7 @@ export interface ExchangeRate {
 export type ListProductsParams = {
 search?: string;
 status?: ListProductsStatus;
+productKind?: ListProductsProductKind;
 /**
  * @minimum 1
  */
@@ -252,6 +273,16 @@ export const ListProductsStatus = {
   unavailable: 'unavailable',
   published: 'published',
   draft: 'draft',
+} as const;
+
+export type ListProductsProductKind = typeof ListProductsProductKind[keyof typeof ListProductsProductKind];
+
+
+export const ListProductsProductKind = {
+  all: 'all',
+  key: 'key',
+  gift: 'gift',
+  unknown: 'unknown',
 } as const;
 
 export type ListActivitiesParams = {

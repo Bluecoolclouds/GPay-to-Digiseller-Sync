@@ -5,11 +5,13 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListProductsProductKind } from './listProductsProductKind';
 import type { ListProductsStatus } from './listProductsStatus';
 
 export type ListProductsParams = {
 search?: string;
 status?: ListProductsStatus;
+productKind?: ListProductsProductKind;
 /**
  * @minimum 1
  */

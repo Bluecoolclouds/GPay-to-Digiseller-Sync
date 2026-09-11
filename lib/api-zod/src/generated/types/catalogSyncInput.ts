@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { CatalogSyncInputProductKind } from './catalogSyncInputProductKind';
 
 export interface CatalogSyncInput {
   /**
@@ -13,4 +14,5 @@ export interface CatalogSyncInput {
      */
   pageSize: number;
   availableOnly?: boolean;
+  productKind?: CatalogSyncInputProductKind;
 }

@@ -48,6 +48,11 @@ paths:
           schema:
             type: string
             enum: [all, available, unavailable, published, draft]
+        - name: productKind
+          in: query
+          schema:
+            type: string
+            enum: [all, key, gift, unknown]
         - name: page
           in: query
           schema: { type: integer, minimum: 1, default: 1 }
@@ -220,7 +225,7 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
     Product:
       type: object
-      required: [id, gpayId, name, productType, supplierPriceUsd, salePriceRub, marginPercent, isAvailable, publicationStatus, region, updatedAt]
+      required: [id, gpayId, name, productType, productKind, supplierPriceUsd, salePriceRub, marginPercent, isAvailable, publicationStatus, region, updatedAt]
       properties:
         id: { type: integer }
         gpayId: { type: integer }
@@ -230,6 +235,7 @@ components:
         name: { type: string }
         imageUrl: { type: [string, "null"] }
         productType: { type: string }
+        productKind: { type: string, enum: [key, gift, unknown] }
         supplierPriceUsd: { type: number }
         salePriceRub: { type: number }
         marginPercent: { type: number }
@@ -260,6 +266,7 @@ components:
       properties:
         pageSize: { type: integer, minimum: 1, maximum: 100, default: 100 }
         availableOnly: { type: boolean, default: true }
+        productKind: { type: string, enum: [all, key, gift], default: all }
     SyncResult:
       type: object
       required: [success, imported, updated, disabled, message, completedAt]

@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductProductKind } from './productProductKind';
 import type { ProductPublicationStatus } from './productPublicationStatus';
 
 export interface Product {
@@ -20,6 +21,7 @@ export interface Product {
   /** @nullable */
   imageUrl?: string | null;
   productType: string;
+  productKind: ProductProductKind;
   supplierPriceUsd: number;
   salePriceRub: number;
   marginPercent: number;
