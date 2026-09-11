@@ -26,6 +26,7 @@ export * from './listActivitiesParams';
 export * from './listProductsParams';
 export * from './listProductsProductKind';
 export * from './listProductsStatus';
+export * from './priceTimeoutWarning';
 export * from './product';
 export * from './productPage';
 export * from './productProductKind';

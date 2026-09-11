@@ -40,6 +40,7 @@ import {
   uploadDigisellerProductImage,
 } from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
+import { getRepeatedPriceTimeoutWarning } from "../lib/price-timeout-warning";
 
 const router: IRouter = Router();
 
@@ -96,21 +97,31 @@ async function recalculateAllProductPrices(
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
   const settings = await getSettingsRow();
-  const [metrics] = await db
-    .select({
-      totalProducts: sql<number>`count(*)::int`,
-      availableProducts: sql<number>`count(*) filter (where ${productsTable.isAvailable})::int`,
-      publishedProducts: sql<number>`count(*) filter (where ${productsTable.publicationStatus} = 'published')::int`,
-      averageMargin: sql<number>`coalesce(avg(${productsTable.marginPercent}), 0)::float8`,
-      potentialRevenue: sql<number>`coalesce(sum(${productsTable.salePriceRub}) filter (where ${productsTable.isAvailable}), 0)::float8`,
-      lastSyncAt: sql<Date | null>`max(${productsTable.updatedAt})`,
-    })
-    .from(productsTable);
+  const [[metrics], latestPriceActivities] = await Promise.all([
+    db
+      .select({
+        totalProducts: sql<number>`count(*)::int`,
+        availableProducts: sql<number>`count(*) filter (where ${productsTable.isAvailable})::int`,
+        publishedProducts: sql<number>`count(*) filter (where ${productsTable.publicationStatus} = 'published')::int`,
+        averageMargin: sql<number>`coalesce(avg(${productsTable.marginPercent}), 0)::float8`,
+        potentialRevenue: sql<number>`coalesce(sum(${productsTable.salePriceRub}) filter (where ${productsTable.isAvailable}), 0)::float8`,
+        lastSyncAt: sql<Date | null>`max(${productsTable.updatedAt})`,
+      })
+      .from(productsTable),
+    db
+      .select({ description: activitiesTable.description })
+      .from(activitiesTable)
+      .where(eq(activitiesTable.type, "price"))
+      .orderBy(desc(activitiesTable.createdAt), desc(activitiesTable.id))
+      .limit(2),
+  ]);
   res.json(
     GetDashboardResponse.parse({
       ...metrics,
       lastSyncAt: metrics.lastSyncAt ? new Date(metrics.lastSyncAt).toISOString() : null,
       automationMode: settings.automationMode,
+      priceTimeoutWarning:
+        getRepeatedPriceTimeoutWarning(latestPriceActivities),
     }),
   );
 });

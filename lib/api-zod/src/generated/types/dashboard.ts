@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DashboardAutomationMode } from './dashboardAutomationMode';
+import type { PriceTimeoutWarning } from './priceTimeoutWarning';
 
 export interface Dashboard {
   totalProducts: number;
@@ -16,4 +17,5 @@ export interface Dashboard {
   /** @nullable */
   lastSyncAt: Date | null;
   automationMode: DashboardAutomationMode;
+  priceTimeoutWarning: PriceTimeoutWarning | null;
 }

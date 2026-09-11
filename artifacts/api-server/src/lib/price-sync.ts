@@ -11,6 +11,7 @@ import {
   updateDigisellerProductPrices,
 } from "./digiseller";
 import { getOfficialUsdRubRate } from "./exchange-rate";
+import { createPriceTimeoutSummary } from "./price-timeout-warning";
 
 const PRICE_SYNC_LOCK_ID = 704_291_163;
 
@@ -176,12 +177,14 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
         ([productId, message]) => `Digiseller #${productId}: ${message}`,
       ),
     };
+    const timeoutSummary = createPriceTimeoutSummary(result.errors);
     await db.insert(activitiesTable).values({
       type: "price",
       title: "Автоматическая проверка цен завершена",
       description: [
         `Проверено ${result.checked}, изменилось ${result.changed}, обновлено в Digiseller ${result.digisellerUpdated}, ошибок ${result.failed}.`,
         ...result.errors.slice(0, 3),
+        ...(timeoutSummary ? [timeoutSummary] : []),
       ].join(" "),
       status: result.failed > 0 ? "warning" : "success",
     });

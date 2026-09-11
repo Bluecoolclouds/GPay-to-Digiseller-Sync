@@ -213,6 +213,58 @@ test("list endpoint filters key, gift, all, and unknown product types", async ()
   }
 });
 
+test("dashboard creates a warning after repeated price task timeouts and clears it after success", async () => {
+  await db.delete(activitiesTable).where(eq(activitiesTable.type, "price"));
+  const timeoutDescription = (count: number, error: string) =>
+    `Проверено ${count}, изменилось ${count}, обновлено в Digiseller 0, ошибок ${count}. Тайм-аут задачи Digiseller: затронуто ${count}. Последняя ошибка: ${error}`;
+
+  await db.insert(activitiesTable).values({
+    type: "price",
+    title: "Автоматическая проверка цен завершена",
+    description: timeoutDescription(
+      2,
+      "Digiseller #102: Digiseller не завершил обновление цен за 60 секунд",
+    ),
+    status: "warning",
+  });
+
+  let dashboard = await request<{
+    priceTimeoutWarning: null | {
+      affectedProductCount: number;
+      latestError: string;
+    };
+  }>("/api/dashboard");
+  assert.equal(dashboard.priceTimeoutWarning, null);
+
+  await db.insert(activitiesTable).values({
+    type: "price",
+    title: "Автоматическая проверка цен завершена",
+    description: timeoutDescription(
+      3,
+      "Digiseller #203: Digiseller не завершил обновление цен за 60 секунд",
+    ),
+    status: "warning",
+  });
+
+  dashboard = await request("/api/dashboard");
+  assert.deepEqual(dashboard.priceTimeoutWarning, {
+    affectedProductCount: 3,
+    latestError:
+      "Digiseller #203: Digiseller не завершил обновление цен за 60 секунд",
+  });
+
+  await db.insert(activitiesTable).values({
+    type: "price",
+    title: "Автоматическая проверка цен завершена",
+    description:
+      "Проверено 3, изменилось 3, обновлено в Digiseller 3, ошибок 0.",
+    status: "success",
+  });
+
+  dashboard = await request("/api/dashboard");
+  assert.equal(dashboard.priceTimeoutWarning, null);
+});
+
 test("key sync counts repeated key pages once without changing other types", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {

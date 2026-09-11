@@ -16,6 +16,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Synchronization overview
  */
+
+
+
 export const GetDashboardResponse = zod.object({
   "totalProducts": zod.number().int(),
   "availableProducts": zod.number().int(),
@@ -23,7 +26,11 @@ export const GetDashboardResponse = zod.object({
   "averageMargin": zod.number(),
   "potentialRevenue": zod.number(),
   "lastSyncAt": zod.coerce.date().nullable(),
-  "automationMode": zod.enum(['manual', 'automatic'])
+  "automationMode": zod.enum(['manual', 'automatic']),
+  "priceTimeoutWarning": zod.union([zod.object({
+  "affectedProductCount": zod.number().int().min(1),
+  "latestError": zod.string()
+}),zod.null()])
 })
 
 

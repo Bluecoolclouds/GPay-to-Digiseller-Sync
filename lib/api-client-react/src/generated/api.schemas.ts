@@ -17,6 +17,12 @@ export const DashboardAutomationMode = {
   automatic: 'automatic',
 } as const;
 
+export interface PriceTimeoutWarning {
+  /** @minimum 1 */
+  affectedProductCount: number;
+  latestError: string;
+}
+
 export interface Dashboard {
   totalProducts: number;
   availableProducts: number;
@@ -26,6 +32,7 @@ export interface Dashboard {
   /** @nullable */
   lastSyncAt: string | null;
   automationMode: DashboardAutomationMode;
+  priceTimeoutWarning: PriceTimeoutWarning | null;
 }
 
 export type ProductProductKind = typeof ProductProductKind[keyof typeof ProductProductKind];

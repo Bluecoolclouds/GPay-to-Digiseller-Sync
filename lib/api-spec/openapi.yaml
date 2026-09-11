@@ -231,7 +231,7 @@ components:
         status: { type: string }
     Dashboard:
       type: object
-      required: [totalProducts, availableProducts, publishedProducts, averageMargin, potentialRevenue, lastSyncAt, automationMode]
+      required: [totalProducts, availableProducts, publishedProducts, averageMargin, potentialRevenue, lastSyncAt, automationMode, priceTimeoutWarning]
       properties:
         totalProducts: { type: integer }
         availableProducts: { type: integer }
@@ -240,6 +240,16 @@ components:
         potentialRevenue: { type: number }
         lastSyncAt: { type: [string, "null"], format: date-time }
         automationMode: { type: string, enum: [manual, automatic] }
+        priceTimeoutWarning:
+          oneOf:
+            - $ref: "#/components/schemas/PriceTimeoutWarning"
+            - type: "null"
+    PriceTimeoutWarning:
+      type: object
+      required: [affectedProductCount, latestError]
+      properties:
+        affectedProductCount: { type: integer, minimum: 1 }
+        latestError: { type: string }
     Product:
       type: object
       required: [id, gpayId, name, imageUrl, digisellerImageUploaded, productType, productKind, supplierPriceUsd, salePriceRub, marginPercent, isAvailable, publicationStatus, region, updatedAt]

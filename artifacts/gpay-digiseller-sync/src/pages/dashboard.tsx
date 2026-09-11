@@ -3,6 +3,7 @@ import { useGetDashboard, useListActivities, useSyncCatalog, ActivityStatus, Das
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { RefreshCw, PackageOpen, Layers, DollarSign, Activity as ActivityIcon, AlertCircle, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
@@ -53,6 +54,17 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {dashboard.priceTimeoutWarning && (
+        <Alert className="border-amber-500/60 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          <AlertTitle>Повторные тайм-ауты обновления цен</AlertTitle>
+          <AlertDescription>
+            Цены для {dashboard.priceTimeoutWarning.affectedProductCount.toLocaleString()} товаров могли остаться устаревшими.
+            <span className="mt-1 block font-mono text-xs">{dashboard.priceTimeoutWarning.latestError}</span>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Всего товаров" value={dashboard.totalProducts.toLocaleString()} icon={Layers} />
