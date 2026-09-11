@@ -2,3 +2,4 @@
 - [GPay product types](gpay-product-types.md) — Partner API uses 1 for Steam Gift and 2 for Keys; request the type server-side and paginate the selected catalog.
 - [Digiseller product images](digiseller-product-images.md) — images are uploaded after product creation; generate a labeled fallback when GPay has no artwork.
 - [Digiseller Plati publication](digiseller-plati-publication.md) — retry paged category lookup and include both ru-RU and en-US localizations.
+- [Isolated PostgreSQL API tests](isolated-postgres-api-tests.md) — create test tables explicitly in a unique schema; schema push may inspect public despite search_path.
