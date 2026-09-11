@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { generateAiProductImage } from "./ai-product-image";
+import { logger } from "./logger";
 
 type DigiLoginResponse = {
   token?: string;
@@ -274,40 +276,54 @@ export async function uploadDigisellerProductImage(
   }
 
   if (!bytes) {
-    const cleanName = input.name.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 110);
-    const subtitle = `${input.productKind === "key" ? "DIGITAL KEY" : "STEAM GIFT"}  •  ${input.region || "GLOBAL"}`;
-    const { stdout } = await execFileAsync(
-      "magick",
-      [
-        "-size", "1200x630",
-        "gradient:#0f172a-#2563eb",
-        "-fill", "#93c5fd",
-        "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "-pointsize", "34",
-        "-gravity", "northwest",
-        "-annotate", "+70+75", "SYNC CONSOLE",
-        "(",
-        "-size", "1040x300",
-        "-background", "none",
-        "-fill", "white",
-        "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "-pointsize", "54",
-        "-gravity", "center",
-        `caption:${cleanName}`,
-        ")",
-        "-gravity", "center",
-        "-geometry", "+0-10",
-        "-composite",
-        "-fill", "#bfdbfe",
-        "-pointsize", "30",
-        "-gravity", "south",
-        "-annotate", "+0+65", subtitle,
-        "-depth", "8",
-        "png:-",
-      ],
-      { encoding: "buffer", maxBuffer: MAX_IMAGE_BYTES },
-    );
-    bytes = stdout;
+    try {
+      bytes = await generateAiProductImage({
+        name: input.name,
+        productKind: input.productKind,
+        region: input.region,
+      });
+    } catch (error) {
+      logger.warn(
+        { err: error, productName: input.name },
+        "AI product image generation failed; using local fallback",
+      );
+      const cleanName = input.name
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .slice(0, 110);
+      const subtitle = `${input.productKind === "key" ? "DIGITAL KEY" : "STEAM GIFT"}  •  ${input.region || "GLOBAL"}`;
+      const { stdout } = await execFileAsync(
+        "magick",
+        [
+          "-size", "1024x1024",
+          "gradient:#0f172a-#2563eb",
+          "-fill", "#93c5fd",
+          "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+          "-pointsize", "36",
+          "-gravity", "northwest",
+          "-annotate", "+70+75", "DIGITAL PRODUCT",
+          "(",
+          "-size", "884x470",
+          "-background", "none",
+          "-fill", "white",
+          "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+          "-pointsize", "58",
+          "-gravity", "center",
+          `caption:${cleanName}`,
+          ")",
+          "-gravity", "center",
+          "-geometry", "+0-10",
+          "-composite",
+          "-fill", "#bfdbfe",
+          "-pointsize", "30",
+          "-gravity", "south",
+          "-annotate", "+0+75", subtitle,
+          "-depth", "8",
+          "png:-",
+        ],
+        { encoding: "buffer", maxBuffer: MAX_IMAGE_BYTES },
+      );
+      bytes = stdout;
+    }
   }
 
   const uploadBuffer = new ArrayBuffer(bytes.byteLength);
