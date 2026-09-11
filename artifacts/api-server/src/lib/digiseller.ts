@@ -240,61 +240,135 @@ function getCataloguerSearchName(name: string) {
     .toLocaleLowerCase("ru-RU");
 }
 
+function normalizeCataloguerName(name: string) {
+  return name
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLocaleLowerCase("ru-RU");
+}
+
+type CataloguerCategory = {
+  category_id: number;
+  name?: Array<{ locale?: string; value?: string }>;
+};
+
+async function fetchCataloguerCategoryPage(
+  page: number,
+  token: string,
+): Promise<CataloguerCategory[]> {
+  const url = new URL("https://api.digiseller.com/api/cataloguer/categories");
+  url.searchParams.set("request.page", String(page));
+  url.searchParams.set("request.count", "500");
+  url.searchParams.set("request.rootCategoryId", "33177");
+  url.searchParams.set("token", token);
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      const json = (await response.json()) as {
+        retval?: number;
+        content?: CataloguerCategory[];
+      };
+      if (!response.ok || json.retval !== 0) {
+        throw new Error(
+          `Не удалось загрузить каталог категорий Digiseller (${response.status})`,
+        );
+      }
+      return json.content ?? [];
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Не удалось загрузить каталог категорий Digiseller");
+}
+
+function findBestCataloguerMatch(
+  categories: CataloguerCategory[],
+  searchName: string,
+) {
+  const normalizedSearch = normalizeCataloguerName(searchName);
+  const candidates = categories.flatMap((category) =>
+    (category.name ?? []).map((localizedName) => ({
+      category,
+      normalizedName: normalizeCataloguerName(localizedName.value ?? ""),
+    })),
+  );
+  const exact = candidates.find(
+    (candidate) => candidate.normalizedName === normalizedSearch,
+  );
+  if (exact) return exact.category;
+
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.normalizedName.length >= 8 &&
+        (normalizedSearch.startsWith(`${candidate.normalizedName} `) ||
+          candidate.normalizedName.startsWith(`${normalizedSearch} `)),
+    )
+    .sort(
+      (left, right) =>
+        right.normalizedName.length - left.normalizedName.length,
+    )[0]?.category;
+}
+
 async function findCataloguerCategoryId(name: string, token: string): Promise<number> {
   const searchName = getCataloguerSearchName(name);
   const cached = cataloguerCategoryCache.get(searchName);
   if (cached) return cached;
 
-  for (let page = 1; page <= 60; page++) {
-    const url = new URL("https://api.digiseller.com/api/cataloguer/categories");
-    url.searchParams.set("request.page", String(page));
-    url.searchParams.set("request.count", "500");
-    url.searchParams.set("request.rootCategoryId", "33177");
-    url.searchParams.set("token", token);
-    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    const json = (await response.json()) as {
-      retval?: number;
-      content?: Array<{
-        category_id: number;
-        name?: Array<{ locale?: string; value?: string }>;
-      }>;
-    };
-    if (!response.ok || json.retval !== 0) {
-      throw new Error(`Не удалось загрузить каталог категорий Digiseller (${response.status})`);
-    }
-    const categories = json.content ?? [];
-    const match = categories.find((category) =>
-      category.name?.some(
-        (localizedName) =>
-          localizedName.value?.trim().toLocaleLowerCase("ru-RU") === searchName,
-      ),
+  const pagesPerBatch = 6;
+  for (let startPage = 1; startPage <= 60; startPage += pagesPerBatch) {
+    const pages = Array.from(
+      { length: Math.min(pagesPerBatch, 61 - startPage) },
+      (_, index) => startPage + index,
     );
+    const results = await Promise.all(
+      pages.map((page) => fetchCataloguerCategoryPage(page, token)),
+    );
+    const categories = results.flat();
+    const match = findBestCataloguerMatch(categories, searchName);
     if (match) {
       cataloguerCategoryCache.set(searchName, match.category_id);
       return match.category_id;
     }
-    if (categories.length === 0) break;
+    if (results.some((pageCategories) => pageCategories.length === 0)) break;
   }
   throw new Error(`Категория Plati.Market для «${searchName}» не найдена`);
 }
 
 function buildProductPayload(input: ProductInput, cataloguerCategoryId: number) {
+  const additionalInfoRu =
+    input.productType === "1"
+      ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
+      : "Заказ обрабатывается вручную после проверки цены и наличия у поставщика.";
+  const additionalInfoEn =
+    input.productType === "1"
+      ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
+      : "The order is processed manually after checking price and supplier availability.";
   return {
     content_type: "Form",
     categories: [
       { owner: 0, category_id: 0 },
       { owner: 1, cataloguer_category_id: cataloguerCategoryId },
     ],
-    name: [{ locale: "ru-RU", value: input.name.slice(0, 500) }],
-    description: [{ locale: "ru-RU", value: input.description }],
+    name: [
+      { locale: "ru-RU", value: input.name.slice(0, 500) },
+      { locale: "en-US", value: input.name.slice(0, 500) },
+    ],
+    description: [
+      { locale: "ru-RU", value: input.description },
+      { locale: "en-US", value: input.description },
+    ],
     add_info: [
-      {
-        locale: "ru-RU",
-        value:
-          input.productType === "1"
-            ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
-            : "Заказ обрабатывается вручную после проверки цены и наличия у поставщика.",
-      },
+      { locale: "ru-RU", value: additionalInfoRu },
+      { locale: "en-US", value: additionalInfoEn },
     ],
     price: { price: Math.ceil(input.priceRub), currency: "RUB" },
     enabled: true,
