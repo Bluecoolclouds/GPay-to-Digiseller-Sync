@@ -15,10 +15,13 @@ databaseUrl.searchParams.set("options", `-c search_path=${schema}`);
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
+
+const authTestFile = path.join(compiledDir, "auth.test.mjs");
 const isolatedEnvironment = {
   ...process.env,
   DATABASE_URL: databaseUrl.toString(),
   TEST_DATABASE_SCHEMA: schema,
+  TEST_AUTH_BYPASS: "1",
 };
 
 function run(command: string, args: string[]) {
@@ -33,7 +36,10 @@ function run(command: string, args: string[]) {
   }
 }
 
-try {
+  const { TEST_AUTH_BYPASS: _bypass, ...authEnvironment } =
+    isolatedEnvironment;
+  if (authResult.error) throw authResult.error;
+  if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
   run(process.execPath, ["--test", priceTaskTestFile]);
   await pool.query(`create schema "${schema}"`);
   await pool.query(`
@@ -116,3 +122,9 @@ try {
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });
 }
+
+  const authResult = spawnSync(process.execPath, ["--test", authTestFile], {
+    cwd: process.cwd(),
+    env: authEnvironment,
+    stdio: "inherit",
+  });

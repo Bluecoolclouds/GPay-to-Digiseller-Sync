@@ -44,8 +44,17 @@ import {
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 import { getRepeatedPriceTimeoutWarning } from "../lib/price-timeout-warning";
 import { recordDigisellerProductIds } from "../lib/orders";
+import { requireOperatorRole } from "../middlewares/auth";
 
 const router: IRouter = Router();
+
+router.use((req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    requireOperatorRole(req, res, next);
+    return;
+  }
+  next();
+});
 
 const credentialsConfigured = () =>
   Boolean(

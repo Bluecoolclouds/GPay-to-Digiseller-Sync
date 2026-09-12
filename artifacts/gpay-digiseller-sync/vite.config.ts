@@ -29,6 +29,12 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  define: {
+    'import.meta.env.VITE_CLERK_PROXY_URL': JSON.stringify(
+      process.env.VITE_CLERK_PROXY_URL ??
+        (process.env.NODE_ENV === 'production' ? '/api/__clerk' : ''),
+    ),
+  },
   plugins: [
     react(),
     tailwindcss(),

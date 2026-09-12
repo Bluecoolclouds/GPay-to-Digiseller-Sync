@@ -12,6 +12,7 @@ import {
   syncDigisellerOrders,
   updateOrder,
 } from "../lib/orders";
+import { requireOperatorRole } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -52,7 +53,7 @@ router.get("/orders", async (req, res): Promise<void> => {
   );
 });
 
-router.post("/orders/sync", async (req, res): Promise<void> => {
+router.post("/orders/sync", requireOperatorRole, async (req, res): Promise<void> => {
   try {
     res.json(SyncOrdersResponse.parse(await syncDigisellerOrders()));
   } catch (error) {
@@ -64,7 +65,7 @@ router.post("/orders/sync", async (req, res): Promise<void> => {
   }
 });
 
-router.patch("/orders/:invoiceId", async (req, res): Promise<void> => {
+router.patch("/orders/:invoiceId", requireOperatorRole, async (req, res): Promise<void> => {
   const params = UpdateOrderParams.safeParse(req.params);
   const body = UpdateOrderBody.safeParse(req.body);
   if (!params.success || !body.success) {
