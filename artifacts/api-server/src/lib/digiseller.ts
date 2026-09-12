@@ -50,6 +50,7 @@ type PriceUpdatePollingOptions = {
 };
 
 type DigisellerErrorResult = {
+  retval?: number;
   retdesc?: string;
   errors?: Array<{ message?: string; description?: string }>;
 };
@@ -673,6 +674,46 @@ export async function addDigisellerProductToPlati(
 const TEXT_DELIVERY_NOTICE =
   "Благодарим за заказ! Ваш ключ будет отправлен в чат ниже в течение 5 минут.\n\nThank you for your order! Your key will be sent in the chat below within 5 minutes.";
 
+export const DIGISELLER_TEXT_STOCK_THRESHOLD = 25;
+export const DIGISELLER_TEXT_STOCK_TARGET = 100;
+
+export async function getDigisellerTextStockCount(
+  productId: number,
+  providedToken?: string,
+): Promise<number> {
+  const token = providedToken ?? (await loginDigiseller());
+  const url = new URL(
+    `https://api.digiseller.com/api/products/${productId}/data`,
+  );
+  url.searchParams.set("token", token);
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await response.json()) as DigisellerErrorResult & {
+    num_in_stock?: number;
+    content?: { num_in_stock?: number };
+  };
+  const stock = json.num_in_stock ?? json.content?.num_in_stock;
+  if (
+    !response.ok ||
+    (json.retval !== undefined && json.retval !== 0) ||
+    typeof stock !== "number" ||
+    !Number.isInteger(stock) ||
+    stock < 0
+  ) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        stock === undefined
+          ? "Digiseller не вернул остаток Text-содержимого"
+          : `Не удалось проверить остаток Text-содержимого (${response.status})`,
+      ),
+    );
+  }
+  return stock;
+}
+
 export async function addDigisellerTextStock(
   productId: number,
   providedToken?: string,
@@ -706,6 +747,20 @@ export async function addDigisellerTextStock(
       ),
     );
   }
+}
+
+export async function replenishDigisellerTextStock(
+  productId: number,
+  providedToken?: string,
+): Promise<{ remaining: number; added: number }> {
+  const token = providedToken ?? (await loginDigiseller());
+  const remaining = await getDigisellerTextStockCount(productId, token);
+  if (remaining >= DIGISELLER_TEXT_STOCK_THRESHOLD) {
+    return { remaining, added: 0 };
+  }
+  const added = DIGISELLER_TEXT_STOCK_TARGET - remaining;
+  await addDigisellerTextStock(productId, token, added);
+  return { remaining, added };
 }
 
 export async function disableLegacyDigisellerProduct(

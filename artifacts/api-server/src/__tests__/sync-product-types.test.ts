@@ -773,3 +773,113 @@ test("key migration prepares Text product before disabling legacy Form product",
     await db.delete(productsTable).where(eq(productsTable.gpayId, migrationGpayId));
   }
 });
+
+test("hourly sync replenishes low Text stock once and reports stock errors separately", async () => {
+  const lowStockGpayId = 2_140_001_031;
+  const healthyStockGpayId = 2_140_001_032;
+  const failedStockGpayId = 2_140_001_033;
+  const stockFixtureIds = [lowStockGpayId, healthyStockGpayId, failedStockGpayId];
+  const digisellerByGpay = new Map([
+    [lowStockGpayId, 1_940_001_031],
+    [healthyStockGpayId, 1_940_001_032],
+    [failedStockGpayId, 1_940_001_033],
+  ]);
+  const addedCounts = new Map<number, number>();
+
+  await db.delete(productsTable).where(inArray(productsTable.gpayId, stockFixtureIds));
+  await db.insert(productsTable).values(
+    stockFixtureIds.map((gpayId) => ({
+      gpayId,
+      digisellerId: digisellerByGpay.get(gpayId),
+      digisellerDeliveryType: "text",
+      digisellerTextStocked: true,
+      name: `Text stock regression ${gpayId}`,
+      productType: "2",
+      publicationStatus: "published" as const,
+      supplierPriceUsd: 20,
+      salePriceRub: 2200,
+      marginPercent: 15,
+      profitRub: 200,
+      isAvailable: true,
+    })),
+  );
+  await db
+    .insert(settingsTable)
+    .values({ id: 1, automationMode: "automatic" })
+    .onConflictDoUpdate({
+      target: settingsTable.id,
+      set: { automationMode: "automatic" },
+    });
+
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: { products: [], totalCount: 0, page: 1, pageSize: 100 },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    const productMatch = url.match(/\/api\/products\/(\d+)\/data/);
+    if (productMatch) {
+      const stockUrl = new URL(url);
+      assert.equal(stockUrl.searchParams.get("token"), "digiseller-test-token");
+      assert.equal(stockUrl.searchParams.has("q.token"), false);
+      const productId = Number(productMatch[1]);
+      if (productId === digisellerByGpay.get(failedStockGpayId)) {
+        return Response.json({ retval: 1, retdesc: "Stock endpoint unavailable" });
+      }
+      return Response.json({
+        retval: 0,
+        num_in_stock:
+          productId === digisellerByGpay.get(lowStockGpayId)
+            ? addedCounts.has(productId)
+              ? 100
+              : 10
+            : 25,
+      });
+    }
+    if (url.includes("/api/product/content/add/text")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        product_id: number;
+        content: unknown[];
+      };
+      addedCounts.set(body.product_id, body.content.length);
+      return Response.json({ retval: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const first = await syncKeyPrices();
+    const second = await syncKeyPrices();
+    const failed = (
+      await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.gpayId, failedStockGpayId))
+    )[0];
+
+    assert.equal(first.stockChecked, 3);
+    assert.equal(first.stockReplenished, 1);
+    assert.equal(first.stockFailed, 1);
+    assert.equal(addedCounts.get(digisellerByGpay.get(lowStockGpayId)!), 90);
+    assert.equal(second.stockReplenished, 0);
+    assert.equal(addedCounts.size, 1);
+    assert.equal(failed.publicationStatus, "error");
+    assert.equal(failed.publicationFailureStage, "stock");
+    assert.match(failed.publicationError ?? "", /Stock endpoint unavailable/);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(productsTable).where(inArray(productsTable.gpayId, stockFixtureIds));
+  }
+});

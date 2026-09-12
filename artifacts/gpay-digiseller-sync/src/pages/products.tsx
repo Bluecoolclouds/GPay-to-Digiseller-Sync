@@ -458,6 +458,8 @@ function ProductRow({
               <div className="font-medium">
                 {product.publicationFailureStage === "image"
                   ? "Не удалось загрузить изображение"
+                  : product.publicationFailureStage === "stock"
+                    ? "Ошибка пополнения Text-остатка"
                   : product.publicationFailureStage === "category"
                     ? "Ошибка категории Digiseller"
                     : "Ошибка Digiseller"}

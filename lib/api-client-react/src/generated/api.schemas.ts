@@ -63,6 +63,7 @@ export type ProductPublicationFailureStage = typeof ProductPublicationFailureSta
 export const ProductPublicationFailureStage = {
   category: 'category',
   image: 'image',
+  stock: 'stock',
 } as const;
 
 export interface Product {

@@ -272,7 +272,7 @@ components:
         isAvailable: { type: boolean }
         publicationStatus: { type: string, enum: [draft, published, paused, error] }
         publicationError: { type: [string, "null"] }
-        publicationFailureStage: { type: [string, "null"], enum: [category, image, null] }
+        publicationFailureStage: { type: [string, "null"], enum: [category, image, stock, null] }
         region: { type: string }
         warningMessage: { type: [string, "null"] }
         updatedAt: { type: string, format: date-time }
