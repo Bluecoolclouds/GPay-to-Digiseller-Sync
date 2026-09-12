@@ -96,6 +96,19 @@ try {
       synced_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
+    create table "${schema}".sync_product_digiseller_ids (
+      id serial primary key,
+      local_product_id integer not null,
+      digiseller_product_id integer not null unique,
+      first_seen_at timestamptz not null default now(),
+      last_seen_at timestamptz not null default now(),
+      unique (local_product_id, digiseller_product_id)
+    );
+    create table "${schema}".sync_order_state (
+      id integer primary key default 1,
+      cursor_at timestamptz,
+      updated_at timestamptz not null default now()
+    );
   `);
   run(process.execPath, ["--test", testFile]);
 } finally {

@@ -43,6 +43,7 @@ import {
 } from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 import { getRepeatedPriceTimeoutWarning } from "../lib/price-timeout-warning";
+import { recordDigisellerProductIds } from "../lib/orders";
 
 const router: IRouter = Router();
 
@@ -310,6 +311,11 @@ async function publishProductRecord(current: ProductRecord) {
   let digisellerTextStocked = current.digisellerTextStocked;
   let digisellerImageUploaded = current.digisellerImageUploaded;
   let createdCodeProduct = false;
+  const historicalDigisellerIds = new Set<number>(
+    [current.digisellerId, current.previousDigisellerId].filter(
+      (id): id is number => id !== null,
+    ),
+  );
   const legacyDeliveryType: "form" | "text" =
     deliveryType === "text" ||
     (isKey && deliveryType === "code" && Boolean(previousDigisellerId))
@@ -334,6 +340,8 @@ async function publishProductRecord(current: ProductRecord) {
     createdCodeProduct = true;
     digisellerTextStocked = false;
     digisellerImageUploaded = false;
+    historicalDigisellerIds.add(previousDigisellerId);
+    historicalDigisellerIds.add(digisellerId);
     await db
       .update(productsTable)
       .set({
@@ -348,6 +356,11 @@ async function publishProductRecord(current: ProductRecord) {
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
+    await recordDigisellerProductIds(
+      db,
+      current.id,
+      [...historicalDigisellerIds],
+    );
   } else if (
     isKey &&
     digisellerId &&
@@ -364,6 +377,8 @@ async function publishProductRecord(current: ProductRecord) {
     createdCodeProduct = true;
     digisellerTextStocked = false;
     digisellerImageUploaded = false;
+    historicalDigisellerIds.add(previousDigisellerId);
+    historicalDigisellerIds.add(digisellerId);
     await db
       .update(productsTable)
       .set({
@@ -378,6 +393,11 @@ async function publishProductRecord(current: ProductRecord) {
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
+    await recordDigisellerProductIds(
+      db,
+      current.id,
+      [...historicalDigisellerIds],
+    );
   } else if (digisellerId) {
     await addDigisellerProductToPlati(
       digisellerId,
@@ -394,6 +414,7 @@ async function publishProductRecord(current: ProductRecord) {
     );
     deliveryType = isKey ? "code" : "form";
     createdCodeProduct = isKey;
+    historicalDigisellerIds.add(digisellerId);
     await db
       .update(productsTable)
       .set({
@@ -411,6 +432,11 @@ async function publishProductRecord(current: ProductRecord) {
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
+    await recordDigisellerProductIds(
+      db,
+      current.id,
+      [...historicalDigisellerIds],
+    );
   }
 
   // A newly created (or interrupted migration) Code card must be unlimited
@@ -488,6 +514,11 @@ async function publishProductRecord(current: ProductRecord) {
     })
     .where(eq(productsTable.id, current.id))
     .returning();
+  await recordDigisellerProductIds(
+    db,
+    current.id,
+    [...historicalDigisellerIds, digisellerId, previousDigisellerId],
+  );
   return { product: updated, imageStatus, imageError };
 }
 

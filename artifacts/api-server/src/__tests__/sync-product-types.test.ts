@@ -8,12 +8,18 @@ import {
   pool,
   productsTable,
   settingsTable,
+  syncOrderStateTable,
   syncOrdersTable,
+  syncProductDigisellerIdsTable,
 } from "@workspace/db";
 import app from "../app";
 import { selectCataloguerAttributes } from "../lib/digiseller";
 import { syncKeyPrices } from "../lib/price-sync";
-import { upsertDigisellerSales } from "../lib/orders";
+import {
+  recordDigisellerProductIds,
+  syncDigisellerOrders,
+  upsertDigisellerSales,
+} from "../lib/orders";
 
 const fixtureIds = [2_140_001_001, 2_140_001_002, 2_140_001_003];
 const [keyGpayId, giftGpayId, unknownGpayId] = fixtureIds;
@@ -963,7 +969,8 @@ test("order resync updates sale data but preserves fulfillment state", async () 
     date: "2026-01-01T00:00:00Z",
     productId: digisellerProductId,
     productName: "Original name",
-    paidAmountRub: 1_000,
+    amountIn: 1_000,
+    amountCurrency: "RUB",
   };
   const first = await upsertDigisellerSales(db, [initialSale]);
   assert.equal(first.inserted, 1);
@@ -976,7 +983,8 @@ test("order resync updates sale data but preserves fulfillment state", async () 
       ...initialSale,
       date: "2026-01-02T00:00:00Z",
       productName: "Updated name",
-      paidAmountRub: 1_250,
+      amountIn: 1_250,
+      amountCurrency: "RUB",
     },
   ]);
   assert.equal(second.updated, 1);
@@ -990,4 +998,478 @@ test("order resync updates sale data but preserves fulfillment state", async () 
   assert.equal(order.paidAmountRub, 1_250);
   await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
   await db.delete(productsTable).where(eq(productsTable.id, product.id));
+});
+
+function orderSyncProductValues(
+  gpayId: number,
+  digisellerId: number,
+  previousDigisellerId?: number | null,
+) {
+  return {
+    gpayId,
+    digisellerId,
+    previousDigisellerId: previousDigisellerId ?? null,
+    name: `Order sync regression ${gpayId}`,
+    productType: "2",
+    supplierPriceUsd: 20,
+    salePriceRub: 2200,
+    marginPercent: 15,
+    profitRub: 200,
+    isAvailable: true,
+  };
+}
+
+async function resetOrderSyncState() {
+  await db.delete(syncOrderStateTable);
+}
+
+test("seller-sells pagination imports every sale beyond the first 1000 rows", async () => {
+  const gpayId = 2_140_001_051;
+  const digisellerId = 1_940_001_051;
+  const invoiceIds = Array.from(
+    { length: 1_001 },
+    (_, index) => `invoice-pagination-${index}`,
+  );
+  await resetOrderSyncState();
+  // This test starts with a clean history set; later tests intentionally
+  // retain history to verify that IDs are never forgotten.
+  await db.delete(syncProductDigisellerIdsTable);
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  const requests: Array<Record<string, unknown>> = [];
+
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> & {
+        page: number;
+      };
+      requests.push(body);
+      const pageRows =
+        body.page === 1
+          ? invoiceIds.slice(0, 1_000)
+          : invoiceIds.slice(1_000);
+      return Response.json({
+        retval: 0,
+        total_rows: invoiceIds.length,
+        pages: 2,
+        page: body.page,
+        rows: pageRows.map((invoiceId, index) => ({
+          invoice_id: invoiceId,
+          product_id: digisellerId,
+          product_name: "Paginated order",
+          date_pay: "2024-01-01 00:00:00",
+          amount_in: String(index + 1),
+          amount_currency: "RUB",
+        })),
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const result = await syncDigisellerOrders();
+    assert.equal(result.skipped, false);
+    assert.equal(result.fetched, 1_001);
+    assert.equal(result.inserted, 1_001);
+    assert.equal(requests.length, 2);
+    for (const [index, body] of requests.entries()) {
+      assert.ok((body.product_ids as number[]).includes(digisellerId));
+      assert.equal(body.returned, 0);
+      assert.equal(body.rows, 1_000);
+      assert.equal(body.page, index + 1);
+      assert.equal(body.date_start, "2000-01-01 00:00:00");
+      assert.match(String(body.date_finish), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }
+    const [count] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(syncOrdersTable)
+      .where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+    assert.equal(count.count, 1_001);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("overlap resync upserts one invoice without replacing fulfillment state", async () => {
+  const gpayId = 2_140_001_052;
+  const digisellerId = 1_940_001_052;
+  const invoiceId = "invoice-overlap-regression";
+  await resetOrderSyncState();
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  let syncAttempt = 0;
+  const requests: Array<Record<string, unknown>> = [];
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      syncAttempt++;
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      requests.push(body);
+      return Response.json({
+        retval: 0,
+        total_rows: 1,
+        pages: 1,
+        page: 1,
+        rows: [
+          {
+            invoice_id: invoiceId,
+            product_id: digisellerId,
+            product_name: syncAttempt === 1 ? "Original" : "Resent",
+            date_pay: "2024-01-02 00:00:00",
+            amount_in: syncAttempt === 1 ? "1000" : "1100",
+            amount_currency: "RUR",
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const firstSync = await syncDigisellerOrders();
+    assert.equal(firstSync.skipped, false);
+    assert.equal(firstSync.inserted, 1);
+    await db
+      .update(syncOrdersTable)
+      .set({ status: "processing", operatorNote: "keep this note" })
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    const overlapSync = await syncDigisellerOrders();
+    assert.equal(overlapSync.skipped, false);
+    assert.equal(overlapSync.updated, 1);
+    assert.equal(requests.length, 2);
+    assert.notEqual(requests[1].date_start, "2000-01-01 00:00:00");
+    const matchingOrders = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(matchingOrders.length, 1);
+    assert.equal(matchingOrders[0].status, "processing");
+    assert.equal(matchingOrders[0].operatorNote, "keep this note");
+    assert.equal(matchingOrders[0].productName, "Resent");
+    assert.equal(matchingOrders[0].paidAmountRub, 1_100);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("seller-sells page failure rolls back rows and leaves the cursor unchanged", async () => {
+  const gpayId = 2_140_001_053;
+  const digisellerId = 1_940_001_053;
+  const invoiceIds = Array.from(
+    { length: 1_000 },
+    (_, index) => `invoice-page-failure-${index}`,
+  );
+  await resetOrderSyncState();
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { page: number };
+      if (body.page === 2) {
+        return Response.json(
+          { retval: 1, retdesc: "page 2 unavailable" },
+          { status: 503 },
+        );
+      }
+      return Response.json({
+        retval: 0,
+        total_rows: 1_001,
+        pages: 2,
+        page: 1,
+        rows: invoiceIds.map((invoiceId) => ({
+          invoice_id: invoiceId,
+          product_id: digisellerId,
+          product_name: "Rolled back order",
+          date_pay: "2024-01-03 00:00:00",
+          amount_in: "10",
+          amount_currency: "RUB",
+        })),
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    await assert.rejects(
+      () => syncDigisellerOrders(),
+      /page 2 unavailable|503/,
+    );
+    const rows = await db
+      .select({ id: syncOrdersTable.id })
+      .from(syncOrdersTable)
+      .where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+    assert.equal(rows.length, 0);
+    const state = await db.select().from(syncOrderStateTable);
+    assert.equal(state.length, 0);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(inArray(syncOrdersTable.invoiceId, invoiceIds));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("historical Digiseller ID remains importable after previous ID is cleared", async () => {
+  const gpayId = 2_140_001_054;
+  const currentDigisellerId = 1_940_001_054;
+  const historicalDigisellerId = 1_940_001_055;
+  const invoiceId = "invoice-historical-id-regression";
+  await resetOrderSyncState();
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, currentDigisellerId, null))
+    .returning();
+  await db.insert(syncProductDigisellerIdsTable).values({
+    localProductId: product.id,
+    digisellerProductId: historicalDigisellerId,
+  });
+  const requests: Array<Record<string, unknown>> = [];
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      requests.push(body);
+      return Response.json({
+        retval: 0,
+        total_rows: 1,
+        pages: 1,
+        page: 1,
+        rows: [
+          {
+            invoice_id: invoiceId,
+            product_id: historicalDigisellerId,
+            product_name: "Historical product order",
+            date_pay: "2024-01-04 00:00:00",
+            amount_in: "77",
+            amount_currency: "RUB",
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const result = await syncDigisellerOrders();
+    assert.equal(result.skipped, false);
+    assert.equal(result.inserted, 1);
+    assert.ok((requests[0].product_ids as number[]).includes(currentDigisellerId));
+    assert.ok(
+      (requests[0].product_ids as number[]).includes(historicalDigisellerId),
+    );
+    const [order] = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(order.digisellerProductId, historicalDigisellerId);
+    assert.equal(order.paidAmountRub, 77);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("a malformed seller-sells row rolls back the import and cursor", async () => {
+  const gpayId = 2_140_001_055;
+  const digisellerId = 1_940_001_058;
+  const invoiceId = "invoice-malformed-row-regression";
+  await resetOrderSyncState();
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      return Response.json({
+        retval: 0,
+        total_rows: 1,
+        pages: 1,
+        page: 1,
+        rows: [
+          {
+            invoice_id: invoiceId,
+            product_id: digisellerId,
+            product_name: "   ",
+            date_pay: "2024-01-05 00:00:00",
+            amount_in: "not-a-number",
+            amount_currency: "RUB",
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    await assert.rejects(
+      () => syncDigisellerOrders(),
+      /malformed row|malformed amount/,
+    );
+    const orders = await db
+      .select({ id: syncOrdersTable.id })
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(orders.length, 0);
+    assert.equal((await db.select().from(syncOrderStateTable)).length, 0);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("page metadata drift rolls back page one and leaves cursor unchanged", async () => {
+  const gpayId = 2_140_001_056;
+  const digisellerId = 1_940_001_059;
+  const invoiceId = "invoice-metadata-drift-regression";
+  await resetOrderSyncState();
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-order-test-token" });
+    }
+    if (url.includes("/api/seller-sells/v2")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { page: number };
+      return Response.json({
+        retval: 0,
+        total_rows: body.page === 1 ? 1_001 : 1_002,
+        pages: 2,
+        page: body.page,
+        rows: [
+          {
+            invoice_id: invoiceId,
+            product_id: digisellerId,
+            product_name: "Metadata drift order",
+            date_pay: "2024-01-06 00:00:00",
+            amount_in: "10",
+            amount_currency: "RUB",
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    await assert.rejects(
+      () => syncDigisellerOrders(),
+      /pagination metadata changed/,
+    );
+    const orders = await db
+      .select({ id: syncOrdersTable.id })
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(orders.length, 0);
+    assert.equal((await db.select().from(syncOrderStateTable)).length, 0);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
+    await resetOrderSyncState();
+  }
+});
+
+test("Digiseller ID ownership collisions fail and roll back history writes", async () => {
+  const ownerGpayId = 2_140_001_057;
+  const contenderGpayId = 2_140_001_058;
+  const ownedDigisellerId = 1_940_001_060;
+  const rolledBackDigisellerId = 1_940_001_061;
+  await db.delete(productsTable).where(
+    inArray(productsTable.gpayId, [ownerGpayId, contenderGpayId]),
+  );
+  const [owner] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(ownerGpayId, ownedDigisellerId))
+    .returning();
+  const [contender] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(contenderGpayId, 1_940_001_062))
+    .returning();
+  await recordDigisellerProductIds(db, owner.id, [ownedDigisellerId]);
+
+  try {
+    await assert.rejects(
+      () =>
+        db.transaction((tx) =>
+          recordDigisellerProductIds(tx, contender.id, [
+            rolledBackDigisellerId,
+            ownedDigisellerId,
+          ]),
+        ),
+      /already mapped to local product/,
+    );
+    const [owned] = await db
+      .select()
+      .from(syncProductDigisellerIdsTable)
+      .where(
+        eq(
+          syncProductDigisellerIdsTable.digisellerProductId,
+          ownedDigisellerId,
+        ),
+      );
+    assert.equal(owned.localProductId, owner.id);
+    const rolledBack = await db
+      .select()
+      .from(syncProductDigisellerIdsTable)
+      .where(
+        eq(
+          syncProductDigisellerIdsTable.digisellerProductId,
+          rolledBackDigisellerId,
+        ),
+      );
+    assert.equal(rolledBack.length, 0);
+  } finally {
+    await db.delete(productsTable).where(
+      inArray(productsTable.gpayId, [ownerGpayId, contenderGpayId]),
+    );
+  }
 });

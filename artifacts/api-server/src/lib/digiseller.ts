@@ -118,83 +118,168 @@ export type DigisellerSale = {
   invoiceId: string;
   productId: number;
   productName: string;
-  paidAmountRub: number | null;
+  paidAmountRub?: number | null;
+  amountIn?: number | null;
+  amountCurrency?: string | null;
 };
 
-/**
- * Fetches the seller's ungrouped recent sales. The token is intentionally
- * never included in the returned value or any log context.
- */
-export async function fetchDigisellerLastSales(
-  providedToken?: string,
-): Promise<DigisellerSale[]> {
-  const token = providedToken ?? (await loginDigiseller());
-  const url = new URL(
-    "https://api.digiseller.com/api/seller-last-sales",
+export function parseDigisellerDate(value: string) {
+  const trimmed = value.trim();
+  let normalized = trimmed;
+  const russianDate = trimmed.match(
+    /^(\d{2})\.(\d{2})\.(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/,
   );
+  if (russianDate) {
+    normalized = `${russianDate[3]}-${russianDate[2]}-${russianDate[1]}T${russianDate[4]}:${russianDate[5]}:${russianDate[6] ?? "00"}+03:00`;
+  } else if (
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(trimmed)
+  ) {
+    normalized = `${trimmed.replace(" ", "T")}+03:00`;
+  }
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * A page from seller-sells/v2.  This endpoint deliberately returns pages
+ * rather than silently truncating the seller's sales at 1,000 rows.
+ */
+export type DigisellerSalesPage = {
+  page: number;
+  pages: number;
+  totalRows: number;
+  rawRowCount: number;
+  sales: DigisellerSale[];
+};
+
+const DIGISELLER_SALES_PAGE_SIZE = 1_000;
+
+export async function fetchDigisellerSalesPage(input: {
+  productIds: number[];
+  dateStart: string;
+  dateFinish: string;
+  page: number;
+  providedToken?: string;
+}): Promise<DigisellerSalesPage> {
+  if (input.productIds.length === 0) {
+    return {
+      page: input.page,
+      pages: 0,
+      totalRows: 0,
+      rawRowCount: 0,
+      sales: [],
+    };
+  }
+  const token = input.providedToken ?? (await loginDigiseller());
+  const url = new URL("https://api.digiseller.com/api/seller-sells/v2");
   url.searchParams.set("token", token);
-  url.searchParams.set("seller_id", process.env.DIGISELLER_SELLER_ID ?? "");
-  url.searchParams.set("group", "false");
-  url.searchParams.set("top", "1000");
   const response = await fetch(url, {
-    headers: { accept: "application/json" },
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      product_ids: input.productIds,
+      date_start: input.dateStart,
+      date_finish: input.dateFinish,
+      returned: 0,
+      page: input.page,
+      rows: DIGISELLER_SALES_PAGE_SIZE,
+    }),
     signal: AbortSignal.timeout(30_000),
   });
   const body = (await response.json()) as {
     retval?: number;
     retdesc?: string;
-    sales?: Array<{
-      date?: string;
+    total_rows?: number;
+    pages?: number;
+    page?: number;
+    rows?: Array<{
       invoice_id?: string | number;
-      product?: {
-        id?: string | number;
-        name?: string;
-        price_rub?: string | number | null;
-      };
+      product_id?: string | number;
+      product_name?: string;
+      date_pay?: string;
+      amount_in?: string | number | null;
+      amount_currency?: string | null;
     }>;
-    content?: {
-      sales?: Array<{
-        date?: string;
-        invoice_id?: string | number;
-        product?: {
-          id?: string | number;
-          name?: string;
-          price_rub?: string | number | null;
-        };
-      }>;
-    };
   };
-  const sales = body.sales ?? body.content?.sales ?? [];
-  if (!response.ok || (body.retval !== undefined && body.retval !== 0)) {
+  if (!response.ok || body.retval !== 0) {
     throw new Error(
       body.retdesc || `Digiseller sales API returned ${response.status}`,
     );
   }
-  return sales.flatMap((sale) => {
-    const productId = Number(sale.product?.id);
+  if (
+    typeof body.page !== "number" ||
+    !Number.isInteger(body.page) ||
+    typeof body.pages !== "number" ||
+    !Number.isInteger(body.pages) ||
+    typeof body.total_rows !== "number" ||
+    !Number.isInteger(body.total_rows) ||
+    body.page < 1 ||
+    body.pages < 0 ||
+    body.total_rows < 0 ||
+    !Array.isArray(body.rows)
+  ) {
+    throw new Error("Digiseller sales API returned malformed pagination");
+  }
+  const page = body.page;
+  const pages = body.pages;
+  const totalRows = body.total_rows;
+  const rows = body.rows;
+  const expectedPages =
+    totalRows === 0 ? 0 : Math.ceil(totalRows / DIGISELLER_SALES_PAGE_SIZE);
+  if (pages !== expectedPages || (pages === 0 && rows.length > 0)) {
+    throw new Error("Digiseller sales API returned inconsistent pagination");
+  }
+  const sales = rows.map((sale, index) => {
+    const productId = Number(sale.product_id);
     const invoiceId =
       sale.invoice_id === undefined ? "" : String(sale.invoice_id);
-    const date = sale.date;
-    const productName = sale.product?.name;
-    if (!invoiceId || !date || !productName || !Number.isInteger(productId)) {
-      return [];
+    const date = typeof sale.date_pay === "string" ? sale.date_pay : "";
+    const productName =
+      typeof sale.product_name === "string" ? sale.product_name.trim() : "";
+    if (
+      !invoiceId.trim() ||
+      !date ||
+      !productName ||
+      !Number.isInteger(productId) ||
+      productId <= 0 ||
+      !parseDigisellerDate(date)
+    ) {
+      throw new Error(
+        `Digiseller sales API returned malformed row ${index + 1}`,
+      );
     }
-    const rawAmount = sale.product?.price_rub;
-    const parsedAmount =
-      rawAmount === null || rawAmount === undefined ? null : Number(rawAmount);
-    return [
-      {
-        invoiceId,
-        date,
-        productId,
-        productName,
-        paidAmountRub:
-          parsedAmount !== null && Number.isFinite(parsedAmount)
-            ? parsedAmount
-            : null,
-      },
-    ];
+    const rawAmountValue =
+      sale.amount_in === null || sale.amount_in === undefined
+        ? null
+        : Number(sale.amount_in);
+    if (
+      (typeof sale.amount_in === "string" &&
+        sale.amount_in.trim().length === 0) ||
+      (rawAmountValue !== null && !Number.isFinite(rawAmountValue))
+    ) {
+      throw new Error(
+        `Digiseller sales API returned malformed amount in row ${index + 1}`,
+      );
+    }
+    return {
+      invoiceId: invoiceId.trim(),
+      date,
+      productId,
+      productName,
+      amountIn: rawAmountValue,
+      amountCurrency: sale.amount_currency ?? null,
+    };
   });
+  return {
+    page,
+    pages,
+    totalRows,
+    rawRowCount: rows.length,
+    sales,
+  };
 }
 
 export async function updateDigisellerProductPrices(

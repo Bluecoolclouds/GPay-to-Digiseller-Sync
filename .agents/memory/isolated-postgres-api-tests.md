@@ -8,3 +8,9 @@ Create a uniquely named PostgreSQL schema for each API test run, set the child p
 **Why:** Drizzle Kit schema push reported no changes after connecting with a schema-specific `search_path` because it inspected the existing public schema. Tests then connected to an empty isolated schema.
 
 **How to apply:** For integration tests that use the real database layer, fail closed unless `current_schema()` matches the generated test schema. Drop that exact schema after the test process exits.
+
+Database advisory locks are cluster-wide and are not isolated by PostgreSQL schema.
+
+**Why:** A test using an isolated schema still collided with the running development scheduler because both used the same fixed advisory-lock ID, causing the test sync to be silently skipped.
+
+**How to apply:** Derive a deterministic lock namespace from the isolated test schema while keeping stable production lock IDs. Explicitly assert `skipped: false` in tests whose behavior depends on acquiring the lock.

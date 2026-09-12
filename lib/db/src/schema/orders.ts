@@ -43,3 +43,48 @@ export const syncOrdersTable = pgTable(
 );
 
 export type SyncOrder = typeof syncOrdersTable.$inferSelect;
+
+/**
+ * Digiseller product identifiers are not stable across publication
+ * migrations.  Keep this append-only mapping so an order for an old card can
+ * still be associated with its local product after the old id is cleared.
+ */
+export const syncProductDigisellerIdsTable = pgTable(
+  "sync_product_digiseller_ids",
+  {
+    id: serial("id").primaryKey(),
+    localProductId: integer("local_product_id").notNull(),
+    digisellerProductId: integer("digiseller_product_id").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    digisellerProductIdUnique: uniqueIndex(
+      "sync_product_digiseller_ids_external_unique",
+    ).on(table.digisellerProductId),
+    localProductIdDigisellerProductIdUnique: uniqueIndex(
+      "sync_product_digiseller_ids_local_external_unique",
+    ).on(table.localProductId, table.digisellerProductId),
+  }),
+);
+
+export type SyncProductDigisellerId =
+  typeof syncProductDigisellerIdsTable.$inferSelect;
+
+/**
+ * A singleton cursor.  A null cursor means that the first successful sync
+ * must perform the historical backfill.
+ */
+export const syncOrderStateTable = pgTable("sync_order_state", {
+  id: integer("id").primaryKey().default(1),
+  cursorAt: timestamp("cursor_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type SyncOrderState = typeof syncOrderStateTable.$inferSelect;
