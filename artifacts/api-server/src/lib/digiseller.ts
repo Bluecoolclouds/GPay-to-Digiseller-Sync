@@ -997,6 +997,41 @@ export async function addDigisellerProductToPlati(
   }
 }
 
+export async function setDigisellerProductEnabled(
+  productId: number,
+  input: ProductInput,
+  enabled: boolean,
+  providedToken?: string,
+  platiCategoryId?: number | null,
+  deliveryType: "form" | "text" | "code" = "form",
+): Promise<void> {
+  const token = providedToken ?? (await loginDigiseller());
+  const categories = await resolveProductCategories(input, token, platiCategoryId);
+  const productKind =
+    deliveryType === "text" || deliveryType === "code"
+      ? "uniquefixed"
+      : "arbitrary";
+  const payload = buildProductPayload(input, categories, enabled, deliveryType);
+  const response = await fetch(
+    `https://api.digiseller.com/api/product/edit/${productKind}/${productId}?token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const json = (await response.json()) as CreateProductResult;
+  if (!response.ok || json.retval !== 0) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось ${enabled ? "включить" : "отключить"} товар (${response.status})`,
+      ),
+    );
+  }
+}
+
 export async function disableLegacyDigisellerProduct(
   productId: number,
   input: ProductInput,

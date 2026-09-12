@@ -487,6 +487,203 @@ test("per-product Digiseller failure leaves the previous local price unchanged",
   }
 });
 
+test("hourly sync disables missing keys and re-enables them only after confirmed availability", async () => {
+  const digisellerId = 1_914_001_001;
+  await preparePublishedPriceFixture();
+  await db
+    .update(productsTable)
+    .set({
+      digisellerDeliveryType: "code",
+      platiCategoryId: 87_655,
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  let supplierAvailable = false;
+  const enabledCalls: boolean[] = [];
+
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          products: supplierAvailable
+            ? [{
+                id: keyGpayId,
+                name: "Regression key original",
+                productType: 2,
+                currentPartnerPrice: 11,
+                isAvailable: true,
+                region: "Global",
+              }]
+            : [],
+          totalCount: supplierAvailable ? 1 : 0,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes(`/api/product/edit/uniquefixed/${digisellerId}`)) {
+      const payload = JSON.parse(String(init?.body)) as { enabled?: boolean };
+      enabledCalls.push(payload.enabled === true);
+      return Response.json({ retval: 0 });
+    }
+    if (url.includes("/api/product/edit/prices")) {
+      return new Response("12345678-1234-1234-1234-123456789abc");
+    }
+    if (url.includes("/UpdateProductsTaskStatus")) {
+      return Response.json({ Status: 3, ErrorCount: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const disabled = await syncKeyPrices();
+    const [afterDisable] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+    assert.deepEqual(enabledCalls, [false]);
+    assert.equal(disabled.failed, 0);
+    assert.equal(afterDisable.isAvailable, false);
+    assert.match(afterDisable.warningMessage ?? "", /исчез из каталога GPay/);
+
+    await syncKeyPrices();
+    assert.deepEqual(enabledCalls, [false]);
+
+    supplierAvailable = true;
+    const enabled = await syncKeyPrices();
+    const [afterEnable] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+    assert.deepEqual(enabledCalls, [false, true]);
+    assert.equal(enabled.failed, 0);
+    assert.equal(afterEnable.isAvailable, true);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("failed Digiseller disable remains retryable and visible in activities", async () => {
+  const digisellerId = 1_914_001_001;
+  await preparePublishedPriceFixture();
+  await db
+    .update(productsTable)
+    .set({
+      digisellerDeliveryType: "code",
+      platiCategoryId: 87_655,
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  let disableAttempts = 0;
+
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: { products: [], totalCount: 0, page: 1, pageSize: 100 },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes(`/api/product/edit/uniquefixed/${digisellerId}`)) {
+      disableAttempts++;
+      return Response.json({ retval: 1, retdesc: "Disable rejected" });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const first = await syncKeyPrices();
+    const second = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .orderBy(desc(activitiesTable.createdAt))
+      .limit(1);
+
+    assert.equal(disableAttempts, 2);
+    assert.equal(first.failed, 1);
+    assert.equal(second.failed, 1);
+    assert.match(first.errors?.[0] ?? "", /Disable rejected/);
+    assert.equal(saved.isAvailable, true);
+    assert.equal(activity.status, "warning");
+    assert.match(activity.description, /Disable rejected/);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("disableOnUnavailable false records unavailability without editing Digiseller", async () => {
+  await preparePublishedPriceFixture();
+  await db
+    .update(settingsTable)
+    .set({ disableOnUnavailable: false })
+    .where(eq(settingsTable.id, 1));
+  let digisellerCalls = 0;
+
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: { products: [], totalCount: 0, page: 1, pageSize: 100 },
+      });
+    }
+    if (url.includes("digiseller.com")) {
+      digisellerCalls++;
+      return Response.json({ retval: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const result = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+    assert.equal(result.failed, 0);
+    assert.equal(digisellerCalls, 0);
+    assert.equal(saved.isAvailable, false);
+  } finally {
+    fetchOverride = undefined;
+    await db
+      .update(settingsTable)
+      .set({ disableOnUnavailable: true })
+      .where(eq(settingsTable.id, 1));
+  }
+});
+
 test("a failed price batch does not prevent later batches from saving", async () => {
   const batchGpayIds = Array.from(
     { length: 101 },

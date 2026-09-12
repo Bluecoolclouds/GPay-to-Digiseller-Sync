@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   activitiesTable,
   db,
@@ -8,6 +8,7 @@ import {
 import { fetchGPayProducts } from "./gpay";
 import {
   loginDigiseller,
+  setDigisellerProductEnabled,
   updateDigisellerProductPrices,
 } from "./digiseller";
 import { getOfficialUsdRubRate } from "./exchange-rate";
@@ -47,6 +48,41 @@ export type PriceSyncResult = {
   skipped: boolean;
   errors?: string[];
 };
+
+type ProductRecord = typeof productsTable.$inferSelect;
+
+function getDigisellerProductInput(product: ProductRecord) {
+  const cleanName = product.name
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .split("|")[0]
+    .trim();
+  const platform =
+    product.name.match(/\bSteam\b/i)?.[0] ??
+    product.name.match(/\bXbox\b/i)?.[0] ??
+    product.name.match(/\bPlayStation\b/i)?.[0] ??
+    "PC";
+  const region =
+    product.region && product.region !== "Не указан"
+      ? product.region
+      : "Без региональных ограничений";
+  return {
+    name: product.name,
+    descriptionRu: [
+      `${cleanName} — цифровой ключ для ${platform}.`,
+      `Платформа: ${platform}`,
+      `Регион активации: ${region}`,
+      "Перед покупкой убедитесь, что регион и платформа подходят для вашего аккаунта.",
+    ].join("\n\n"),
+    descriptionEn: [
+      `${cleanName} — digital activation key for ${platform}.`,
+      `Platform: ${platform}`,
+      `Activation region: ${region}`,
+      "Before purchasing, make sure the region and platform are suitable for your account.",
+    ].join("\n\n"),
+    priceRub: product.salePriceRub,
+    productType: product.productType,
+  };
+}
 
 export async function syncKeyPrices(): Promise<PriceSyncResult> {
   const lock = await db.execute<{ locked: boolean }>(
@@ -97,42 +133,86 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
     const supplierById = new Map(
       (catalog.products ?? []).map((product) => [product.id, product]),
     );
-    const localProducts = supplierById.size
-      ? await db
-          .select()
-          .from(productsTable)
-          .where(inArray(productsTable.gpayId, [...supplierById.keys()]))
-      : [];
+    const localProducts = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.productType, "2"));
 
     const changes = localProducts.flatMap((product) => {
       const supplier = supplierById.get(product.gpayId);
-      if (!supplier) return [];
-      const calculated = calculatePrice(
-        supplier.currentPartnerPrice,
-        settings,
-        product.marginPercent,
-      );
-      const isAvailable = supplier.isAvailable === true;
+      const calculated = supplier
+        ? calculatePrice(
+            supplier.currentPartnerPrice,
+            settings,
+            product.marginPercent,
+          )
+        : {
+            salePriceRub: product.salePriceRub,
+            profitRub: product.profitRub,
+          };
+      const isAvailable = supplier?.isAvailable === true;
+      const priceChanged =
+        supplier !== undefined &&
+        (supplier.currentPartnerPrice !== product.supplierPriceUsd ||
+          calculated.salePriceRub !== product.salePriceRub);
+      const availabilityChanged = isAvailable !== product.isAvailable;
       if (
-        supplier.currentPartnerPrice === product.supplierPriceUsd &&
-        calculated.salePriceRub === product.salePriceRub &&
-        isAvailable === product.isAvailable
+        !priceChanged &&
+        !availabilityChanged &&
+        (supplier?.warningMessage ?? null) === product.warningMessage
       ) {
         return [];
       }
-      return [{ product, supplier, calculated }];
+      return [{
+        product,
+        supplier,
+        calculated,
+        isAvailable,
+        priceChanged,
+        availabilityChanged,
+      }];
     });
 
-    const published = changes.filter(
-      ({ product }) =>
+    const publishedPriceChanges = changes.filter(
+      ({ product, priceChanged }) =>
+        priceChanged &&
         product.publicationStatus === "published" && product.digisellerId,
     );
+    const publishedAvailabilityChanges = changes.filter(
+      ({ product, isAvailable, availabilityChanged }) =>
+        availabilityChanged &&
+        (isAvailable || settings.disableOnUnavailable) &&
+        product.publicationStatus === "published" &&
+        product.digisellerId,
+    );
+    const publishedProductIds = new Set(
+      [...publishedPriceChanges, ...publishedAvailabilityChanges].map(
+        ({ product }) => product.digisellerId!,
+      ),
+    );
     const digisellerFailures = new Map<number, string>();
-    if (published.length > 0) {
-      const token = await loginDigiseller();
+    if (publishedProductIds.size > 0) {
+      let token: string;
+      try {
+        token = await loginDigiseller();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Не удалось войти в Digiseller";
+        for (const productId of publishedProductIds) {
+          digisellerFailures.set(productId, message);
+        }
+        token = "";
+      }
       const batchSize = 100;
-      for (let start = 0; start < published.length; start += batchSize) {
-        const batch = published.slice(start, start + batchSize);
+      for (
+        let start = 0;
+        start < publishedPriceChanges.length;
+        start += batchSize
+      ) {
+        const batch = publishedPriceChanges.slice(start, start + batchSize);
+        if (!token) continue;
         try {
           const failures = await updateDigisellerProductPrices(
             batch.map(({ product, calculated }) => ({
@@ -152,10 +232,34 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
           }
         }
       }
+      for (const change of publishedAvailabilityChanges) {
+        const productId = change.product.digisellerId!;
+        if (!token || digisellerFailures.has(productId)) continue;
+        try {
+          await setDigisellerProductEnabled(
+            productId,
+            {
+              ...getDigisellerProductInput(change.product),
+              priceRub: change.calculated.salePriceRub,
+            },
+            change.isAvailable,
+            token,
+            change.product.platiCategoryId,
+            change.product.digisellerDeliveryType ?? "form",
+          );
+        } catch (error) {
+          digisellerFailures.set(
+            productId,
+            error instanceof Error
+              ? error.message
+              : `Не удалось ${change.isAvailable ? "включить" : "отключить"} товар`,
+          );
+        }
+      }
     }
 
     let updated = 0;
-    for (const { product, supplier, calculated } of changes) {
+    for (const { product, supplier, calculated, isAvailable } of changes) {
       if (
         product.digisellerId &&
         product.publicationStatus === "published" &&
@@ -166,10 +270,13 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       await db
         .update(productsTable)
         .set({
-          supplierPriceUsd: supplier.currentPartnerPrice,
+          supplierPriceUsd:
+            supplier?.currentPartnerPrice ?? product.supplierPriceUsd,
           ...calculated,
-          isAvailable: supplier.isAvailable === true,
-          warningMessage: supplier.warningMessage ?? null,
+          isAvailable,
+          warningMessage:
+            supplier?.warningMessage ??
+            (supplier ? null : "Товар исчез из каталога GPay"),
           updatedAt: new Date(),
         })
         .where(eq(productsTable.id, product.id));
@@ -179,7 +286,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
     const result = {
       checked: localProducts.length,
       changed: changes.length,
-      digisellerUpdated: published.length - digisellerFailures.size,
+      digisellerUpdated: publishedProductIds.size - digisellerFailures.size,
       failed: digisellerFailures.size,
       stockChecked: 0,
       stockReplenished: 0,
