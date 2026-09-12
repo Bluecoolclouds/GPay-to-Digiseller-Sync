@@ -109,7 +109,8 @@ export async function recordDigisellerProductIds(
 /**
  * Upsert sales while deliberately excluding status and operatorNote from the
  * update set. Those two fields are local fulfillment state and must survive
- * every external resynchronization.
+ * every external resynchronization. Return state belongs to Digiseller and is
+ * refreshed on every import.
  */
 export async function upsertDigisellerSales(
   executor: DbExecutor,
@@ -183,6 +184,7 @@ export async function upsertDigisellerSales(
         productName: sale.productName,
         paidAmountRub: parseSaleAmount(sale),
         saleTimestamp,
+        isReturned: sale.isReturned,
         syncedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -193,6 +195,7 @@ export async function upsertDigisellerSales(
           productName: sale.productName,
           paidAmountRub: parseSaleAmount(sale),
           saleTimestamp,
+          isReturned: sale.isReturned,
           syncedAt: new Date(),
           updatedAt: new Date(),
         },
@@ -480,8 +483,16 @@ export async function listOrders(input: {
 
 export async function updateOrder(
   invoiceId: string,
-  values: { status?: "new" | "processing" | "delivered"; note?: string | null },
+  values: {
+    status?: "new" | "processing" | "delivered";
+    note?: string | null;
+    confirmReturned?: boolean;
+  },
 ): Promise<SyncOrder | undefined> {
+  const requiresUnreturnedOrder =
+    values.status !== undefined &&
+    values.status !== "new" &&
+    values.confirmReturned !== true;
   const [updated] = await db
     .update(syncOrdersTable)
     .set({
@@ -489,7 +500,30 @@ export async function updateOrder(
       ...(values.note !== undefined ? { operatorNote: values.note } : {}),
       updatedAt: new Date(),
     })
-    .where(eq(syncOrdersTable.invoiceId, invoiceId))
+    .where(
+      requiresUnreturnedOrder
+        ? and(
+            eq(syncOrdersTable.invoiceId, invoiceId),
+            eq(syncOrdersTable.isReturned, false),
+          )
+        : eq(syncOrdersTable.invoiceId, invoiceId),
+    )
     .returning();
+  if (!updated && requiresUnreturnedOrder) {
+    const [order] = await db
+      .select({ isReturned: syncOrdersTable.isReturned })
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    if (order?.isReturned) {
+      throw new ReturnedOrderConfirmationRequiredError();
+    }
+  }
   return updated;
+}
+
+export class ReturnedOrderConfirmationRequiredError extends Error {
+  constructor() {
+    super("Returned order status change requires explicit confirmation");
+    this.name = "ReturnedOrderConfirmationRequiredError";
+  }
 }

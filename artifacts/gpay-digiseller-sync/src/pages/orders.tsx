@@ -308,8 +308,23 @@ function OrderRow({
 
   const handleStatusChange = (newStatus: OrderUpdateStatus) => {
     if (newStatus === order.status) return
+    const requiresReturnConfirmation = order.isReturned && newStatus !== "new"
+    if (
+      requiresReturnConfirmation &&
+      !window.confirm(
+        "Платёж по этому заказу возвращён. Подтвердите, что ключ всё равно нужно выдать.",
+      )
+    ) {
+      return
+    }
     updateMutation.mutate(
-      { invoiceId: order.invoiceId, data: { status: newStatus } },
+      {
+        invoiceId: order.invoiceId,
+        data: {
+          status: newStatus,
+          ...(requiresReturnConfirmation ? { confirmReturned: true } : {}),
+        },
+      },
       {
         onSuccess: (res) => {
           onUpdateRef.current(res)
@@ -341,7 +356,14 @@ function OrderRow({
   return (
     <tr className={cn("hover:bg-muted/30 transition-colors group", order.status === "new" && "bg-rose-50/30 dark:bg-rose-950/10")}>
       <td className="px-4 py-3 align-top">
-        <div className="font-mono text-sm font-medium text-foreground">{order.invoiceId}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="font-mono text-sm font-medium text-foreground">{order.invoiceId}</div>
+          {order.isReturned && (
+            <Badge variant="destructive" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+              <AlertTriangle className="w-3 h-3 mr-1" /> Возврат
+            </Badge>
+          )}
+        </div>
         <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
           {saleDate}
         </div>

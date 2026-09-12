@@ -121,6 +121,7 @@ export type DigisellerSale = {
   paidAmountRub?: number | null;
   amountIn?: number | null;
   amountCurrency?: string | null;
+  isReturned: boolean;
 };
 
 export function parseDigisellerDate(value: string) {
@@ -202,6 +203,7 @@ export async function fetchDigisellerSalesPage(input: {
       date_pay?: string;
       amount_in?: string | number | null;
       amount_currency?: string | null;
+      returned?: boolean | number | string | null;
     }>;
   };
   if (!response.ok || body.retval !== 0) {
@@ -264,6 +266,26 @@ export async function fetchDigisellerSalesPage(input: {
         `Digiseller sales API returned malformed amount in row ${index + 1}`,
       );
     }
+    if (
+      sale.returned === undefined ||
+      sale.returned === null ||
+      (
+      sale.returned !== false &&
+      sale.returned !== 0 &&
+      sale.returned !== "0" &&
+      sale.returned !== true &&
+      sale.returned !== 1 &&
+      sale.returned !== "1"
+      )
+    ) {
+      throw new Error(
+        `Digiseller sales API returned malformed return state in row ${index + 1}`,
+      );
+    }
+    const isReturned =
+      sale.returned === true ||
+      sale.returned === 1 ||
+      sale.returned === "1";
     return {
       invoiceId: invoiceId.trim(),
       date,
@@ -271,6 +293,7 @@ export async function fetchDigisellerSalesPage(input: {
       productName,
       amountIn: rawAmountValue,
       amountCurrency: sale.amount_currency ?? null,
+      isReturned,
     };
   });
   return {

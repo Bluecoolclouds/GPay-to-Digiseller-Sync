@@ -9,6 +9,8 @@ import type { OrderUpdateStatus } from './orderUpdateStatus';
 
 export interface OrderUpdate {
   status?: OrderUpdateStatus;
+  /** Explicit confirmation required when moving a returned order out of the new queue. */
+  confirmReturned?: boolean;
   /**
      * @maxLength 2000
      * @nullable

@@ -287,6 +287,8 @@ paths:
                 $ref: "#/components/schemas/Order"
         "404":
           description: Order not found
+        "409":
+          description: Explicit confirmation is required to fulfill a returned order
 components:
   schemas:
     HealthStatus:
@@ -470,7 +472,7 @@ components:
         isFallback: { type: boolean }
     Order:
       type: object
-      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, operatorNote, syncedAt, updatedAt]
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, syncedAt, updatedAt]
       properties:
         id: { type: integer }
         invoiceId: { type: string }
@@ -479,6 +481,7 @@ components:
         paidAmountRub: { type: [number, "null"] }
         saleTimestamp: { type: string, format: date-time }
         status: { type: string, enum: [new, processing, delivered] }
+        isReturned: { type: boolean }
         operatorNote: { type: [string, "null"] }
         syncedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -508,6 +511,9 @@ components:
       minProperties: 1
       properties:
         status: { type: string, enum: [new, processing, delivered] }
+        confirmReturned:
+          type: boolean
+          description: Explicit confirmation required when moving a returned order out of the new queue.
         note: { type: [string, "null"], maxLength: 2000 }
     OrderSyncResult:
       type: object

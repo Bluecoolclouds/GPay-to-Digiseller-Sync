@@ -13,7 +13,10 @@ import {
   syncProductDigisellerIdsTable,
 } from "@workspace/db";
 import app from "../app";
-import { selectCataloguerAttributes } from "../lib/digiseller";
+import {
+  fetchDigisellerSalesPage,
+  selectCataloguerAttributes,
+} from "../lib/digiseller";
 import { syncKeyPrices } from "../lib/price-sync";
 import {
   recordDigisellerProductIds,
@@ -1168,6 +1171,7 @@ test("order resync updates sale data but preserves fulfillment state", async () 
     productName: "Original name",
     amountIn: 1_000,
     amountCurrency: "RUB",
+    isReturned: false,
   };
   const first = await upsertDigisellerSales(db, [initialSale]);
   assert.equal(first.inserted, 1);
@@ -1265,6 +1269,7 @@ test("seller-sells pagination imports every sale beyond the first 1000 rows", as
           date_pay: "2024-01-01 00:00:00",
           amount_in: String(index + 1),
           amount_currency: "RUB",
+          returned: 0,
         })),
       });
     }
@@ -1333,6 +1338,7 @@ test("overlap resync upserts one invoice without replacing fulfillment state", a
             date_pay: "2024-01-02 00:00:00",
             amount_in: syncAttempt === 1 ? "1000" : "1100",
             amount_currency: "RUR",
+            returned: syncAttempt === 1 ? 0 : 1,
           },
         ],
       });
@@ -1360,6 +1366,7 @@ test("overlap resync upserts one invoice without replacing fulfillment state", a
     assert.equal(matchingOrders.length, 1);
     assert.equal(matchingOrders[0].status, "processing");
     assert.equal(matchingOrders[0].operatorNote, "keep this note");
+    assert.equal(matchingOrders[0].isReturned, true);
     assert.equal(matchingOrders[0].productName, "Resent");
     assert.equal(matchingOrders[0].paidAmountRub, 1_100);
   } finally {
@@ -1367,6 +1374,121 @@ test("overlap resync upserts one invoice without replacing fulfillment state", a
     await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
     await db.delete(productsTable).where(eq(productsTable.id, product.id));
     await resetOrderSyncState();
+  }
+});
+
+test("a refund after payment is persisted without erasing operator state and requires confirmation", async () => {
+  const gpayId = 2_140_001_053;
+  const digisellerId = 1_940_001_053;
+  const invoiceId = "invoice-returned-after-payment";
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values(orderSyncProductValues(gpayId, digisellerId))
+    .returning();
+  const paidSale = {
+    invoiceId,
+    date: "2026-01-01T00:00:00Z",
+    productId: digisellerId,
+    productName: "Refund regression product",
+    amountIn: 1_500,
+    amountCurrency: "RUB",
+    isReturned: false,
+  };
+
+  try {
+    await upsertDigisellerSales(db, [paidSale]);
+    await db
+      .update(syncOrdersTable)
+      .set({ operatorNote: "Contacted buyer" })
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await upsertDigisellerSales(db, [{ ...paidSale, isReturned: true }]);
+
+    const [returnedOrder] = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(returnedOrder.isReturned, true);
+    assert.equal(returnedOrder.operatorNote, "Contacted buyer");
+    assert.equal(returnedOrder.status, "new");
+
+    for (const returned of [undefined, null]) {
+      fetchOverride = async (input) => {
+        const url = String(input);
+        if (url.includes("/api/seller-sells/v2")) {
+          return Response.json({
+            retval: 0,
+            total_rows: 1,
+            pages: 1,
+            page: 1,
+            rows: [
+              {
+                invoice_id: invoiceId,
+                product_id: digisellerId,
+                product_name: "Refund regression product",
+                date_pay: "2026-01-01T00:00:00Z",
+                amount_in: "1500",
+                amount_currency: "RUB",
+                ...(returned !== undefined ? { returned } : {}),
+              },
+            ],
+          });
+        }
+        throw new Error(`Unexpected outbound request: ${url}`);
+      };
+      await assert.rejects(
+        fetchDigisellerSalesPage({
+          productIds: [digisellerId],
+          dateStart: "2026-01-01 00:00:00",
+          dateFinish: "2026-01-02 00:00:00",
+          page: 1,
+          providedToken: "digiseller-order-test-token",
+        }),
+        /malformed return state/,
+      );
+      const [stillReturned] = await db
+        .select({ isReturned: syncOrdersTable.isReturned })
+        .from(syncOrdersTable)
+        .where(eq(syncOrdersTable.invoiceId, invoiceId));
+      assert.equal(stillReturned.isReturned, true);
+    }
+    fetchOverride = undefined;
+
+    const rejectedResponse = await fetch(
+      `${baseUrl}/api/orders/${encodeURIComponent(invoiceId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "processing" }),
+      },
+    );
+    assert.equal(rejectedResponse.status, 409);
+    assert.deepEqual(await rejectedResponse.json(), {
+      error: "Returned order status change requires explicit confirmation",
+    });
+    const confirmedResponse = await fetch(
+      `${baseUrl}/api/orders/${encodeURIComponent(invoiceId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "processing",
+          confirmReturned: true,
+        }),
+      },
+    );
+    assert.equal(confirmedResponse.status, 200);
+    const confirmed = (await confirmedResponse.json()) as {
+      status: string;
+      isReturned: boolean;
+    };
+    assert.equal(confirmed.status, "processing");
+    assert.equal(confirmed.isReturned, true);
+  } finally {
+    fetchOverride = undefined;
+    await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+    await db.delete(productsTable).where(eq(productsTable.id, product.id));
   }
 });
 
@@ -1409,6 +1531,7 @@ test("seller-sells page failure rolls back rows and leaves the cursor unchanged"
           date_pay: "2024-01-03 00:00:00",
           amount_in: "10",
           amount_currency: "RUB",
+          returned: 0,
         })),
       });
     }
@@ -1473,6 +1596,7 @@ test("historical Digiseller ID remains importable after previous ID is cleared",
             date_pay: "2024-01-04 00:00:00",
             amount_in: "77",
             amount_currency: "RUB",
+            returned: 0,
           },
         ],
       });
@@ -1532,6 +1656,7 @@ test("a malformed seller-sells row rolls back the import and cursor", async () =
             date_pay: "2024-01-05 00:00:00",
             amount_in: "not-a-number",
             amount_currency: "RUB",
+            returned: 0,
           },
         ],
       });
@@ -1589,6 +1714,7 @@ test("page metadata drift rolls back page one and leaves cursor unchanged", asyn
             date_pay: "2024-01-06 00:00:00",
             amount_in: "10",
             amount_currency: "RUB",
+            returned: 0,
           },
         ],
       });

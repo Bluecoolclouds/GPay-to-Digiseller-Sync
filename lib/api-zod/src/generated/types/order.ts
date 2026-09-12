@@ -16,6 +16,7 @@ export interface Order {
   paidAmountRub: number | null;
   saleTimestamp: Date;
   status: OrderStatus;
+  isReturned: boolean;
   /** @nullable */
   operatorNote: string | null;
   syncedAt: Date;

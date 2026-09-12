@@ -348,6 +348,7 @@ export const ListOrdersResponse = zod.object({
   "paidAmountRub": zod.number().nullable(),
   "saleTimestamp": zod.coerce.date(),
   "status": zod.enum(['new', 'processing', 'delivered']),
+  "isReturned": zod.boolean(),
   "operatorNote": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -386,6 +387,7 @@ export const updateOrderBodyNoteMax = 2000;
 
 export const UpdateOrderBody = zod.object({
   "status": zod.enum(['new', 'processing', 'delivered']).optional(),
+  "confirmReturned": zod.boolean().optional().describe('Explicit confirmation required when moving a returned order out of the new queue.'),
   "note": zod.string().max(updateOrderBodyNoteMax).nullish()
 })
 
@@ -397,6 +399,7 @@ export const UpdateOrderResponse = zod.object({
   "paidAmountRub": zod.number().nullable(),
   "saleTimestamp": zod.coerce.date(),
   "status": zod.enum(['new', 'processing', 'delivered']),
+  "isReturned": zod.boolean(),
   "operatorNote": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

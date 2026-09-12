@@ -1,4 +1,5 @@
 import {
+  boolean,
   doublePrecision,
   integer,
   pgEnum,
@@ -27,6 +28,7 @@ export const syncOrdersTable = pgTable(
       withTimezone: true,
     }).notNull(),
     status: syncOrderStatus("status").notNull().default("new"),
+    isReturned: boolean("is_returned").notNull().default(false),
     operatorNote: text("operator_note"),
     syncedAt: timestamp("synced_at", { withTimezone: true })
       .notNull()

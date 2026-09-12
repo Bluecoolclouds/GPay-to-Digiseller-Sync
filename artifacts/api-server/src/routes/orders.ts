@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import {
   listOrders,
+  ReturnedOrderConfirmationRequiredError,
   syncDigisellerOrders,
   updateOrder,
 } from "../lib/orders";
@@ -24,6 +25,7 @@ function serializeOrder(order: {
   paidAmountRub: number | null;
   saleTimestamp: Date;
   status: "new" | "processing" | "delivered";
+  isReturned: boolean;
   operatorNote: string | null;
   syncedAt: Date;
   updatedAt: Date;
@@ -81,10 +83,20 @@ router.patch("/orders/:invoiceId", requireOperatorRole, async (req, res): Promis
     });
     return;
   }
-  const updated = await updateOrder(params.data.invoiceId, {
-    status: body.data.status,
-    note: body.data.note,
-  });
+  let updated;
+  try {
+    updated = await updateOrder(params.data.invoiceId, {
+      status: body.data.status,
+      note: body.data.note,
+      confirmReturned: body.data.confirmReturned,
+    });
+  } catch (error) {
+    if (error instanceof ReturnedOrderConfirmationRequiredError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
   if (!updated) {
     res.status(404).json({ error: "Order not found" });
     return;

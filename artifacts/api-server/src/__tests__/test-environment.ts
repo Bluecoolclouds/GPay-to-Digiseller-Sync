@@ -98,6 +98,7 @@ function run(command: string, args: string[]) {
       paid_amount_rub double precision,
       sale_timestamp timestamptz not null,
       status text not null default 'new',
+      is_returned boolean not null default false,
       operator_note text,
       synced_at timestamptz not null default now(),
       updated_at timestamptz not null default now()

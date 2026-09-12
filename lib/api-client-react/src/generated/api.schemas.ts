@@ -352,6 +352,7 @@ export interface Order {
   paidAmountRub: number | null;
   saleTimestamp: string;
   status: OrderStatus;
+  isReturned: boolean;
   /** @nullable */
   operatorNote: string | null;
   syncedAt: string;
@@ -389,6 +390,8 @@ export const OrderUpdateStatus = {
 
 export interface OrderUpdate {
   status?: OrderUpdateStatus;
+  /** Explicit confirmation required when moving a returned order out of the new queue. */
+  confirmReturned?: boolean;
   /**
      * @maxLength 2000
      * @nullable
