@@ -218,11 +218,7 @@ export async function createDigisellerProduct(input: {
   productType: string;
 }, providedToken?: string, platiCategoryId?: number | null): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = await resolveProductCategories(
-    input.name,
-    token,
-    platiCategoryId,
-  );
+  const categories = await resolveProductCategories(input, token, platiCategoryId);
   const payload = buildProductPayload(input, categories);
   const productKind = input.productType === "2" ? "uniquefixed" : "arbitrary";
   const response = await fetch(
@@ -399,6 +395,112 @@ type CataloguerCategory = {
   name?: Array<{ locale?: string; value?: string }>;
 };
 
+type CataloguerAttributeValue = {
+  attribute_value_id: number;
+  name?: Array<{ locale?: string; value?: string }>;
+};
+
+type CataloguerAttribute = {
+  attribute_id: number;
+  name?: Array<{ locale?: string; value?: string }>;
+  values?: CataloguerAttributeValue[];
+};
+
+type CataloguerProductAttribute = {
+  attribute_id: number;
+  attribute_value_id: number;
+};
+
+const cataloguerAttributesCache = new Map<number, CataloguerAttribute[]>();
+
+function getLocalizedValues(
+  localizedNames: Array<{ locale?: string; value?: string }> | undefined,
+) {
+  return (localizedNames ?? [])
+    .map((entry) => entry.value?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
+function includesNormalized(source: string, candidate: string) {
+  const normalizedSource = ` ${normalizeCataloguerName(source)} `;
+  const normalizedCandidate = normalizeCataloguerName(candidate);
+  return (
+    normalizedCandidate.length > 0 &&
+    normalizedSource.includes(` ${normalizedCandidate} `)
+  );
+}
+
+async function fetchCataloguerAttributes(
+  categoryId: number,
+  token: string,
+): Promise<CataloguerAttribute[]> {
+  const cached = cataloguerAttributesCache.get(categoryId);
+  if (cached) return cached;
+
+  const response = await fetch(
+    `https://api.digiseller.com/api/cataloguer/${categoryId}/attributes?token=${encodeURIComponent(token)}`,
+    {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const json = (await response.json()) as {
+    retval?: number;
+    content?: CataloguerAttribute[];
+  };
+  if (!response.ok || json.retval !== 0) {
+    throw new Error(
+      `Не удалось загрузить атрибуты категории Digiseller (${response.status})`,
+    );
+  }
+  const attributes = json.content ?? [];
+  cataloguerAttributesCache.set(categoryId, attributes);
+  return attributes;
+}
+
+export function selectCataloguerAttributes(
+  attributes: CataloguerAttribute[],
+  input: Pick<ProductInput, "name" | "productType">,
+): CataloguerProductAttribute[] {
+  const selected: CataloguerProductAttribute[] = [];
+  for (const attribute of attributes) {
+    const attributeNames = getLocalizedValues(attribute.name).map((name) =>
+      normalizeCataloguerName(name),
+    );
+    const isPlatform = attributeNames.some((name) =>
+      ["платформа", "platform"].includes(name),
+    );
+    const isContentType = attributeNames.some((name) =>
+      ["тип контента", "content type"].includes(name),
+    );
+    const isEdition = attributeNames.some((name) =>
+      ["издание", "edition"].includes(name),
+    );
+    if (!isPlatform && !isContentType && !isEdition) continue;
+
+    const value = (attribute.values ?? []).find((candidate) => {
+      const names = getLocalizedValues(candidate.name);
+      if (isContentType) {
+        const expected =
+          input.productType === "1"
+            ? ["гифты", "gifts"]
+            : ["ключи", "keys"];
+        return names.some((name) =>
+          expected.includes(normalizeCataloguerName(name)),
+        );
+      }
+      return names.some((name) => includesNormalized(input.name, name));
+    });
+    if (value) {
+      selected.push({
+        attribute_id: attribute.attribute_id,
+        attribute_value_id: value.attribute_value_id,
+      });
+    }
+  }
+  return selected;
+}
+
 async function fetchCataloguerCategoryPage(
   page: number,
   token: string,
@@ -550,19 +652,33 @@ async function findCataloguerCategoryId(name: string, token: string): Promise<nu
 
 type ProductCategory =
   | { owner: 0; category_id: number }
-  | { owner: 1; cataloguer_category_id: number };
+  | {
+      owner: 1;
+      cataloguer_category_id: number;
+      cataloguer_attributes?: CataloguerProductAttribute[];
+    };
 async function resolveProductCategories(
-  name: string,
+  input: Pick<ProductInput, "name" | "productType">,
   token: string,
   platiCategoryId?: number | null,
 ): Promise<ProductCategory[]> {
   if (platiCategoryId) {
     return [{ owner: 0, category_id: platiCategoryId }];
   }
-  const cataloguerCategoryId = await findCataloguerCategoryId(name, token);
+  const cataloguerCategoryId = await findCataloguerCategoryId(input.name, token);
+  const cataloguerAttributes = selectCataloguerAttributes(
+    await fetchCataloguerAttributes(cataloguerCategoryId, token),
+    input,
+  );
   return [
     { owner: 0, category_id: 0 },
-    { owner: 1, cataloguer_category_id: cataloguerCategoryId },
+    {
+      owner: 1,
+      cataloguer_category_id: cataloguerCategoryId,
+      ...(cataloguerAttributes.length > 0
+        ? { cataloguer_attributes: cataloguerAttributes }
+        : {}),
+    },
   ];
 }
 
@@ -644,11 +760,7 @@ export async function addDigisellerProductToPlati(
   deliveryType?: "form" | "text",
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = await resolveProductCategories(
-    input.name,
-    token,
-    platiCategoryId,
-  );
+  const categories = await resolveProductCategories(input, token, platiCategoryId);
   const payload = buildProductPayload(input, categories);
   const productKind =
     deliveryType === "text" || (!deliveryType && input.productType === "2")
@@ -693,8 +805,12 @@ export async function getDigisellerTextStockCount(
   const json = (await response.json()) as DigisellerErrorResult & {
     num_in_stock?: number;
     content?: { num_in_stock?: number };
+    product?: { num_in_stock?: number };
   };
-  const stock = json.num_in_stock ?? json.content?.num_in_stock;
+  const stock =
+    json.num_in_stock ??
+    json.content?.num_in_stock ??
+    json.product?.num_in_stock;
   if (
     !response.ok ||
     (json.retval !== undefined && json.retval !== 0) ||
@@ -770,11 +886,7 @@ export async function disableLegacyDigisellerProduct(
   platiCategoryId?: number | null,
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
-  const categories = await resolveProductCategories(
-    input.name,
-    token,
-    platiCategoryId,
-  );
+  const categories = await resolveProductCategories(input, token, platiCategoryId);
   const payload = buildProductPayload(
     { ...input, productType: "1" },
     categories,

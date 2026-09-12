@@ -10,6 +10,7 @@ import {
   settingsTable,
 } from "@workspace/db";
 import app from "../app";
+import { selectCataloguerAttributes } from "../lib/digiseller";
 import { syncKeyPrices } from "../lib/price-sync";
 
 const fixtureIds = [2_140_001_001, 2_140_001_002, 2_140_001_003];
@@ -66,6 +67,65 @@ const catalog = [
     region: "Global",
   },
 ];
+
+test("cataloguer attributes select platform, content type, and explicit edition", () => {
+  const attributes = [
+    {
+      attribute_id: 10,
+      name: [{ locale: "ru-RU", value: "Платформа" }],
+      values: [
+        {
+          attribute_value_id: 101,
+          name: [{ locale: "en-US", value: "Steam" }],
+        },
+        {
+          attribute_value_id: 102,
+          name: [{ locale: "en-US", value: "Xbox" }],
+        },
+      ],
+    },
+    {
+      attribute_id: 20,
+      name: [{ locale: "ru-RU", value: "Тип контента" }],
+      values: [
+        {
+          attribute_value_id: 201,
+          name: [{ locale: "ru-RU", value: "Ключи" }],
+        },
+        {
+          attribute_value_id: 202,
+          name: [{ locale: "ru-RU", value: "Гифты" }],
+        },
+      ],
+    },
+    {
+      attribute_id: 30,
+      name: [{ locale: "ru-RU", value: "Издание" }],
+      values: [
+        {
+          attribute_value_id: 301,
+          name: [{ locale: "en-US", value: "Deluxe" }],
+        },
+        {
+          attribute_value_id: 302,
+          name: [{ locale: "en-US", value: "Standard" }],
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(
+    selectCataloguerAttributes(attributes, {
+      name: "Example Game Deluxe | Steam ключ",
+      productType: "2",
+    }),
+    [
+      { attribute_id: 10, attribute_value_id: 101 },
+      { attribute_id: 20, attribute_value_id: 201 },
+      { attribute_id: 30, attribute_value_id: 301 },
+    ],
+  );
+});
 
 async function cleanup() {
   await db.delete(productsTable).where(inArray(productsTable.gpayId, fixtureIds));
@@ -840,12 +900,14 @@ test("hourly sync replenishes low Text stock once and reports stock errors separ
       }
       return Response.json({
         retval: 0,
-        num_in_stock:
-          productId === digisellerByGpay.get(lowStockGpayId)
-            ? addedCounts.has(productId)
-              ? 100
-              : 10
-            : 25,
+        product: {
+          num_in_stock:
+            productId === digisellerByGpay.get(lowStockGpayId)
+              ? addedCounts.has(productId)
+                ? 100
+                : 10
+              : 25,
+        },
       });
     }
     if (url.includes("/api/product/content/add/text")) {
