@@ -8,12 +8,14 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
+export type DigisellerDeliveryType = "form" | "text" | "code";
+
 export const productsTable = pgTable("sync_products", {
   id: serial("id").primaryKey(),
   gpayId: integer("gpay_id").notNull().unique(),
   digisellerId: integer("digiseller_id"),
   previousDigisellerId: integer("previous_digiseller_id"),
-  digisellerDeliveryType: text("digiseller_delivery_type"),
+  digisellerDeliveryType: text("digiseller_delivery_type").$type<DigisellerDeliveryType>(),
   digisellerTextStocked: boolean("digiseller_text_stocked")
     .notNull()
     .default(false),

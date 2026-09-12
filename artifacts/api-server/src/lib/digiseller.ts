@@ -113,6 +113,90 @@ export async function loginDigiseller(): Promise<string> {
   return json.token;
 }
 
+export type DigisellerSale = {
+  date: string;
+  invoiceId: string;
+  productId: number;
+  productName: string;
+  paidAmountRub: number | null;
+};
+
+/**
+ * Fetches the seller's ungrouped recent sales. The token is intentionally
+ * never included in the returned value or any log context.
+ */
+export async function fetchDigisellerLastSales(
+  providedToken?: string,
+): Promise<DigisellerSale[]> {
+  const token = providedToken ?? (await loginDigiseller());
+  const url = new URL(
+    "https://api.digiseller.com/api/seller-last-sales",
+  );
+  url.searchParams.set("token", token);
+  url.searchParams.set("seller_id", process.env.DIGISELLER_SELLER_ID ?? "");
+  url.searchParams.set("group", "false");
+  url.searchParams.set("top", "1000");
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const body = (await response.json()) as {
+    retval?: number;
+    retdesc?: string;
+    sales?: Array<{
+      date?: string;
+      invoice_id?: string | number;
+      product?: {
+        id?: string | number;
+        name?: string;
+        price_rub?: string | number | null;
+      };
+    }>;
+    content?: {
+      sales?: Array<{
+        date?: string;
+        invoice_id?: string | number;
+        product?: {
+          id?: string | number;
+          name?: string;
+          price_rub?: string | number | null;
+        };
+      }>;
+    };
+  };
+  const sales = body.sales ?? body.content?.sales ?? [];
+  if (!response.ok || (body.retval !== undefined && body.retval !== 0)) {
+    throw new Error(
+      body.retdesc || `Digiseller sales API returned ${response.status}`,
+    );
+  }
+  return sales.flatMap((sale) => {
+    const productId = Number(sale.product?.id);
+    const invoiceId =
+      sale.invoice_id === undefined ? "" : String(sale.invoice_id);
+    const date = sale.date;
+    const productName = sale.product?.name;
+    if (!invoiceId || !date || !productName || !Number.isInteger(productId)) {
+      return [];
+    }
+    const rawAmount = sale.product?.price_rub;
+    const parsedAmount =
+      rawAmount === null || rawAmount === undefined ? null : Number(rawAmount);
+    return [
+      {
+        invoiceId,
+        date,
+        productId,
+        productName,
+        paidAmountRub:
+          parsedAmount !== null && Number.isFinite(parsedAmount)
+            ? parsedAmount
+            : null,
+      },
+    ];
+  });
+}
+
 export async function updateDigisellerProductPrices(
   prices: Array<{ productId: number; priceRub: number }>,
   providedToken?: string,
@@ -236,6 +320,43 @@ export async function createDigisellerProduct(input: {
     throw new Error(getDigisellerError(json, `Digiseller API returned ${response.status}`));
   }
   return productId;
+}
+
+export async function setDigisellerCodeUnlimitedStock(
+  productId: number,
+  providedToken?: string,
+): Promise<void> {
+  const token = providedToken ?? (await loginDigiseller());
+  const url = new URL(
+    "https://api.digiseller.com/api/product/content/code/count",
+  );
+  url.searchParams.set("product_id", String(productId));
+  url.searchParams.set("variant_id", "0");
+  url.searchParams.set("token", token);
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ count: -1 }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await response.json()) as DigisellerErrorResult & {
+    content?: { count?: number | string };
+  };
+  if (
+    !response.ok ||
+    json.retval !== 0 ||
+    Number(json.content?.count) !== -1
+  ) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось установить безлимитный остаток Code (${response.status})`,
+      ),
+    );
+  }
 }
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -719,6 +840,7 @@ function buildProductPayload(
   input: ProductInput,
   categories: ProductCategory[],
   enabled = true,
+  deliveryType?: "form" | "text" | "code",
 ) {
   const additionalInfoRu =
     input.productType === "1"
@@ -729,7 +851,12 @@ function buildProductPayload(
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
       : "The order is processed manually after checking price and supplier availability.";
   return {
-    content_type: input.productType === "2" ? "text" : "Form",
+    content_type:
+      deliveryType === "text"
+        ? "text"
+        : input.productType === "2"
+          ? "digisellercode"
+          : "Form",
     ...(categories.length > 0 ? { categories } : {}),
     name: [
       { locale: "ru-RU", value: input.name.slice(0, 500) },
@@ -757,13 +884,15 @@ export async function addDigisellerProductToPlati(
   input: ProductInput,
   providedToken?: string,
   platiCategoryId?: number | null,
-  deliveryType?: "form" | "text",
+  deliveryType?: "form" | "text" | "code",
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
   const categories = await resolveProductCategories(input, token, platiCategoryId);
-  const payload = buildProductPayload(input, categories);
+  const payload = buildProductPayload(input, categories, true, deliveryType);
   const productKind =
-    deliveryType === "text" || (!deliveryType && input.productType === "2")
+    deliveryType === "text" ||
+    deliveryType === "code" ||
+    (!deliveryType && input.productType === "2")
       ? "uniquefixed"
       : "arbitrary";
   const response = await fetch(
@@ -783,117 +912,24 @@ export async function addDigisellerProductToPlati(
   }
 }
 
-const TEXT_DELIVERY_NOTICE =
-  "Благодарим за заказ! Ваш ключ будет отправлен в чат ниже в течение 5 минут.\n\nThank you for your order! Your key will be sent in the chat below within 5 minutes.";
-
-export const DIGISELLER_TEXT_STOCK_THRESHOLD = 25;
-export const DIGISELLER_TEXT_STOCK_TARGET = 100;
-
-export async function getDigisellerTextStockCount(
-  productId: number,
-  providedToken?: string,
-): Promise<number> {
-  const token = providedToken ?? (await loginDigiseller());
-  const url = new URL(
-    `https://api.digiseller.com/api/products/${productId}/data`,
-  );
-  url.searchParams.set("token", token);
-  const response = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const json = (await response.json()) as DigisellerErrorResult & {
-    num_in_stock?: number;
-    content?: { num_in_stock?: number };
-    product?: { num_in_stock?: number };
-  };
-  const stock =
-    json.num_in_stock ??
-    json.content?.num_in_stock ??
-    json.product?.num_in_stock;
-  if (
-    !response.ok ||
-    (json.retval !== undefined && json.retval !== 0) ||
-    typeof stock !== "number" ||
-    !Number.isInteger(stock) ||
-    stock < 0
-  ) {
-    throw new Error(
-      getDigisellerError(
-        json,
-        stock === undefined
-          ? "Digiseller не вернул остаток Text-содержимого"
-          : `Не удалось проверить остаток Text-содержимого (${response.status})`,
-      ),
-    );
-  }
-  return stock;
-}
-
-export async function addDigisellerTextStock(
-  productId: number,
-  providedToken?: string,
-  count = 100,
-): Promise<void> {
-  const token = providedToken ?? (await loginDigiseller());
-  const response = await fetch(
-    `https://api.digiseller.com/api/product/content/add/text?token=${encodeURIComponent(token)}`,
-    {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        product_id: productId,
-        content: Array.from({ length: count }, () => ({
-          value: TEXT_DELIVERY_NOTICE,
-          id_v: 0,
-        })),
-      }),
-      signal: AbortSignal.timeout(20_000),
-    },
-  );
-  const json = (await response.json()) as CreateProductResult;
-  if (!response.ok || json.retval !== 0) {
-    throw new Error(
-      getDigisellerError(
-        json,
-        `Не удалось добавить Text-содержимое (${response.status})`,
-      ),
-    );
-  }
-}
-
-export async function replenishDigisellerTextStock(
-  productId: number,
-  providedToken?: string,
-): Promise<{ remaining: number; added: number }> {
-  const token = providedToken ?? (await loginDigiseller());
-  const remaining = await getDigisellerTextStockCount(productId, token);
-  if (remaining >= DIGISELLER_TEXT_STOCK_THRESHOLD) {
-    return { remaining, added: 0 };
-  }
-  const added = DIGISELLER_TEXT_STOCK_TARGET - remaining;
-  await addDigisellerTextStock(productId, token, added);
-  return { remaining, added };
-}
-
 export async function disableLegacyDigisellerProduct(
   productId: number,
   input: ProductInput,
   providedToken?: string,
   platiCategoryId?: number | null,
+  deliveryType: "form" | "text" = "form",
 ): Promise<void> {
   const token = providedToken ?? (await loginDigiseller());
   const categories = await resolveProductCategories(input, token, platiCategoryId);
+  const isUniqueFixed = deliveryType === "text";
   const payload = buildProductPayload(
-    { ...input, productType: "1" },
+    { ...input, productType: isUniqueFixed ? "2" : "1" },
     categories,
     false,
+    isUniqueFixed ? "text" : "form",
   );
   const response = await fetch(
-    `https://api.digiseller.com/api/product/edit/arbitrary/${productId}?token=${encodeURIComponent(token)}`,
+    `https://api.digiseller.com/api/product/edit/${isUniqueFixed ? "uniquefixed" : "arbitrary"}/${productId}?token=${encodeURIComponent(token)}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },

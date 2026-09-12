@@ -84,6 +84,18 @@ try {
       status text not null,
       created_at timestamptz not null default now()
     );
+    create table "${schema}".sync_orders (
+      id serial primary key,
+      invoice_id text not null unique,
+      digiseller_product_id integer not null,
+      product_name text not null,
+      paid_amount_rub double precision,
+      sale_timestamp timestamptz not null,
+      status text not null default 'new',
+      operator_note text,
+      synced_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
   `);
   run(process.execPath, ["--test", testFile]);
 } finally {

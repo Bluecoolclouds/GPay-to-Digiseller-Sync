@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { syncKeyPrices } from "./lib/price-sync";
+import { syncDigisellerOrders } from "./lib/orders";
 
 const rawPort = process.env["PORT"];
 
@@ -27,6 +28,8 @@ const server = app.listen(port, (err) => {
 
 const PRICE_SYNC_INTERVAL_MS = 60 * 60 * 1_000;
 const PRICE_SYNC_INITIAL_DELAY_MS = 60 * 1_000;
+const ORDER_SYNC_INTERVAL_MS = 5 * 60 * 1_000;
+const ORDER_SYNC_INITIAL_DELAY_MS = 60 * 1_000;
 
 async function runScheduledPriceSync() {
   try {
@@ -46,7 +49,30 @@ const intervalTimer = setInterval(() => {
 initialTimer.unref();
 intervalTimer.unref();
 
+async function runScheduledOrderSync() {
+  try {
+    const result = await syncDigisellerOrders();
+    logger.info(
+      { orderSync: result },
+      "Scheduled Digiseller order sync finished",
+    );
+  } catch (err) {
+    logger.error({ err }, "Scheduled Digiseller order sync failed");
+  }
+}
+
+const orderInitialTimer = setTimeout(() => {
+  void runScheduledOrderSync();
+}, ORDER_SYNC_INITIAL_DELAY_MS);
+const orderIntervalTimer = setInterval(() => {
+  void runScheduledOrderSync();
+}, ORDER_SYNC_INTERVAL_MS);
+orderInitialTimer.unref();
+orderIntervalTimer.unref();
+
 server.on("close", () => {
   clearTimeout(initialTimer);
   clearInterval(intervalTimer);
+  clearTimeout(orderInitialTimer);
+  clearInterval(orderIntervalTimer);
 });

@@ -324,3 +324,73 @@ export const GetExchangeRateResponse = zod.object({
 })
 
 
+export const listOrdersQueryStatusDefault = `all`;
+export const listOrdersQueryPageDefault = 1;
+
+export const listOrdersQueryPageSizeDefault = 20;
+export const listOrdersQueryPageSizeMax = 100;
+
+
+
+export const ListOrdersQueryParams = zod.object({
+  "status": zod.enum(['all', 'new', 'processing', 'delivered']).default(listOrdersQueryStatusDefault),
+  "search": zod.coerce.string().optional(),
+  "page": zod.coerce.number().int().min(1).default(listOrdersQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listOrdersQueryPageSizeMax).default(listOrdersQueryPageSizeDefault)
+})
+
+export const ListOrdersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "invoiceId": zod.string(),
+  "digisellerProductId": zod.number().int(),
+  "productName": zod.string(),
+  "paidAmountRub": zod.number().nullable(),
+  "saleTimestamp": zod.coerce.date(),
+  "status": zod.enum(['new', 'processing', 'delivered']),
+  "operatorNote": zod.string().nullable(),
+  "syncedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+export const SyncOrdersResponse = zod.object({
+  "fetched": zod.number().int(),
+  "inserted": zod.number().int(),
+  "updated": zod.number().int(),
+  "ignored": zod.number().int(),
+  "skipped": zod.boolean()
+})
+
+
+export const UpdateOrderParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const updateOrderBodyNoteMax = 2000;
+
+
+
+export const UpdateOrderBody = zod.object({
+  "status": zod.enum(['new', 'processing', 'delivered']).optional(),
+  "note": zod.string().max(updateOrderBodyNoteMax).nullish()
+})
+
+export const UpdateOrderResponse = zod.object({
+  "id": zod.number().int(),
+  "invoiceId": zod.string(),
+  "digisellerProductId": zod.number().int(),
+  "productName": zod.string(),
+  "paidAmountRub": zod.number().nullable(),
+  "saleTimestamp": zod.coerce.date(),
+  "status": zod.enum(['new', 'processing', 'delivered']),
+  "operatorNote": zod.string().nullable(),
+  "syncedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+

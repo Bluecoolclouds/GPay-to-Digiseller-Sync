@@ -334,6 +334,63 @@ export interface ExchangeRate {
   isFallback: boolean;
 }
 
+export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
+
+
+export const OrderStatus = {
+  new: 'new',
+  processing: 'processing',
+  delivered: 'delivered',
+} as const;
+
+export interface Order {
+  id: number;
+  invoiceId: string;
+  digisellerProductId: number;
+  productName: string;
+  /** @nullable */
+  paidAmountRub: number | null;
+  saleTimestamp: string;
+  status: OrderStatus;
+  /** @nullable */
+  operatorNote: string | null;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+export interface OrderPage {
+  items: Order[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type OrderUpdateStatus = typeof OrderUpdateStatus[keyof typeof OrderUpdateStatus];
+
+
+export const OrderUpdateStatus = {
+  new: 'new',
+  processing: 'processing',
+  delivered: 'delivered',
+} as const;
+
+export interface OrderUpdate {
+  status?: OrderUpdateStatus;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export interface OrderSyncResult {
+  fetched: number;
+  inserted: number;
+  updated: number;
+  ignored: number;
+  skipped: boolean;
+}
+
 export type ListProductsParams = {
 search?: string;
 status?: ListProductsStatus;
@@ -377,4 +434,28 @@ export type ListActivitiesParams = {
  */
 limit?: number;
 };
+
+export type ListOrdersParams = {
+status?: ListOrdersStatus;
+search?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ListOrdersStatus = typeof ListOrdersStatus[keyof typeof ListOrdersStatus];
+
+
+export const ListOrdersStatus = {
+  all: 'all',
+  new: 'new',
+  processing: 'processing',
+  delivered: 'delivered',
+} as const;
 

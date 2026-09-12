@@ -11,6 +11,7 @@ tags:
   - name: products
   - name: sync
   - name: settings
+  - name: orders
 paths:
   /healthz:
     get:
@@ -222,6 +223,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExchangeRate"
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, new, processing, delivered]
+            default: all
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Manual fulfillment orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderPage"
+  /orders/sync:
+    post:
+      operationId: syncOrders
+      tags: [orders]
+      responses:
+        "200":
+          description: Latest Digiseller sales synchronization result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderSyncResult"
+        "502":
+          description: Digiseller API unavailable
+  /orders/{invoiceId}:
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found
 components:
   schemas:
     HealthStatus:
@@ -403,3 +468,42 @@ components:
         effectiveDate: { type: string }
         fetchedAt: { type: string, format: date-time }
         isFallback: { type: boolean }
+    Order:
+      type: object
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, operatorNote, syncedAt, updatedAt]
+      properties:
+        id: { type: integer }
+        invoiceId: { type: string }
+        digisellerProductId: { type: integer }
+        productName: { type: string }
+        paidAmountRub: { type: [number, "null"] }
+        saleTimestamp: { type: string, format: date-time }
+        status: { type: string, enum: [new, processing, delivered] }
+        operatorNote: { type: [string, "null"] }
+        syncedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OrderPage:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Order" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+    OrderUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status: { type: string, enum: [new, processing, delivered] }
+        note: { type: [string, "null"], maxLength: 2000 }
+    OrderSyncResult:
+      type: object
+      required: [fetched, inserted, updated, ignored, skipped]
+      properties:
+        fetched: { type: integer }
+        inserted: { type: integer }
+        updated: { type: integer }
+        ignored: { type: integer }
+        skipped: { type: boolean }

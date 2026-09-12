@@ -8,10 +8,12 @@ import {
   pool,
   productsTable,
   settingsTable,
+  syncOrdersTable,
 } from "@workspace/db";
 import app from "../app";
 import { selectCataloguerAttributes } from "../lib/digiseller";
 import { syncKeyPrices } from "../lib/price-sync";
+import { upsertDigisellerSales } from "../lib/orders";
 
 const fixtureIds = [2_140_001_001, 2_140_001_002, 2_140_001_003];
 const [keyGpayId, giftGpayId, unknownGpayId] = fixtureIds;
@@ -652,7 +654,7 @@ test("category retry creates one Digiseller product after the category is accept
         categories?: Array<{ owner?: number; category_id?: number }>;
         content_type?: string;
       };
-      assert.equal(payload.content_type, "text");
+      assert.equal(payload.content_type, "digisellercode");
       assert.deepEqual(payload.categories, [
         { owner: 0, category_id: verifiedCategoryId },
       ]);
@@ -667,22 +669,10 @@ test("category retry creates one Digiseller product after the category is accept
         content: { product_id: createdDigisellerId },
       });
     }
-    if (url.includes("/api/product/content/add/text")) {
-      contentCalls += 1;
-      const payload = JSON.parse(
-        input instanceof Request
-          ? await input.clone().text()
-          : typeof init?.body === "string"
-            ? init.body
-            : "{}",
-      ) as {
-        product_id?: number;
-        content?: Array<{ value?: string; id_v?: number }>;
-      };
-      assert.equal(payload.product_id, createdDigisellerId);
-      assert.equal(payload.content?.length, 100);
-      assert.match(payload.content?.[0]?.value ?? "", /ключ будет отправлен в чат/i);
-      return Response.json({ retval: 0, content: [{ content_id: 1 }] });
+    if (url.includes("/api/product/content/code/count")) {
+      assert.equal(new URL(url).searchParams.get("variant_id"), "0");
+      assert.deepEqual(JSON.parse(String(init?.body)), { count: -1 });
+      return Response.json({ retval: 0, content: { count: -1 } });
     }
     throw new Error(`Unexpected outbound request: ${url}`);
   };
@@ -729,14 +719,14 @@ test("category retry creates one Digiseller product after the category is accept
     assert.equal(retried.publicationError, null);
     assert.equal(retried.publicationFailureStage, null);
     assert.equal(createCalls, 2);
-    assert.equal(contentCalls, 1);
+    assert.equal(contentCalls, 0);
   } finally {
     fetchOverride = undefined;
     await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
   }
 });
 
-test("key migration prepares Text product before disabling legacy Form product", async () => {
+test("published legacy Text key migrates safely to unlimited Code", async () => {
   const migrationGpayId = 2_140_001_022;
   const legacyDigisellerId = 1_940_001_022;
   const newDigisellerId = 1_940_001_023;
@@ -759,6 +749,7 @@ test("key migration prepares Text product before disabling legacy Form product",
       profitRub: 200,
       isAvailable: true,
       publicationStatus: "published",
+      digisellerDeliveryType: "text" as const,
       platiCategoryId: verifiedCategoryId,
     })
     .returning();
@@ -769,21 +760,25 @@ test("key migration prepares Text product before disabling legacy Form product",
       return Response.json({ token: "digiseller-test-token" });
     }
     if (url.includes("/api/product/create/uniquefixed")) {
-      calls.push("create-text");
+      calls.push("create-code");
       const payload = JSON.parse(String(init?.body)) as {
         content_type?: string;
         enabled?: boolean;
       };
-      assert.equal(payload.content_type, "text");
+      assert.equal(payload.content_type, "digisellercode");
       assert.equal(payload.enabled, true);
       return Response.json({
         retval: 0,
         content: { product_id: newDigisellerId },
       });
     }
-    if (url.includes("/api/product/content/add/text")) {
-      calls.push("stock-text");
-      return Response.json({ retval: 0, content: [{ content_id: 1 }] });
+    if (url.includes("/api/product/content/code/count")) {
+      calls.push("unlimited-code");
+      const parsed = new URL(url);
+      assert.equal(parsed.searchParams.get("product_id"), String(newDigisellerId));
+      assert.equal(parsed.searchParams.get("variant_id"), "0");
+      assert.deepEqual(JSON.parse(String(init?.body)), { count: -1 });
+      return Response.json({ retval: 0, content: { count: -1 } });
     }
     if (url === "https://images.test/key.png") {
       calls.push("download-image");
@@ -795,8 +790,8 @@ test("key migration prepares Text product before disabling legacy Form product",
       calls.push("upload-image");
       return Response.json({ retval: 0, content: [{ preview_id: 1 }] });
     }
-    if (url.includes(`/api/product/edit/arbitrary/${legacyDigisellerId}`)) {
-      calls.push("disable-legacy");
+    if (url.includes(`/api/product/edit/uniquefixed/${legacyDigisellerId}`)) {
+      calls.push("disable-legacy-text");
       const payload = JSON.parse(String(init?.body)) as { enabled?: boolean };
       assert.equal(payload.enabled, false);
       return Response.json({ retval: 0 });
@@ -812,11 +807,11 @@ test("key migration prepares Text product before disabling legacy Form product",
     assert.equal(published.digisellerId, newDigisellerId);
     assert.equal(published.publicationStatus, "published");
     assert.deepEqual(calls, [
-      "create-text",
-      "stock-text",
+      "create-code",
+      "unlimited-code",
       "download-image",
       "upload-image",
-      "disable-legacy",
+      "disable-legacy-text",
     ]);
 
     const [migrated] = await db
@@ -825,8 +820,7 @@ test("key migration prepares Text product before disabling legacy Form product",
       .where(eq(productsTable.id, fixture.id));
     assert.equal(migrated.digisellerId, newDigisellerId);
     assert.equal(migrated.previousDigisellerId, null);
-    assert.equal(migrated.digisellerDeliveryType, "text");
-    assert.equal(migrated.digisellerTextStocked, true);
+    assert.equal(migrated.digisellerDeliveryType, "code");
     assert.equal(migrated.digisellerImageUploaded, true);
   } finally {
     fetchOverride = undefined;
@@ -834,7 +828,7 @@ test("key migration prepares Text product before disabling legacy Form product",
   }
 });
 
-test("hourly sync replenishes low Text stock once and reports stock errors separately", async () => {
+test("hourly sync does not stock legacy Text notices", async () => {
   const lowStockGpayId = 2_140_001_031;
   const healthyStockGpayId = 2_140_001_032;
   const failedStockGpayId = 2_140_001_033;
@@ -851,7 +845,7 @@ test("hourly sync replenishes low Text stock once and reports stock errors separ
     stockFixtureIds.map((gpayId) => ({
       gpayId,
       digisellerId: digisellerByGpay.get(gpayId),
-      digisellerDeliveryType: "text",
+      digisellerDeliveryType: "text" as const,
       digisellerTextStocked: true,
       name: `Text stock regression ${gpayId}`,
       productType: "2",
@@ -931,17 +925,69 @@ test("hourly sync replenishes low Text stock once and reports stock errors separ
         .where(eq(productsTable.gpayId, failedStockGpayId))
     )[0];
 
-    assert.equal(first.stockChecked, 3);
-    assert.equal(first.stockReplenished, 1);
-    assert.equal(first.stockFailed, 1);
-    assert.equal(addedCounts.get(digisellerByGpay.get(lowStockGpayId)!), 90);
+    assert.equal(first.stockChecked, 0);
+    assert.equal(first.stockReplenished, 0);
+    assert.equal(first.stockFailed, 0);
     assert.equal(second.stockReplenished, 0);
-    assert.equal(addedCounts.size, 1);
-    assert.equal(failed.publicationStatus, "error");
-    assert.equal(failed.publicationFailureStage, "stock");
-    assert.match(failed.publicationError ?? "", /Stock endpoint unavailable/);
+    assert.equal(addedCounts.size, 0);
+    assert.equal(failed.publicationStatus, "published");
+    assert.equal(failed.publicationFailureStage, null);
   } finally {
     fetchOverride = undefined;
     await db.delete(productsTable).where(inArray(productsTable.gpayId, stockFixtureIds));
   }
+});
+
+test("order resync updates sale data but preserves fulfillment state", async () => {
+  const gpayId = 2_140_001_041;
+  const digisellerProductId = 1_940_001_041;
+  const invoiceId = "invoice-preservation-regression";
+  await db.delete(productsTable).where(eq(productsTable.gpayId, gpayId));
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const [product] = await db
+    .insert(productsTable)
+    .values({
+      gpayId,
+      digisellerId: digisellerProductId,
+      name: "Order preservation product",
+      productType: "2",
+      supplierPriceUsd: 20,
+      salePriceRub: 2200,
+      marginPercent: 15,
+      profitRub: 200,
+      isAvailable: true,
+    })
+    .returning();
+  const initialSale = {
+    invoiceId,
+    date: "2026-01-01T00:00:00Z",
+    productId: digisellerProductId,
+    productName: "Original name",
+    paidAmountRub: 1_000,
+  };
+  const first = await upsertDigisellerSales(db, [initialSale]);
+  assert.equal(first.inserted, 1);
+  await db
+    .update(syncOrdersTable)
+    .set({ status: "processing", operatorNote: "operator-owned note" })
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const second = await upsertDigisellerSales(db, [
+    {
+      ...initialSale,
+      date: "2026-01-02T00:00:00Z",
+      productName: "Updated name",
+      paidAmountRub: 1_250,
+    },
+  ]);
+  assert.equal(second.updated, 1);
+  const [order] = await db
+    .select()
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  assert.equal(order.status, "processing");
+  assert.equal(order.operatorNote, "operator-owned note");
+  assert.equal(order.productName, "Updated name");
+  assert.equal(order.paidAmountRub, 1_250);
+  await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
+  await db.delete(productsTable).where(eq(productsTable.id, product.id));
 });

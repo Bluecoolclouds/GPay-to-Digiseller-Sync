@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   activitiesTable,
   db,
@@ -8,7 +8,6 @@ import {
 import { fetchGPayProducts } from "./gpay";
 import {
   loginDigiseller,
-  replenishDigisellerTextStock,
   updateDigisellerProductPrices,
 } from "./digiseller";
 import { getOfficialUsdRubRate } from "./exchange-rate";
@@ -128,27 +127,8 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       ({ product }) =>
         product.publicationStatus === "published" && product.digisellerId,
     );
-    const textProducts = await db
-      .select()
-      .from(productsTable)
-      .where(
-        and(
-          eq(productsTable.productType, "2"),
-          eq(productsTable.digisellerDeliveryType, "text"),
-          isNotNull(productsTable.digisellerId),
-          or(
-            eq(productsTable.publicationStatus, "published"),
-            and(
-              eq(productsTable.publicationStatus, "error"),
-              eq(productsTable.publicationFailureStage, "stock"),
-            ),
-          ),
-        ),
-      );
     const digisellerFailures = new Map<number, string>();
-    const stockFailures = new Map<number, string>();
-    let stockReplenished = 0;
-    if (published.length > 0 || textProducts.length > 0) {
+    if (published.length > 0) {
       const token = await loginDigiseller();
       const batchSize = 100;
       for (let start = 0; start < published.length; start += batchSize) {
@@ -170,39 +150,6 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
           for (const { product } of batch) {
             digisellerFailures.set(product.digisellerId!, message);
           }
-        }
-      }
-      for (const product of textProducts) {
-        try {
-          const stock = await replenishDigisellerTextStock(
-            product.digisellerId!,
-            token,
-          );
-          if (stock.added > 0) stockReplenished++;
-          if (product.publicationFailureStage === "stock") {
-            await db
-              .update(productsTable)
-              .set({
-                publicationStatus: "published",
-                publicationError: null,
-                publicationFailureStage: null,
-                updatedAt: new Date(),
-              })
-              .where(eq(productsTable.id, product.id));
-          }
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Ошибка пополнения Text-остатка";
-          stockFailures.set(product.digisellerId!, message);
-          await db
-            .update(productsTable)
-            .set({
-              publicationStatus: "error",
-              publicationError: message,
-              publicationFailureStage: "stock",
-              updatedAt: new Date(),
-            })
-            .where(eq(productsTable.id, product.id));
         }
       }
     }
@@ -234,17 +181,13 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       changed: changes.length,
       digisellerUpdated: published.length - digisellerFailures.size,
       failed: digisellerFailures.size,
-      stockChecked: textProducts.length,
-      stockReplenished,
-      stockFailed: stockFailures.size,
+      stockChecked: 0,
+      stockReplenished: 0,
+      stockFailed: 0,
       skipped: false,
       errors: [
         ...[...digisellerFailures.entries()].map(
           ([productId, message]) => `Digiseller #${productId}: ${message}`,
-        ),
-        ...[...stockFailures.entries()].map(
-          ([productId, message]) =>
-            `Text-остаток Digiseller #${productId}: ${message}`,
         ),
       ],
     };
@@ -254,11 +197,10 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       title: "Автоматическая проверка цен завершена",
       description: [
         `Проверено ${result.checked}, изменилось ${result.changed}, обновлено в Digiseller ${result.digisellerUpdated}, ошибок ${result.failed}.`,
-        `Text-остаток: проверено ${result.stockChecked}, пополнено ${result.stockReplenished}, ошибок ${result.stockFailed}.`,
         ...result.errors.slice(0, 3),
         ...(timeoutSummary ? [timeoutSummary] : []),
       ].join(" "),
-      status: result.failed > 0 || result.stockFailed > 0 ? "warning" : "success",
+      status: result.failed > 0 ? "warning" : "success",
     });
     return result;
   } finally {

@@ -3,11 +3,11 @@ name: Digiseller product type for manual fulfillment
 description: Which Digiseller product type supports safe manual fulfillment forms.
 ---
 
-Use an `Arbitrary` Digiseller product with `Form` content for Steam Gift items that require buyer details. For key items, use `UniqueFixed` with `text` content stocked with bilingual notices that the key will arrive in chat within five minutes.
+Use an `Arbitrary` Digiseller product with `Form` content for Steam Gift items that require buyer details. For manually fulfilled key items, use `UniqueFixed` with `digisellercode` content and unlimited generated-code stock. Import paid sales into the operator orders page, where the operator tracks manual delivery.
 
-**Why:** Digiseller rejects `Form` content for `UniqueFixed` products. The operator explicitly chose immediate Text delivery notices while the actual key is fulfilled manually in chat.
+**Why:** Digiseller rejects `Form` content for `UniqueFixed` products, and administrators do not permit repeated placeholder Text content in place of real keys. A generated Digiseller code proves the paid order without pretending to be the purchased game key.
 
-**How to apply:** Keep gifts on Form. Give each key product multiple Text notice units because Digiseller consumes one unit per sale. Replace legacy key Form cards with new Text cards, and disable the old card only after the new card has content and an image.
+**How to apply:** Keep gifts on Form. Set generated-code count to `-1` for every new key card. When replacing legacy Form or Text cards, disable the old card only after the new code card has unlimited stock, its image, and its category.
 
 For Plati.Market, do not pass IDs from the legacy marketplace category tree to the old add-category endpoint. Find the exact game in the authenticated cataloguer tree, then edit/create the product with a category entry whose owner is `1` and whose cataloguer category ID is the exact game category.
 

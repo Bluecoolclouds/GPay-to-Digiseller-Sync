@@ -11,6 +11,7 @@ import {
 import { AppLayout } from '@/components/layout';
 import DashboardPage from '@/pages/dashboard';
 import ProductsPage from '@/pages/products';
+import OrdersPage from '@/pages/orders';
 import SettingsPage from '@/pages/settings';
 
 const queryClient = new QueryClient({
@@ -37,6 +38,7 @@ function Router() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/" component={DashboardPage} />
+          <Route path="/orders" component={OrdersPage} />
           <Route path="/products" component={ProductsPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route component={NotFound} />

@@ -34,11 +34,11 @@ import {
   loginGPay,
 } from "../lib/gpay";
 import {
-  addDigisellerTextStock,
   addDigisellerProductToPlati,
   createDigisellerProduct,
   disableLegacyDigisellerProduct,
   loginDigiseller,
+  setDigisellerCodeUnlimitedStock,
   uploadDigisellerProductImage,
 } from "../lib/digiseller";
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
@@ -309,15 +309,29 @@ async function publishProductRecord(current: ProductRecord) {
   let deliveryType = current.digisellerDeliveryType;
   let digisellerTextStocked = current.digisellerTextStocked;
   let digisellerImageUploaded = current.digisellerImageUploaded;
+  let createdCodeProduct = false;
+  const legacyDeliveryType: "form" | "text" =
+    deliveryType === "text" ||
+    (isKey && deliveryType === "code" && Boolean(previousDigisellerId))
+      ? "text"
+      : "form";
 
-  if (isKey && digisellerId && deliveryType !== "text") {
+  if (
+    isKey &&
+    digisellerId &&
+    deliveryType === "text" &&
+    !previousDigisellerId
+  ) {
+    // Text cards cannot be converted in place. Keep the old ID until the
+    // replacement code card has stock and an image, then disable it.
     previousDigisellerId = digisellerId;
     digisellerId = await createDigisellerProduct(
       input,
       token,
       current.platiCategoryId,
     );
-    deliveryType = "text";
+    deliveryType = "code";
+    createdCodeProduct = true;
     digisellerTextStocked = false;
     digisellerImageUploaded = false;
     await db
@@ -328,6 +342,39 @@ async function publishProductRecord(current: ProductRecord) {
         digisellerDeliveryType: deliveryType,
         digisellerTextStocked,
         digisellerImageUploaded,
+        publicationStatus: "draft",
+        publicationError: null,
+        publicationFailureStage: "image",
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
+  } else if (
+    isKey &&
+    digisellerId &&
+    deliveryType !== "text" &&
+    deliveryType !== "code"
+  ) {
+    previousDigisellerId = digisellerId;
+    digisellerId = await createDigisellerProduct(
+      input,
+      token,
+      current.platiCategoryId,
+    );
+    deliveryType = "code";
+    createdCodeProduct = true;
+    digisellerTextStocked = false;
+    digisellerImageUploaded = false;
+    await db
+      .update(productsTable)
+      .set({
+        digisellerId,
+        previousDigisellerId,
+        digisellerDeliveryType: deliveryType,
+        digisellerTextStocked,
+        digisellerImageUploaded,
+        publicationStatus: "draft",
+        publicationError: null,
+        publicationFailureStage: "image",
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
@@ -337,7 +384,7 @@ async function publishProductRecord(current: ProductRecord) {
       input,
       token,
       current.platiCategoryId,
-      deliveryType === "text" ? "text" : "form",
+      isKey ? (deliveryType === "text" ? "text" : "code") : "form",
     );
   } else {
     digisellerId = await createDigisellerProduct(
@@ -345,24 +392,41 @@ async function publishProductRecord(current: ProductRecord) {
       token,
       current.platiCategoryId,
     );
-    deliveryType = isKey ? "text" : "form";
+    deliveryType = isKey ? "code" : "form";
+    createdCodeProduct = isKey;
     await db
       .update(productsTable)
       .set({
         digisellerId,
         digisellerDeliveryType: deliveryType,
+        ...(isKey
+          ? {
+              digisellerTextStocked: false,
+              digisellerImageUploaded: false,
+              publicationStatus: "draft",
+              publicationError: null,
+              publicationFailureStage: "image",
+            }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
   }
-  if (isKey && !digisellerTextStocked) {
-    await addDigisellerTextStock(digisellerId, token);
-    digisellerTextStocked = true;
-    await db
-      .update(productsTable)
-      .set({ digisellerTextStocked: true, updatedAt: new Date() })
-      .where(eq(productsTable.id, current.id));
+
+  // A newly created (or interrupted migration) Code card must be unlimited
+  // before it can be considered ready. Existing code cards are edited in
+  // place and do not need this call.
+  if (
+    isKey &&
+    (createdCodeProduct ||
+      (deliveryType === "code" && previousDigisellerId) ||
+      (deliveryType === "code" &&
+        current.publicationFailureStage === "image" &&
+        !current.digisellerImageUploaded))
+  ) {
+    await setDigisellerCodeUnlimitedStock(digisellerId!, token);
   }
+
   let imageStatus: "uploaded" | "skipped" | "failed" = "skipped";
   let imageError: string | null = null;
   if (!digisellerImageUploaded) {
@@ -387,11 +451,24 @@ async function publishProductRecord(current: ProductRecord) {
   }
 
   if (previousDigisellerId && imageStatus !== "failed") {
+    // Persist the ready replacement before touching the live legacy card. If
+    // disabling fails, the next retry resumes from this code ID safely.
+    await db
+      .update(productsTable)
+      .set({
+        digisellerImageUploaded: true,
+        publicationStatus: "draft",
+        publicationError: null,
+        publicationFailureStage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
     await disableLegacyDigisellerProduct(
       previousDigisellerId,
       input,
       token,
       current.platiCategoryId,
+      legacyDeliveryType,
     );
     previousDigisellerId = null;
   }
@@ -465,12 +542,19 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Ошибка публикации";
+        const [persistedFailure] = await db
+          .select({
+            publicationFailureStage: productsTable.publicationFailureStage,
+          })
+          .from(productsTable)
+          .where(eq(productsTable.id, current.id));
         const [failedProduct] = await db
           .update(productsTable)
           .set({
             publicationStatus: "error",
             publicationError: message,
-            publicationFailureStage: "category",
+            publicationFailureStage:
+              persistedFailure?.publicationFailureStage ?? "category",
             updatedAt: new Date(),
           })
           .where(eq(productsTable.id, current.id))
@@ -548,12 +632,19 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Digiseller publication failed";
+    const [persistedFailure] = await db
+      .select({
+        publicationFailureStage: productsTable.publicationFailureStage,
+      })
+      .from(productsTable)
+      .where(eq(productsTable.id, current.id));
     await db
       .update(productsTable)
       .set({
         publicationStatus: "error",
         publicationError: message,
-        publicationFailureStage: "category",
+        publicationFailureStage:
+          persistedFailure?.publicationFailureStage ?? "category",
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));

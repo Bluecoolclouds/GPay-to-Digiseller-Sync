@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Package, Settings } from "lucide-react"
+import { LayoutDashboard, Package, Settings, ShoppingCart } from "lucide-react"
 import {
   getGetExchangeRateQueryKey,
   getHealthCheckQueryKey,
@@ -20,6 +20,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   const navItems = [
     { href: "/", label: "Дашборд", icon: LayoutDashboard },
+    { href: "/orders", label: "Заказы", icon: ShoppingCart },
     { href: "/products", label: "Товары", icon: Package },
     { href: "/settings", label: "Настройки", icon: Settings },
   ]
