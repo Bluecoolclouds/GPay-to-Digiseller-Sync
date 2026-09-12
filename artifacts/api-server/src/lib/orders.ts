@@ -40,7 +40,14 @@ export type OrderSyncResult = {
   updated: number;
   ignored: number;
   skipped: boolean;
+  stage: "incremental" | "backfill";
 };
+
+const ORDER_SYNC_STALE_AFTER_MS = 15 * 60 * 1_000;
+
+function describeSyncError(error: unknown) {
+  return error instanceof Error ? error.message : "Digiseller sales API error";
+}
 
 export const parseDigisellerDate = parseDigisellerDateValue;
 
@@ -107,7 +114,7 @@ export async function recordDigisellerProductIds(
 export async function upsertDigisellerSales(
   executor: DbExecutor,
   sales: DigisellerSale[],
-): Promise<Omit<OrderSyncResult, "skipped" | "fetched">> {
+): Promise<Omit<OrderSyncResult, "skipped" | "fetched" | "stage">> {
   const validSales = sales.map((sale) => {
     const saleTimestamp = parseDigisellerDateValue(sale.date);
     if (!saleTimestamp) {
@@ -197,7 +204,9 @@ export async function upsertDigisellerSales(
 }
 
 export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
-  return db.transaction(async (tx) => {
+  const attemptAt = new Date();
+  try {
+    return await db.transaction(async (tx) => {
     const lockResult = await tx.execute(
       sql`select pg_try_advisory_xact_lock(${getOrderSyncLockId()}) as locked`,
     );
@@ -205,12 +214,17 @@ export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
       (lockResult.rows[0] as { locked?: boolean } | undefined)?.locked,
     );
     if (!locked) {
+      const [currentState] = await tx
+        .select({ cursorAt: syncOrderStateTable.cursorAt })
+        .from(syncOrderStateTable)
+        .where(eq(syncOrderStateTable.id, 1));
       return {
         fetched: 0,
         inserted: 0,
         updated: 0,
         ignored: 0,
         skipped: true,
+        stage: currentState?.cursorAt ? "incremental" : "backfill",
       };
     }
     const productRows = await tx
@@ -231,6 +245,7 @@ export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
       .select()
       .from(syncOrderStateTable)
       .where(eq(syncOrderStateTable.id, 1));
+    const stage = state?.cursorAt ? "incremental" : "backfill";
     const now = new Date();
     const dateStart = state?.cursorAt
       ? new Date(state.cursorAt.getTime() - 24 * 60 * 60 * 1_000)
@@ -262,12 +277,33 @@ export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
       ...new Set(knownIds.map(({ digisellerProductId }) => digisellerProductId)),
     ];
     if (ids.length === 0) {
+      await tx
+        .insert(syncOrderStateTable)
+        .values({
+          id: 1,
+          cursorAt: now,
+          lastAttemptAt: attemptAt,
+          consecutiveFailures: 0,
+          lastError: null,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: syncOrderStateTable.id,
+          set: {
+            cursorAt: now,
+            lastAttemptAt: attemptAt,
+            consecutiveFailures: 0,
+            lastError: null,
+            updatedAt: now,
+          },
+        });
       return {
         fetched: 0,
         inserted: 0,
         updated: 0,
         ignored: 0,
         skipped: false,
+        stage,
       };
     }
 
@@ -292,13 +328,22 @@ export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
           throw new Error("Digiseller sales API returned looping pagination");
         }
         seenPages.add(page);
-        const result = await fetchDigisellerSalesPage({
-          productIds,
-          dateStart: startString,
-          dateFinish: finishString,
-          page,
-          providedToken: token,
-        });
+        let result;
+        try {
+          result = await fetchDigisellerSalesPage({
+            productIds,
+            dateStart: startString,
+            dateFinish: finishString,
+            page,
+            providedToken: token,
+          });
+        } catch (error) {
+          const chunkNumber = Math.floor(offset / chunkSize) + 1;
+          const chunkCount = Math.ceil(ids.length / chunkSize);
+          throw new Error(
+            `${stage === "backfill" ? "Исторический импорт" : "Синхронизация"}: ошибка страницы ${page} (группа товаров ${chunkNumber} из ${chunkCount}): ${describeSyncError(error)}`,
+          );
+        }
         if (
           result.page !== page ||
           result.pages < 0 ||
@@ -342,13 +387,47 @@ export async function syncDigisellerOrders(): Promise<OrderSyncResult> {
     }
     await tx
       .insert(syncOrderStateTable)
-      .values({ id: 1, cursorAt: now, updatedAt: now })
+      .values({
+        id: 1,
+        cursorAt: now,
+        lastAttemptAt: attemptAt,
+        consecutiveFailures: 0,
+        lastError: null,
+        updatedAt: now,
+      })
       .onConflictDoUpdate({
         target: syncOrderStateTable.id,
-        set: { cursorAt: now, updatedAt: now },
+        set: {
+          cursorAt: now,
+          lastAttemptAt: attemptAt,
+          consecutiveFailures: 0,
+          lastError: null,
+          updatedAt: now,
+        },
       });
-    return { fetched, inserted, updated, ignored, skipped: false };
-  });
+      return { fetched, inserted, updated, ignored, skipped: false, stage };
+    });
+  } catch (error) {
+    await db
+      .insert(syncOrderStateTable)
+      .values({
+        id: 1,
+        lastAttemptAt: attemptAt,
+        consecutiveFailures: 1,
+        lastError: describeSyncError(error),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: syncOrderStateTable.id,
+        set: {
+          lastAttemptAt: attemptAt,
+          consecutiveFailures: sql`${syncOrderStateTable.consecutiveFailures} + 1`,
+          lastError: describeSyncError(error),
+          updatedAt: new Date(),
+        },
+      });
+    throw error;
+  }
 }
 
 export async function listOrders(input: {
@@ -378,7 +457,25 @@ export async function listOrders(input: {
     .orderBy(desc(syncOrdersTable.saleTimestamp), desc(syncOrdersTable.id))
     .limit(input.pageSize)
     .offset((input.page - 1) * input.pageSize);
-  return { items, total: countRow?.total ?? 0 };
+  const [syncState] = await db
+    .select()
+    .from(syncOrderStateTable)
+    .where(eq(syncOrderStateTable.id, 1));
+  const lastSuccessfulAt = syncState?.cursorAt ?? null;
+  return {
+    items,
+    total: countRow?.total ?? 0,
+    sync: {
+      lastSuccessfulAt,
+      lastAttemptAt: syncState?.lastAttemptAt ?? null,
+      consecutiveFailures: syncState?.consecutiveFailures ?? 0,
+      lastError: syncState?.lastError ?? null,
+      isBackfill: !lastSuccessfulAt,
+      isStale:
+        lastSuccessfulAt === null ||
+        Date.now() - lastSuccessfulAt.getTime() > ORDER_SYNC_STALE_AFTER_MS,
+    },
+  };
 }
 
 export async function updateOrder(

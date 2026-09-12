@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderSyncResultStage } from './orderSyncResultStage';
 
 export interface OrderSyncResult {
   fetched: number;
@@ -12,4 +13,5 @@ export interface OrderSyncResult {
   updated: number;
   ignored: number;
   skipped: boolean;
+  stage: OrderSyncResultStage;
 }

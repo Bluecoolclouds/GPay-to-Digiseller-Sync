@@ -484,7 +484,7 @@ components:
         updatedAt: { type: string, format: date-time }
     OrderPage:
       type: object
-      required: [items, total, page, pageSize]
+      required: [items, total, page, pageSize, sync]
       properties:
         items:
           type: array
@@ -492,6 +492,17 @@ components:
         total: { type: integer }
         page: { type: integer }
         pageSize: { type: integer }
+        sync: { $ref: "#/components/schemas/OrderSyncStatus" }
+    OrderSyncStatus:
+      type: object
+      required: [lastSuccessfulAt, lastAttemptAt, consecutiveFailures, lastError, isBackfill, isStale]
+      properties:
+        lastSuccessfulAt: { type: [string, "null"], format: date-time }
+        lastAttemptAt: { type: [string, "null"], format: date-time }
+        consecutiveFailures: { type: integer }
+        lastError: { type: [string, "null"] }
+        isBackfill: { type: boolean }
+        isStale: { type: boolean }
     OrderUpdate:
       type: object
       minProperties: 1
@@ -500,10 +511,11 @@ components:
         note: { type: [string, "null"], maxLength: 2000 }
     OrderSyncResult:
       type: object
-      required: [fetched, inserted, updated, ignored, skipped]
+      required: [fetched, inserted, updated, ignored, skipped, stage]
       properties:
         fetched: { type: integer }
         inserted: { type: integer }
         updated: { type: integer }
         ignored: { type: integer }
         skipped: { type: boolean }
+        stage: { type: string, enum: [incremental, backfill] }

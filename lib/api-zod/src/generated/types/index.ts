@@ -32,6 +32,8 @@ export * from './order';
 export * from './orderPage';
 export * from './orderStatus';
 export * from './orderSyncResult';
+export * from './orderSyncResultStage';
+export * from './orderSyncStatus';
 export * from './orderUpdate';
 export * from './orderUpdateStatus';
 export * from './priceTimeoutWarning';

@@ -354,7 +354,15 @@ export const ListOrdersResponse = zod.object({
 })),
   "total": zod.number().int(),
   "page": zod.number().int(),
-  "pageSize": zod.number().int()
+  "pageSize": zod.number().int(),
+  "sync": zod.object({
+  "lastSuccessfulAt": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "consecutiveFailures": zod.number().int(),
+  "lastError": zod.string().nullable(),
+  "isBackfill": zod.boolean(),
+  "isStale": zod.boolean()
+})
 })
 
 
@@ -363,7 +371,8 @@ export const SyncOrdersResponse = zod.object({
   "inserted": zod.number().int(),
   "updated": zod.number().int(),
   "ignored": zod.number().int(),
-  "skipped": zod.boolean()
+  "skipped": zod.boolean(),
+  "stage": zod.enum(['incremental', 'backfill'])
 })
 
 

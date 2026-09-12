@@ -358,11 +358,24 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface OrderSyncStatus {
+  /** @nullable */
+  lastSuccessfulAt: string | null;
+  /** @nullable */
+  lastAttemptAt: string | null;
+  consecutiveFailures: number;
+  /** @nullable */
+  lastError: string | null;
+  isBackfill: boolean;
+  isStale: boolean;
+}
+
 export interface OrderPage {
   items: Order[];
   total: number;
   page: number;
   pageSize: number;
+  sync: OrderSyncStatus;
 }
 
 export type OrderUpdateStatus = typeof OrderUpdateStatus[keyof typeof OrderUpdateStatus];
@@ -383,12 +396,21 @@ export interface OrderUpdate {
   note?: string | null;
 }
 
+export type OrderSyncResultStage = typeof OrderSyncResultStage[keyof typeof OrderSyncResultStage];
+
+
+export const OrderSyncResultStage = {
+  incremental: 'incremental',
+  backfill: 'backfill',
+} as const;
+
 export interface OrderSyncResult {
   fetched: number;
   inserted: number;
   updated: number;
   ignored: number;
   skipped: boolean;
+  stage: OrderSyncResultStage;
 }
 
 export type ListProductsParams = {

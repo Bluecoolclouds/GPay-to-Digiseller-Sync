@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Order } from './order';
+import type { OrderSyncStatus } from './orderSyncStatus';
 
 export interface OrderPage {
   items: Order[];
   total: number;
   page: number;
   pageSize: number;
+  sync: OrderSyncStatus;
 }

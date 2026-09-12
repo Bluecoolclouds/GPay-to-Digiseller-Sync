@@ -49,6 +49,11 @@ router.get("/orders", async (req, res): Promise<void> => {
       total: result.total,
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
+      sync: {
+        ...result.sync,
+        lastSuccessfulAt: result.sync.lastSuccessfulAt?.toISOString() ?? null,
+        lastAttemptAt: result.sync.lastAttemptAt?.toISOString() ?? null,
+      },
     }),
   );
 });

@@ -15,12 +15,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box } from "lucide-react"
+import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
 function getMutationErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "data" in error) {
+    const data = (error as { data?: unknown }).data
+    if (typeof data === "object" && data !== null && "error" in data && typeof data.error === "string") {
+      return `${fallback}: ${data.error}`
+    }
+  }
   if (error instanceof Error && error.message.trim()) {
     return `${fallback}: ${error.message}`
   }
@@ -68,7 +74,11 @@ export default function OrdersPage() {
     syncMutation.mutate(undefined, {
       onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() })
-        if (res.fetched === 0) {
+        if (res.skipped) {
+          toast.info("Синхронизация уже выполняется. Дождитесь её завершения.")
+        } else if (res.stage === "backfill") {
+          toast.success(`Исторический импорт завершён: импортировано ${res.inserted}, обновлено ${res.updated}.`)
+        } else if (res.fetched === 0) {
           toast.success("Синхронизация завершена. Новых заказов нет.")
         } else {
           toast.success(`Синхронизация завершена: импортировано ${res.inserted}, обновлено ${res.updated}.`)
@@ -79,6 +89,17 @@ export default function OrdersPage() {
       }
     })
   }
+
+  const syncStatus = data?.sync
+  const lastSuccessfulSync = syncStatus?.lastSuccessfulAt
+    ? new Date(syncStatus.lastSuccessfulAt).toLocaleString("ru-RU", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "ещё не завершалась"
+  const hasSyncWarning = Boolean(
+    syncStatus && (syncStatus.isStale || syncStatus.consecutiveFailures > 0),
+  )
 
   const updateOrderInCache = useCallback((updatedOrder: Order) => {
     const queryKey = getListOrdersQueryKey({
@@ -110,8 +131,40 @@ export default function OrdersPage() {
           className="gap-2 bg-card"
         >
           <RefreshCw className={cn("h-4 w-4", syncMutation.isPending && "animate-spin")} />
-          {syncMutation.isPending ? "Синхронизация..." : "Синхронизировать"}
+          {syncMutation.isPending
+            ? syncStatus?.isBackfill ? "Исторический импорт..." : "Синхронизация..."
+            : "Синхронизировать"}
         </Button>
+      </div>
+
+      <div
+        className={cn(
+          "rounded-lg border px-4 py-3 text-sm",
+          hasSyncWarning
+            ? "border-amber-500/50 bg-amber-500/10 text-amber-950 dark:text-amber-100"
+            : "border-border/60 bg-card text-muted-foreground",
+        )}
+      >
+        <div className="flex items-start gap-2">
+          {hasSyncWarning ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />}
+          <div>
+            <div className="font-medium text-foreground">
+              Последняя полная синхронизация: {lastSuccessfulSync}
+            </div>
+            {syncStatus?.isBackfill && (
+              <p className="mt-1">Исторический импорт ещё не завершён. Список заказов может быть неполным.</p>
+            )}
+            {!syncStatus?.isBackfill && syncStatus?.isStale && (
+              <p className="mt-1">Данные устарели: успешной синхронизации не было более 15 минут.</p>
+            )}
+            {syncStatus && syncStatus.consecutiveFailures > 0 && (
+              <p className="mt-1">
+                Ошибок подряд: {syncStatus.consecutiveFailures}.
+                {syncStatus.lastError ? ` Последняя ошибка: ${syncStatus.lastError}` : ""}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between">

@@ -113,6 +113,9 @@ function run(command: string, args: string[]) {
     create table "${schema}".sync_order_state (
       id integer primary key default 1,
       cursor_at timestamptz,
+      last_attempt_at timestamptz,
+      consecutive_failures integer not null default 0,
+      last_error text,
       updated_at timestamptz not null default now()
     );
   `);

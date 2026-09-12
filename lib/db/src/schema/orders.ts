@@ -82,6 +82,9 @@ export type SyncProductDigisellerId =
 export const syncOrderStateTable = pgTable("sync_order_state", {
   id: integer("id").primaryKey().default(1),
   cursorAt: timestamp("cursor_at", { withTimezone: true }),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  lastError: text("last_error"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
