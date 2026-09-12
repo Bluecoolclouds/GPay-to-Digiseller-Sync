@@ -71,6 +71,7 @@ const clerkAppearance = {
     formFieldLabel: 'text-slate-800',
     footerActionLink: 'text-blue-600',
     footerActionText: 'text-slate-600',
+    footerAction: 'hidden',
     dividerText: 'text-slate-500',
     formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
     formFieldInput: 'bg-slate-50 text-slate-950 border-slate-300',
