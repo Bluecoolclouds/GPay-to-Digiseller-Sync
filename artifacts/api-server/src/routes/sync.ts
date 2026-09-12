@@ -33,6 +33,7 @@ import {
   fetchGPayProducts,
   loginGPay,
 } from "../lib/gpay";
+import { buildProductDescriptions } from "../lib/product-description";
 import {
   addDigisellerProductToPlati,
   createDigisellerProduct,
@@ -258,38 +259,16 @@ function getDigisellerProductInput(current: ProductRecord) {
     current.region && current.region !== "Не указан"
       ? current.region
       : regionFromName || "Без региональных ограничений";
-  const typeRu = productKind === "gift" ? "Steam Gift" : "цифровой ключ";
-  const typeEn = productKind === "gift" ? "Steam Gift" : "digital activation key";
+  const descriptions = buildProductDescriptions({
+    productId: current.gpayId,
+    cleanName,
+    platform,
+    region,
+    productKind,
+  });
   return {
     name: current.name,
-    descriptionRu: [
-      `${cleanName} — ${typeRu} для ${platform}.`,
-      "",
-      "Информация о товаре:",
-      `• Платформа: ${platform}`,
-      `• Тип товара: ${typeRu}`,
-      `• Регион активации: ${region}`,
-      "",
-      productKind === "gift"
-        ? "После оформления заказа потребуется ссылка на ваш профиль Steam. Подарок отправляется после обработки заказа."
-        : "После обработки заказа вы получите цифровой ключ и сможете активировать его в соответствующем сервисе.",
-      "",
-      "Перед покупкой убедитесь, что выбранный регион и платформа подходят для вашего аккаунта.",
-    ].join("\n"),
-    descriptionEn: [
-      `${cleanName} — ${typeEn} for ${platform}.`,
-      "",
-      "Product information:",
-      `• Platform: ${platform}`,
-      `• Product type: ${typeEn}`,
-      `• Activation region: ${region}`,
-      "",
-      productKind === "gift"
-        ? "After placing the order, provide your Steam profile link. The gift is sent after the order is processed."
-        : "After the order is processed, you will receive a digital key that can be activated on the corresponding platform.",
-      "",
-      "Before purchasing, make sure the selected platform and activation region are suitable for your account.",
-    ].join("\n"),
+    ...descriptions,
     priceRub: current.salePriceRub,
     productType: current.productType,
   };

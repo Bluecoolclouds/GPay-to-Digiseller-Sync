@@ -953,11 +953,11 @@ function buildProductPayload(
   const additionalInfoRu =
     input.productType === "1"
       ? "После оплаты укажите ссылку на профиль Steam. Заказ обрабатывается вручную после проверки цены и наличия."
-      : "Заказ обрабатывается вручную после проверки цены и наличия у поставщика.";
+      : "После подтверждения оплаты ключ автоматически появится на странице заказа и будет отправлен на указанную электронную почту.";
   const additionalInfoEn =
     input.productType === "1"
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
-      : "The order is processed manually after checking price and supplier availability.";
+      : "After payment is confirmed, the key automatically appears on the order page and is sent to the email address provided at checkout.";
   return {
     content_type:
       deliveryType === "text"

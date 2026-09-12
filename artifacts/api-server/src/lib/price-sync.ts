@@ -5,7 +5,7 @@ import {
   productsTable,
   settingsTable,
 } from "@workspace/db";
-import { fetchGPayProducts } from "./gpay";
+import { classifyGPayProductType, fetchGPayProducts } from "./gpay";
 import {
   loginDigiseller,
   setDigisellerProductEnabled,
@@ -13,6 +13,7 @@ import {
 } from "./digiseller";
 import { getOfficialUsdRubRate } from "./exchange-rate";
 import { createPriceTimeoutSummary } from "./price-timeout-warning";
+import { buildProductDescriptions } from "./product-description";
 
 const PRICE_SYNC_LOCK_ID = 704_291_163;
 
@@ -51,7 +52,8 @@ export type PriceSyncResult = {
 
 type ProductRecord = typeof productsTable.$inferSelect;
 
-function getDigisellerProductInput(product: ProductRecord) {
+export function getDigisellerProductInput(product: ProductRecord) {
+  const productKind = classifyGPayProductType(product.productType);
   const cleanName = product.name
     .replace(/^[^\p{L}\p{N}]+/u, "")
     .split("|")[0]
@@ -65,20 +67,16 @@ function getDigisellerProductInput(product: ProductRecord) {
     product.region && product.region !== "Не указан"
       ? product.region
       : "Без региональных ограничений";
+  const descriptions = buildProductDescriptions({
+    productId: product.gpayId,
+    cleanName,
+    platform,
+    region,
+    productKind,
+  });
   return {
     name: product.name,
-    descriptionRu: [
-      `${cleanName} — цифровой ключ для ${platform}.`,
-      `Платформа: ${platform}`,
-      `Регион активации: ${region}`,
-      "Перед покупкой убедитесь, что регион и платформа подходят для вашего аккаунта.",
-    ].join("\n\n"),
-    descriptionEn: [
-      `${cleanName} — digital activation key for ${platform}.`,
-      `Platform: ${platform}`,
-      `Activation region: ${region}`,
-      "Before purchasing, make sure the region and platform are suitable for your account.",
-    ].join("\n\n"),
+    ...descriptions,
     priceRub: product.salePriceRub,
     productType: product.productType,
   };
@@ -245,7 +243,8 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
             change.isAvailable,
             token,
             change.product.platiCategoryId,
-            change.product.digisellerDeliveryType ?? "form",
+            change.product.digisellerDeliveryType ??
+              (change.product.productType === "2" ? "code" : "form"),
           );
         } catch (error) {
           digisellerFailures.set(

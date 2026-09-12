@@ -36,11 +36,18 @@ function run(command: string, args: string[]) {
   }
 }
 
-  const { TEST_AUTH_BYPASS: _bypass, ...authEnvironment } =
-    isolatedEnvironment;
-  if (authResult.error) throw authResult.error;
-  if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
-  run(process.execPath, ["--test", priceTaskTestFile]);
+const { TEST_AUTH_BYPASS: _bypass, ...authEnvironment } = isolatedEnvironment;
+const authResult = spawnSync(process.execPath, ["--test", authTestFile], {
+  cwd: process.cwd(),
+  env: authEnvironment,
+  stdio: "inherit",
+});
+if (authResult.error) throw authResult.error;
+if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
+
+run(process.execPath, ["--test", priceTaskTestFile]);
+
+try {
   await pool.query(`create schema "${schema}"`);
   await pool.query(`
     create table "${schema}".sync_settings (
@@ -126,9 +133,3 @@ function run(command: string, args: string[]) {
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });
 }
-
-  const authResult = spawnSync(process.execPath, ["--test", authTestFile], {
-    cwd: process.cwd(),
-    env: authEnvironment,
-    stdio: "inherit",
-  });
