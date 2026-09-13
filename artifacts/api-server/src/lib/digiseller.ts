@@ -426,8 +426,8 @@ export async function createDigisellerProduct(input: {
 }, providedToken?: string, platiCategoryId?: number | null, onBeforeCreate?: () => Promise<void>, onCreateRejected?: () => Promise<void>): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
   const categories = await resolveProductCategories(input, token, platiCategoryId);
-  const payload = buildProductPayload(input, categories);
-  const productKind = input.productType === "2" ? "uniquefixed" : "arbitrary";
+  const payload = buildProductPayload(input, categories, true, "code");
+  const productKind = "uniquefixed";
   await onBeforeCreate?.();
   const response = await fetch(
     `https://api.digiseller.com/api/product/create/${productKind}?token=${encodeURIComponent(token)}`,
@@ -978,12 +978,7 @@ function buildProductPayload(
       ? "After payment, provide your Steam profile link. The order is processed manually after checking price and availability."
       : "After payment is confirmed, the key automatically appears on the order page and is sent to the email address provided at checkout.";
   return {
-    content_type:
-      deliveryType === "text"
-        ? "text"
-        : input.productType === "2"
-          ? "digisellercode"
-          : "Form",
+    content_type: deliveryType === "text" ? "text" : "digisellercode",
     ...(categories.length > 0 ? { categories } : {}),
     name: [
       { locale: "ru-RU", value: input.name.slice(0, 500) },
@@ -1019,7 +1014,7 @@ export async function addDigisellerProductToPlati(
   const productKind =
     deliveryType === "text" ||
     deliveryType === "code" ||
-    (!deliveryType && input.productType === "2")
+    !deliveryType
       ? "uniquefixed"
       : "arbitrary";
   const response = await fetch(

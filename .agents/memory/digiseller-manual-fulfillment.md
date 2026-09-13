@@ -1,13 +1,13 @@
 ---
 name: Digiseller product type for manual fulfillment
-description: Which Digiseller product type supports safe manual fulfillment forms.
+description: Which Digiseller product type supports safe manual fulfillment.
 ---
 
-Use an `Arbitrary` Digiseller product with `Form` content for Steam Gift items that require buyer details. For manually fulfilled key items, use `UniqueFixed` with `digisellercode` content and unlimited generated-code stock. Import paid sales into the operator orders page, where the operator tracks manual delivery.
+Use `UniqueFixed` with `digisellercode` content and unlimited generated-code stock for every product, including Steam Gift and keys. Import paid sales into the operator orders page, where the operator tracks manual delivery.
 
-**Why:** Digiseller rejects `Form` content for `UniqueFixed` products, and administrators do not permit repeated placeholder Text content in place of real keys. A generated Digiseller code proves the paid order without pretending to be the purchased game key.
+**Why:** The owner explicitly requires every Digiseller card to use Code. A generated Digiseller code proves the paid order without pretending to be the purchased game key or Steam Gift; the actual fulfillment remains manual where required.
 
-**How to apply:** Keep gifts on Form. Set generated-code count to `-1` for every new key card. When replacing legacy Form or Text cards, disable the old card only after the new code card has unlimited stock, its image, and its category.
+**How to apply:** Set generated-code count to `-1` for every new card. When replacing legacy Form or Text cards, disable the old card only after the new Code card has unlimited stock, its image, and its category. Keep Steam Gift descriptions clear that fulfillment itself is manual.
 
 For Plati.Market, do not pass IDs from the legacy marketplace category tree to the old add-category endpoint. Find the exact game in the authenticated cataloguer tree, then edit/create the product with a category entry whose owner is `1` and whose cataloguer category ID is the exact game category.
 

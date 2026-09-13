@@ -1,4 +1,4 @@
-- [Digiseller manual fulfillment and Plati category](digiseller-manual-fulfillment.md) — gifts use Form; keys use unlimited Digiseller-generated codes before manual chat delivery.
+- [Digiseller manual fulfillment and Plati category](digiseller-manual-fulfillment.md) — all cards use unlimited Digiseller-generated codes; actual fulfillment may remain manual.
 - [GPay product types](gpay-product-types.md) — Partner API uses 1 for Steam Gift and 2 for Keys; request the type server-side and paginate the selected catalog.
 - [Digiseller product images](digiseller-product-images.md) — images are uploaded after product creation; generate a labeled fallback when GPay has no artwork.
 - [Digiseller Plati publication](digiseller-plati-publication.md) — retry paged category lookup and include both ru-RU and en-US localizations.

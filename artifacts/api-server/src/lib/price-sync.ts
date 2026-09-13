@@ -243,8 +243,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
             change.isAvailable,
             token,
             change.product.platiCategoryId,
-            change.product.digisellerDeliveryType ??
-              (change.product.productType === "2" ? "code" : "form"),
+            change.product.digisellerDeliveryType ?? "code",
           );
         } catch (error) {
           digisellerFailures.set(

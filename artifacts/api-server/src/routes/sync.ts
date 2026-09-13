@@ -331,7 +331,6 @@ async function publishProductRecord(current: ProductRecord) {
 
   const token = await loginDigiseller();
   const input = getDigisellerProductInput(current);
-  const isKey = classifyGPayProductType(current.productType) === "key";
   let digisellerId = current.digisellerId;
   let previousDigisellerId = current.previousDigisellerId;
   let deliveryType = current.digisellerDeliveryType;
@@ -346,7 +345,7 @@ async function publishProductRecord(current: ProductRecord) {
   );
   const legacyDeliveryType: "form" | "text" =
     deliveryType === "text" ||
-    (isKey && deliveryType === "code" && Boolean(previousDigisellerId))
+    (deliveryType === "code" && Boolean(previousDigisellerId))
       ? "text"
       : "form";
   const runWithCategoryRecovery = async <T>(
@@ -372,7 +371,6 @@ async function publishProductRecord(current: ProductRecord) {
   };
 
   if (
-    isKey &&
     digisellerId &&
     deliveryType === "text" &&
     !previousDigisellerId
@@ -415,7 +413,6 @@ async function publishProductRecord(current: ProductRecord) {
       [...historicalDigisellerIds],
     );
   } else if (
-    isKey &&
     digisellerId &&
     deliveryType !== "text" &&
     deliveryType !== "code"
@@ -463,7 +460,7 @@ async function publishProductRecord(current: ProductRecord) {
           input,
           token,
           categoryId,
-          isKey ? (deliveryType === "text" ? "text" : "code") : "form",
+          deliveryType === "text" ? "text" : "code",
         ),
       );
     } catch (error) {
@@ -483,8 +480,8 @@ async function publishProductRecord(current: ProductRecord) {
           markCreationRequestRejected,
         ),
       );
-      deliveryType = isKey ? "code" : "form";
-      createdCodeProduct = isKey;
+      deliveryType = "code";
+      createdCodeProduct = true;
       digisellerTextStocked = false;
       digisellerImageUploaded = false;
       historicalDigisellerIds.add(digisellerId);
@@ -497,7 +494,7 @@ async function publishProductRecord(current: ProductRecord) {
           digisellerImageUploaded,
           publicationStatus: "draft",
           publicationError: null,
-          publicationFailureStage: isKey ? "image" : null,
+          publicationFailureStage: "image",
           updatedAt: new Date(),
         })
         .where(eq(productsTable.id, current.id));
@@ -517,23 +514,19 @@ async function publishProductRecord(current: ProductRecord) {
         markCreationRequestRejected,
       ),
     );
-    deliveryType = isKey ? "code" : "form";
-    createdCodeProduct = isKey;
+    deliveryType = "code";
+    createdCodeProduct = true;
     historicalDigisellerIds.add(digisellerId);
     await db
       .update(productsTable)
       .set({
         digisellerId,
         digisellerDeliveryType: deliveryType,
-        ...(isKey
-          ? {
-              digisellerTextStocked: false,
-              digisellerImageUploaded: false,
-              publicationStatus: "draft",
-              publicationError: null,
-              publicationFailureStage: "image",
-            }
-          : {}),
+        digisellerTextStocked: false,
+        digisellerImageUploaded: false,
+        publicationStatus: "draft",
+        publicationError: null,
+        publicationFailureStage: "image",
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
@@ -548,12 +541,11 @@ async function publishProductRecord(current: ProductRecord) {
   // before it can be considered ready. Existing code cards are edited in
   // place and do not need this call.
   if (
-    isKey &&
-    (createdCodeProduct ||
+    createdCodeProduct ||
       (deliveryType === "code" && previousDigisellerId) ||
       (deliveryType === "code" &&
         current.publicationFailureStage === "image" &&
-        !current.digisellerImageUploaded))
+        !current.digisellerImageUploaded)
   ) {
     await setDigisellerCodeUnlimitedStock(digisellerId!, token);
   }
@@ -683,7 +675,11 @@ async function publishJobItem(
     if (!current) throw new Error("Товар не найден");
 
     item.name = current.name;
-    if (current.publicationStatus === "published" && current.digisellerId) {
+    if (
+      current.publicationStatus === "published" &&
+      current.digisellerId &&
+      current.digisellerDeliveryType === "code"
+    ) {
       item.status = "published";
       item.digisellerId = current.digisellerId;
       return;
