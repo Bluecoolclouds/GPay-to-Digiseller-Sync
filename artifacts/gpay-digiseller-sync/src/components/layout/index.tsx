@@ -61,7 +61,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="mt-1 text-[10px] text-muted-foreground">
               {exchangeRate
-                ? `ЦБ ${exchangeRate.usdRub.toFixed(2)} ₽ + ${exchangeRate.conversionMarkupPercent}%`
+                ? `${exchangeRate.source} ${exchangeRate.usdRub.toFixed(2)} ₽ + ${exchangeRate.conversionMarkupPercent}%`
                 : "Получаем курс…"}
             </div>
           </div>

@@ -93,13 +93,13 @@ export default function SettingsPage() {
                       className="h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm focus:ring-1 focus:ring-ring focus:outline-none"
                       {...register("exchangeRateMode")}
                     >
-                      <option value="cbr">Автоматически — ЦБ РФ</option>
+                      <option value="cbr">Автоматически — BestChange (СБП/Сбер → USDT TRC20)</option>
                       <option value="manual">Ввести вручную</option>
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
-                      {exchangeRateMode === "manual" ? "Ручной курс USD → RUB" : "Курс ЦБ USD → RUB"}
+                      {exchangeRateMode === "manual" ? "Ручной курс USD → RUB" : "Курс покупки USDT за RUB"}
                     </label>
                     <Input
                       type="number"
