@@ -97,6 +97,18 @@ try {
       status text not null,
       created_at timestamptz not null default now()
     );
+    create table "${schema}".sync_publication_jobs (
+      id uuid primary key,
+      status text not null default 'queued',
+      product_ids integer[] not null,
+      items jsonb not null default '[]'::jsonb,
+      requested integer not null,
+      succeeded integer not null default 0,
+      failed integer not null default 0,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      completed_at timestamptz
+    );
     create table "${schema}".sync_orders (
       id serial primary key,
       invoice_id text not null unique,

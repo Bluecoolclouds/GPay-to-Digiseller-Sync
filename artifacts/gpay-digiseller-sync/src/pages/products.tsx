@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { useListProducts, useUpdateProduct, usePublishProduct, usePublishProductsBatch, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind, BatchPublishResult } from "@workspace/api-client-react"
+import { useListProducts, useUpdateProduct, usePublishProduct, usePublishProductsBatch, useGetLatestPublishProductsBatch, getGetLatestPublishProductsBatchQueryKey, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,8 +24,18 @@ export default function ProductsPage() {
   const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [batchResult, setBatchResult] = useState<BatchPublishResult | null>(null)
   const batchMutation = usePublishProductsBatch()
+  const completedTaskRef = useRef<string | null>(null)
+  const { data: batchTask } = useGetLatestPublishProductsBatch({
+    query: {
+      queryKey: getGetLatestPublishProductsBatchQueryKey(),
+      refetchInterval: (query) =>
+        query.state.data?.status === "queued" ||
+        query.state.data?.status === "running"
+          ? 1_000
+          : false,
+    },
+  })
   
   const [debouncedSearch, setDebouncedSearch] = useState("")
   useEffect(() => {
@@ -46,8 +56,26 @@ export default function ProductsPage() {
 
   useEffect(() => {
     setSelectedIds(new Set())
-    setBatchResult(null)
   }, [page, status, productKind, debouncedSearch])
+
+  useEffect(() => {
+    if (
+      batchTask?.status !== "completed" ||
+      completedTaskRef.current === batchTask.taskId
+    ) return
+    completedTaskRef.current = batchTask.taskId
+    void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+    const imageFailures = batchTask.items.filter(
+      (item) => item.imageStatus === "failed",
+    ).length
+    if (batchTask.failed > 0 || imageFailures > 0) {
+      toast.warning(
+        `Опубликовано ${batchTask.succeeded}, ошибок ${batchTask.failed}, проблем с изображениями ${imageFailures}`,
+      )
+    } else {
+      toast.success(`Опубликовано ${batchTask.succeeded} товаров`)
+    }
+  }, [batchTask, queryClient])
 
   const eligibleItems = (data?.items ?? []).filter(
     (product) =>
@@ -83,19 +111,12 @@ export default function ProductsPage() {
       { data: { productIds } },
       {
         onSuccess: (result) => {
-          setBatchResult(result)
           setSelectedIds(new Set())
-          queryClient.invalidateQueries()
-          const imageFailures = result.items.filter(
-            (item) => item.imageStatus === "failed",
-          ).length
-          if (result.failed > 0 || imageFailures > 0) {
-            toast.warning(
-              `Опубликовано ${result.succeeded}, ошибок ${result.failed}, проблем с изображениями ${imageFailures}`,
-            )
-          } else {
-            toast.success(`Опубликовано ${result.succeeded} товаров`)
-          }
+          queryClient.setQueryData(
+            getGetLatestPublishProductsBatchQueryKey(),
+            result,
+          )
+          toast.success("Публикация запущена в фоне")
         },
         onError: (error) =>
           toast.error(
@@ -114,6 +135,12 @@ export default function ProductsPage() {
       }
     })
   }
+  const batchIsActive =
+    batchTask?.status === "queued" || batchTask?.status === "running"
+  const completedItems =
+    batchTask?.items.filter(
+      (item) => item.status === "published" || item.status === "failed",
+    ).length ?? 0
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -127,12 +154,12 @@ export default function ProductsPage() {
         </div>
         <Button
           onClick={handleBatchPublish}
-          disabled={selectedIds.size === 0 || batchMutation.isPending}
+          disabled={selectedIds.size === 0 || batchMutation.isPending || batchIsActive}
           className="gap-2"
         >
           <Play className="h-4 w-4" />
-          {batchMutation.isPending
-            ? "Публикация..."
+          {batchMutation.isPending || batchIsActive
+            ? "Публикация выполняется…"
             : `Опубликовать выбранные (${selectedIds.size})`}
         </Button>
       </div>
@@ -183,25 +210,55 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {batchResult && (
+      {batchTask && (
         <Card className="border-primary/20 bg-primary/5 p-4">
-          <div className="font-medium">
-            Пакет завершен: опубликовано {batchResult.succeeded} из {batchResult.requested}
+          <div className="flex items-center justify-between gap-4">
+            <div className="font-medium">
+              {batchTask.status === "completed"
+                ? `Пакет завершён: опубликовано ${batchTask.succeeded} из ${batchTask.requested}`
+                : `Публикация: обработано ${completedItems} из ${batchTask.requested}`}
+            </div>
+            <Badge variant={batchTask.status === "completed" ? "outline" : "secondary"}>
+              {batchTask.status === "queued"
+                ? "В очереди"
+                : batchTask.status === "running"
+                  ? "Выполняется"
+                  : "Завершено"}
+            </Badge>
           </div>
-          {batchResult.items.some(
-            (item) => item.status === "failed" || item.imageStatus === "failed",
-          ) && (
-            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-              {batchResult.items
-                .filter(
-                  (item) =>
-                    item.status === "failed" || item.imageStatus === "failed",
-                )
-                .map((item) => (
-                  <div key={item.productId}>
-                    {item.name}: {item.error || "изображение не загружено"}
-                  </div>
-                ))}
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-primary/10">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{
+                width: `${batchTask.requested ? (completedItems / batchTask.requested) * 100 : 0}%`,
+              }}
+            />
+          </div>
+          <div className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm">
+            {batchTask.items.map((item) => (
+              <div
+                key={item.productId}
+                className="flex items-start justify-between gap-3 rounded-md bg-background/70 px-3 py-2"
+              >
+                <span className="min-w-0 truncate" title={item.name}>{item.name}</span>
+                <span className={cn(
+                  "shrink-0 text-xs",
+                  item.status === "failed" ? "text-destructive" : "text-muted-foreground",
+                )}>
+                  {item.status === "queued"
+                    ? "Ожидает"
+                    : item.status === "publishing"
+                      ? "Публикуется…"
+                      : item.status === "published"
+                        ? `Опубликован${item.digisellerId ? ` · DS ${item.digisellerId}` : ""}`
+                        : item.error || "Ошибка"}
+                </span>
+              </div>
+            ))}
+          </div>
+          {batchTask.status !== "completed" && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Можно обновить страницу или перейти в другой раздел — задача продолжит выполняться.
             </div>
           )}
         </Card>
@@ -240,6 +297,7 @@ export default function ProductsPage() {
                     key={product.id} 
                     product={product} 
                     onUpdate={updateProductInCache}
+                     batchIsActive={batchIsActive}
                     selected={selectedIds.has(product.id)}
                     onSelectionChange={(selected) =>
                       setSelectedIds((current) => {
@@ -274,11 +332,13 @@ export default function ProductsPage() {
 function ProductRow({
   product,
   onUpdate,
+  batchIsActive,
   selected,
   onSelectionChange,
 }: {
   product: Product
   onUpdate: (p: Product) => void
+  batchIsActive: boolean
   selected: boolean
   onSelectionChange: (selected: boolean) => void
 }) {
@@ -458,6 +518,8 @@ function ProductRow({
               <div className="font-medium">
                 {product.publicationFailureStage === "image"
                   ? "Не удалось загрузить изображение"
+                  : product.publicationFailureStage === "uncertain"
+                    ? "Требуется сверка с Digiseller"
                   : product.publicationFailureStage === "stock"
                     ? "Ошибка пополнения Text-остатка"
                   : product.publicationFailureStage === "category"
@@ -468,6 +530,9 @@ function ProductRow({
               <div className="mt-1 break-words">{product.publicationError}</div>
               {product.publicationFailureStage === "image" && (
                 <div className="mt-1 font-medium">Повторите публикацию, чтобы загрузить изображение.</div>
+              )}
+              {product.publicationFailureStage === "uncertain" && (
+                <div className="mt-1 font-medium">Не запускайте создание повторно, пока не проверите карточку в Digiseller.</div>
               )}
             </div>
           )}
@@ -512,7 +577,7 @@ function ProductRow({
                size="sm" 
                className="h-7 text-xs px-3 gap-1.5"
                onClick={handlePublish}
-               disabled={publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
+               disabled={batchIsActive || publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
              >
                <Play className="w-3 h-3" /> Опубликовать
              </Button>

@@ -120,12 +120,42 @@ paths:
             schema:
               $ref: "#/components/schemas/BatchPublishInput"
       responses:
-        "200":
-          description: Batch publication result
+        "202":
+          description: Batch publication task accepted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BatchPublishResult"
+                $ref: "#/components/schemas/BatchPublishTask"
+    get:
+      operationId: getLatestPublishProductsBatch
+      tags: [products]
+      responses:
+        "200":
+          description: Latest batch publication task
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/BatchPublishTask"
+                  - type: "null"
+  /products/publish-batch/{taskId}:
+    get:
+      operationId: getPublishProductsBatch
+      tags: [products]
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Batch publication task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchPublishTask"
+        "404":
+          description: Publication task not found
   /sync/catalog:
     post:
       operationId: syncCatalog
@@ -337,9 +367,9 @@ components:
         marginPercent: { type: number }
         profitRub: { type: number }
         isAvailable: { type: boolean }
-        publicationStatus: { type: string, enum: [draft, published, paused, error] }
+        publicationStatus: { type: string, enum: [draft, publishing, published, paused, error] }
         publicationError: { type: [string, "null"] }
-        publicationFailureStage: { type: [string, "null"], enum: [category, image, stock, null] }
+        publicationFailureStage: { type: [string, "null"], enum: [category, image, stock, uncertain, null] }
         region: { type: string }
         warningMessage: { type: [string, "null"] }
         updatedAt: { type: string, format: date-time }
@@ -375,7 +405,7 @@ components:
       properties:
         productId: { type: integer }
         name: { type: string }
-        status: { type: string, enum: [published, failed] }
+        status: { type: string, enum: [queued, publishing, published, failed] }
         digisellerId: { type: [integer, "null"] }
         imageStatus: { type: string, enum: [uploaded, skipped, failed] }
         error: { type: [string, "null"] }
@@ -389,6 +419,17 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/BatchPublishItem" }
+    BatchPublishTask:
+      allOf:
+        - $ref: "#/components/schemas/BatchPublishResult"
+        - type: object
+          required: [taskId, status, createdAt, updatedAt]
+          properties:
+            taskId: { type: string, format: uuid }
+            status: { type: string, enum: [queued, running, completed] }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            completedAt: { type: [string, "null"], format: date-time }
     CatalogSyncInput:
       type: object
       required: [pageSize]

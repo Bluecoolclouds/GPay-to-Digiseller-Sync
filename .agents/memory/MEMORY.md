@@ -6,3 +6,4 @@
 - [AI category selection safety](ai-category-selection-safety.md) — apinet gpt-5.5 may ignore requested JSON fields; accept only unambiguous IDs from the supplied category shortlist.
 - [Isolated PostgreSQL API tests](isolated-postgres-api-tests.md) — create test tables explicitly in a unique schema; schema push may inspect public despite search_path.
 - [Supplier availability retries](supplier-availability-retries.md) — persist unavailable only after marketplace disable succeeds, so failures remain retryable.
+- [Ambiguous Digiseller creation](ambiguous-digiseller-creation.md) — fail closed when creation may have succeeded but its product ID was not persisted.

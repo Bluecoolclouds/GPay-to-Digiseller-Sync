@@ -67,9 +67,9 @@ export const ListProductsResponse = zod.object({
   "marginPercent": zod.number(),
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
-  "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationStatus": zod.enum(['draft', 'publishing', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
-  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal(null)]).nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal('uncertain'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -113,9 +113,9 @@ export const UpdateProductResponse = zod.object({
   "marginPercent": zod.number(),
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
-  "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationStatus": zod.enum(['draft', 'publishing', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
-  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal(null)]).nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal('uncertain'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -143,9 +143,9 @@ export const PublishProductResponse = zod.object({
   "marginPercent": zod.number(),
   "profitRub": zod.number().optional(),
   "isAvailable": zod.boolean(),
-  "publicationStatus": zod.enum(['draft', 'published', 'paused', 'error']),
+  "publicationStatus": zod.enum(['draft', 'publishing', 'published', 'paused', 'error']),
   "publicationError": zod.string().nullish(),
-  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal(null)]).nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal('uncertain'),zod.literal(null)]).nullish(),
   "region": zod.string(),
   "warningMessage": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
@@ -168,12 +168,64 @@ export const PublishProductsBatchResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number().int(),
   "name": zod.string(),
-  "status": zod.enum(['published', 'failed']),
+  "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
   "digisellerId": zod.number().int().nullish(),
   "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
   "error": zod.string().nullish()
 }))
+}).and(zod.object({
+  "taskId": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+}))
+
+
+export const GetLatestPublishProductsBatchResponse = zod.union([zod.object({
+  "requested": zod.number().int(),
+  "succeeded": zod.number().int(),
+  "failed": zod.number().int(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().int(),
+  "name": zod.string(),
+  "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
+  "digisellerId": zod.number().int().nullish(),
+  "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
+  "error": zod.string().nullish()
+}))
+}).and(zod.object({
+  "taskId": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})),zod.null()])
+
+
+export const GetPublishProductsBatchParams = zod.object({
+  "taskId": zod.coerce.string().uuid()
 })
+
+export const GetPublishProductsBatchResponse = zod.object({
+  "requested": zod.number().int(),
+  "succeeded": zod.number().int(),
+  "failed": zod.number().int(),
+  "items": zod.array(zod.object({
+  "productId": zod.number().int(),
+  "name": zod.string(),
+  "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
+  "digisellerId": zod.number().int().nullish(),
+  "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
+  "error": zod.string().nullish()
+}))
+}).and(zod.object({
+  "taskId": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+}))
 
 
 export const syncCatalogBodyPageSizeDefault = 100;

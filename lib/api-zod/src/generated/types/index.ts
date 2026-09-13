@@ -14,6 +14,8 @@ export * from './batchPublishItem';
 export * from './batchPublishItemImageStatus';
 export * from './batchPublishItemStatus';
 export * from './batchPublishResult';
+export * from './batchPublishTask';
+export * from './batchPublishTaskStatus';
 export * from './catalogSyncInput';
 export * from './catalogSyncInputProductKind';
 export * from './connections';

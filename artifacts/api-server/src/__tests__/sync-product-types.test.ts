@@ -7,6 +7,7 @@ import {
   db,
   pool,
   productsTable,
+  publicationJobsTable,
   settingsTable,
   syncOrderStateTable,
   syncOrdersTable,
@@ -929,6 +930,106 @@ test("category retry creates one Digiseller product after the category is accept
   } finally {
     fetchOverride = undefined;
     await db.delete(productsTable).where(eq(productsTable.gpayId, retryGpayId));
+  }
+});
+
+test("batch publication returns immediately and exposes persisted progress", async () => {
+  const missingProductId = 2_000_000_000;
+  const startedAt = Date.now();
+  const response = await originalFetch(`${baseUrl}/api/products/publish-batch`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ productIds: [missingProductId] }),
+  });
+  const responseBody = await response.text();
+  assert.equal(response.status, 202, responseBody);
+  const task = JSON.parse(responseBody) as {
+    taskId: string;
+    status: string;
+  };
+  assert.ok(Date.now() - startedAt < 500);
+  assert.match(task.taskId, /^[0-9a-f-]{36}$/);
+
+  let completed:
+    | {
+        status: string;
+        requested: number;
+        failed: number;
+        items: Array<{ productId: number; status: string; error: string | null }>;
+      }
+    | undefined;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const latest = await request<typeof completed>(
+      `/api/products/publish-batch/${task.taskId}`,
+    );
+    if (latest?.status === "completed") {
+      completed = latest;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  assert.equal(completed?.requested, 1);
+  assert.equal(completed?.failed, 1);
+  assert.deepEqual(completed?.items, [
+    {
+      productId: missingProductId,
+      status: "failed",
+      name: `Товар #${missingProductId}`,
+      digisellerId: null,
+      imageStatus: "skipped",
+      error: "Товар не найден",
+    },
+  ]);
+  await db
+    .delete(publicationJobsTable)
+    .where(eq(publicationJobsTable.id, task.taskId));
+});
+
+test("Digiseller login failure remains retryable before product creation", async () => {
+  const loginFailureGpayId = 2_140_001_024;
+  await db.delete(productsTable).where(eq(productsTable.gpayId, loginFailureGpayId));
+  const [fixture] = await db
+    .insert(productsTable)
+    .values({
+      gpayId: loginFailureGpayId,
+      name: "Pre-creation login failure regression",
+      productType: "2",
+      supplierPriceUsd: 20,
+      salePriceRub: 2200,
+      marginPercent: 15,
+      profitRub: 200,
+      isAvailable: true,
+    })
+    .returning();
+  fetchOverride = async (input) => {
+    if (String(input).includes("/api/apilogin")) {
+      return Response.json(
+        { desc: "Temporary Digiseller login outage" },
+        { status: 503 },
+      );
+    }
+    throw new Error(`Unexpected outbound request: ${String(input)}`);
+  };
+
+  try {
+    const response = await originalFetch(
+      `${baseUrl}/api/products/${fixture.id}/publish`,
+      { method: "POST", headers: { "content-type": "application/json" } },
+    );
+    assert.equal(response.status, 502);
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, fixture.id));
+    assert.equal(saved.publicationStatus, "error");
+    assert.equal(saved.publicationFailureStage, "category");
+    assert.match(saved.publicationError ?? "", /Temporary Digiseller login outage/);
+  } finally {
+    fetchOverride = undefined;
+    await db
+      .delete(productsTable)
+      .where(eq(productsTable.gpayId, loginFailureGpayId));
   }
 });
 

@@ -11,6 +11,7 @@ export type ProductPublicationStatus = typeof ProductPublicationStatus[keyof typ
 
 export const ProductPublicationStatus = {
   draft: 'draft',
+  publishing: 'publishing',
   published: 'published',
   paused: 'paused',
   error: 'error',

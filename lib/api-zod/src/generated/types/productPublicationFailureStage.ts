@@ -16,4 +16,5 @@ export const ProductPublicationFailureStage = {
   category: 'category',
   image: 'image',
   stock: 'stock',
+  uncertain: 'uncertain',
 } as const;

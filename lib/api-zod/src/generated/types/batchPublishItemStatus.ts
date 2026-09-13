@@ -10,6 +10,8 @@ export type BatchPublishItemStatus = typeof BatchPublishItemStatus[keyof typeof 
 
 
 export const BatchPublishItemStatus = {
+  queued: 'queued',
+  publishing: 'publishing',
   published: 'published',
   failed: 'failed',
 } as const;

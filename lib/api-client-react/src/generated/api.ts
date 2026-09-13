@@ -22,7 +22,7 @@ import type {
 import type {
   Activity,
   BatchPublishInput,
-  BatchPublishResult,
+  BatchPublishTask,
   CatalogSyncInput,
   Connections,
   Dashboard,
@@ -435,9 +435,9 @@ export const getPublishProductsBatchUrl = () => {
   return `/api/products/publish-batch`
 }
 
-export const publishProductsBatch = async (batchPublishInput: BatchPublishInput, options?: Parameters<typeof customFetch>[1]): Promise<BatchPublishResult> => {
+export const publishProductsBatch = async (batchPublishInput: BatchPublishInput, options?: Parameters<typeof customFetch>[1]): Promise<BatchPublishTask> => {
 
-  return customFetch<BatchPublishResult>(getPublishProductsBatchUrl(),
+  return customFetch<BatchPublishTask>(getPublishProductsBatchUrl(),
   {
     ...options,
     method: 'POST',
@@ -491,6 +491,148 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getPublishProductsBatchMutationOptions(options));
     }
+
+export const getGetLatestPublishProductsBatchUrl = () => {
+
+
+
+
+  return `/api/products/publish-batch`
+}
+
+export const getLatestPublishProductsBatch = async ( options?: Parameters<typeof customFetch>[1]): Promise<BatchPublishTask | null> => {
+
+  return customFetch<BatchPublishTask | null>(getGetLatestPublishProductsBatchUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLatestPublishProductsBatchQueryKey = () => {
+    return [
+    `/api/products/publish-batch`
+    ] as const;
+    }
+
+
+export const getGetLatestPublishProductsBatchQueryOptions = <TData = Awaited<ReturnType<typeof getLatestPublishProductsBatch>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLatestPublishProductsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLatestPublishProductsBatchQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLatestPublishProductsBatch>>> = ({ signal }) => getLatestPublishProductsBatch({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLatestPublishProductsBatch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLatestPublishProductsBatchQueryResult = NonNullable<Awaited<ReturnType<typeof getLatestPublishProductsBatch>>>
+export type GetLatestPublishProductsBatchQueryError = ErrorType<unknown>
+
+
+
+export function useGetLatestPublishProductsBatch<TData = Awaited<ReturnType<typeof getLatestPublishProductsBatch>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLatestPublishProductsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLatestPublishProductsBatchQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPublishProductsBatchUrl = (taskId: string,) => {
+
+
+
+
+  return `/api/products/publish-batch/${taskId}`
+}
+
+export const getPublishProductsBatch = async (taskId: string, options?: Parameters<typeof customFetch>[1]): Promise<BatchPublishTask> => {
+
+  return customFetch<BatchPublishTask>(getGetPublishProductsBatchUrl(taskId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublishProductsBatchQueryKey = (taskId: string,) => {
+    return [
+    `/api/products/publish-batch/${taskId}`
+    ] as const;
+    }
+
+
+export const getGetPublishProductsBatchQueryOptions = <TData = Awaited<ReturnType<typeof getPublishProductsBatch>>, TError = ErrorType<void>>(taskId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishProductsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublishProductsBatchQueryKey(taskId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublishProductsBatch>>> = ({ signal }) => getPublishProductsBatch(taskId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: taskId !== null && taskId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublishProductsBatch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublishProductsBatchQueryResult = NonNullable<Awaited<ReturnType<typeof getPublishProductsBatch>>>
+export type GetPublishProductsBatchQueryError = ErrorType<void>
+
+
+
+export function useGetPublishProductsBatch<TData = Awaited<ReturnType<typeof getPublishProductsBatch>>, TError = ErrorType<void>>(
+ taskId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublishProductsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublishProductsBatchQueryOptions(taskId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSyncCatalogUrl = () => {
 

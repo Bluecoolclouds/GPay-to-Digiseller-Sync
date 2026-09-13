@@ -49,6 +49,7 @@ export type ProductPublicationStatus = typeof ProductPublicationStatus[keyof typ
 
 export const ProductPublicationStatus = {
   draft: 'draft',
+  publishing: 'publishing',
   published: 'published',
   paused: 'paused',
   error: 'error',
@@ -64,6 +65,7 @@ export const ProductPublicationFailureStage = {
   category: 'category',
   image: 'image',
   stock: 'stock',
+  uncertain: 'uncertain',
 } as const;
 
 export interface Product {
@@ -142,6 +144,8 @@ export type BatchPublishItemStatus = typeof BatchPublishItemStatus[keyof typeof 
 
 
 export const BatchPublishItemStatus = {
+  queued: 'queued',
+  publishing: 'publishing',
   published: 'published',
   failed: 'failed',
 } as const;
@@ -172,6 +176,24 @@ export interface BatchPublishResult {
   failed: number;
   items: BatchPublishItem[];
 }
+
+export type BatchPublishTaskStatus = typeof BatchPublishTaskStatus[keyof typeof BatchPublishTaskStatus];
+
+
+export const BatchPublishTaskStatus = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+} as const;
+
+export type BatchPublishTask = BatchPublishResult & ({
+  taskId: string;
+  status: BatchPublishTaskStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+});
 
 export type CatalogSyncInputProductKind = typeof CatalogSyncInputProductKind[keyof typeof CatalogSyncInputProductKind];
 

@@ -1,14 +1,20 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   activitiesTable,
   db,
+  pool,
   productsTable,
+  publicationJobsTable,
+  type PublicationJobItem,
   settingsTable,
 } from "@workspace/db";
 import {
   PublishProductsBatchBody,
   PublishProductsBatchResponse,
+  GetLatestPublishProductsBatchResponse,
+  GetPublishProductsBatchResponse,
   GetConnectionsResponse,
   GetDashboardResponse,
   GetExchangeRateResponse,
@@ -28,6 +34,7 @@ import {
   UpdateSettingsBody,
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
+import { logger } from "../lib/logger";
 import {
   classifyGPayProductType,
   fetchGPayProducts,
@@ -289,6 +296,38 @@ async function publishProductRecord(current: ProductRecord) {
   if (classifyGPayProductType(current.productType) === "unknown") {
     throw new Error(`Неизвестный тип товара GPay: ${current.productType}`);
   }
+  if (
+    current.publicationStatus === "publishing" &&
+    current.publicationFailureStage === "uncertain"
+  ) {
+    throw new Error(
+      current.publicationError ??
+        "Предыдущая попытка прервалась во время создания карточки. Автоматический повтор остановлен, чтобы не создать дубликат.",
+    );
+  }
+  const markCreationRequestStarting = async () => {
+    await db
+      .update(productsTable)
+      .set({
+        publicationStatus: "publishing",
+        publicationError:
+          "Создание карточки было начато. При прерывании потребуется сверка с Digiseller.",
+        publicationFailureStage: "uncertain",
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
+  };
+  const markCreationRequestRejected = async () => {
+    await db
+      .update(productsTable)
+      .set({
+        publicationStatus: "draft",
+        publicationError: null,
+        publicationFailureStage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, current.id));
+  };
 
   const token = await loginDigiseller();
   const input = getDigisellerProductInput(current);
@@ -342,7 +381,13 @@ async function publishProductRecord(current: ProductRecord) {
     // replacement code card has stock and an image, then disable it.
     previousDigisellerId = digisellerId;
     digisellerId = await runWithCategoryRecovery((categoryId) =>
-      createDigisellerProduct(input, token, categoryId),
+      createDigisellerProduct(
+        input,
+        token,
+        categoryId,
+        markCreationRequestStarting,
+        markCreationRequestRejected,
+      ),
     );
     deliveryType = "code";
     createdCodeProduct = true;
@@ -377,7 +422,13 @@ async function publishProductRecord(current: ProductRecord) {
   ) {
     previousDigisellerId = digisellerId;
     digisellerId = await runWithCategoryRecovery((categoryId) =>
-      createDigisellerProduct(input, token, categoryId),
+      createDigisellerProduct(
+        input,
+        token,
+        categoryId,
+        markCreationRequestStarting,
+        markCreationRequestRejected,
+      ),
     );
     deliveryType = "code";
     createdCodeProduct = true;
@@ -424,7 +475,13 @@ async function publishProductRecord(current: ProductRecord) {
       }
       historicalDigisellerIds.add(digisellerId);
       digisellerId = await runWithCategoryRecovery((categoryId) =>
-        createDigisellerProduct(input, token, categoryId),
+        createDigisellerProduct(
+          input,
+          token,
+          categoryId,
+          markCreationRequestStarting,
+          markCreationRequestRejected,
+        ),
       );
       deliveryType = isKey ? "code" : "form";
       createdCodeProduct = isKey;
@@ -452,7 +509,13 @@ async function publishProductRecord(current: ProductRecord) {
     }
   } else {
     digisellerId = await runWithCategoryRecovery((categoryId) =>
-      createDigisellerProduct(input, token, categoryId),
+      createDigisellerProduct(
+        input,
+        token,
+        categoryId,
+        markCreationRequestStarting,
+        markCreationRequestRejected,
+      ),
     );
     deliveryType = isKey ? "code" : "form";
     createdCodeProduct = isKey;
@@ -564,6 +627,205 @@ async function publishProductRecord(current: ProductRecord) {
   return { product: updated, imageStatus, imageError };
 }
 
+type PublicationJob = typeof publicationJobsTable.$inferSelect;
+
+function toPublicationJobResponse(job: PublicationJob) {
+  return {
+    taskId: job.id,
+    status: job.status,
+    requested: job.requested,
+    succeeded: job.succeeded,
+    failed: job.failed,
+    items: job.items,
+    createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
+    completedAt: job.completedAt?.toISOString() ?? null,
+  };
+}
+
+async function savePublicationJobItems(
+  taskId: string,
+  items: PublicationJobItem[],
+) {
+  const succeeded = items.filter((item) => item.status === "published").length;
+  const failed = items.filter((item) => item.status === "failed").length;
+  await db
+    .update(publicationJobsTable)
+    .set({ items, succeeded, failed, updatedAt: new Date() })
+    .where(eq(publicationJobsTable.id, taskId));
+}
+
+async function withProductPublicationLock<T>(
+  productId: number,
+  operation: () => Promise<T>,
+) {
+  const client = await pool.connect();
+  try {
+    await client.query("select pg_advisory_lock($1, $2)", [42, productId]);
+    return await operation();
+  } finally {
+    await client.query("select pg_advisory_unlock($1, $2)", [42, productId]);
+    client.release();
+  }
+}
+
+async function publishJobItem(
+  taskId: string,
+  item: PublicationJobItem,
+  items: PublicationJobItem[],
+) {
+  await withProductPublicationLock(item.productId, async () => {
+    try {
+    const [current] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, item.productId));
+    if (!current) throw new Error("Товар не найден");
+
+    item.name = current.name;
+    if (current.publicationStatus === "published" && current.digisellerId) {
+      item.status = "published";
+      item.digisellerId = current.digisellerId;
+      return;
+    }
+
+    item.status = "publishing";
+    await savePublicationJobItems(taskId, items);
+    const result = await publishProductRecord(current);
+    item.status = result.imageStatus === "failed" ? "failed" : "published";
+    item.digisellerId = result.product.digisellerId;
+    item.imageStatus = result.imageStatus;
+    item.error = result.imageError;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Ошибка публикации";
+    const [persistedFailure] = await db
+      .select({
+        publicationStatus: productsTable.publicationStatus,
+        digisellerId: productsTable.digisellerId,
+        publicationFailureStage: productsTable.publicationFailureStage,
+      })
+      .from(productsTable)
+      .where(eq(productsTable.id, item.productId));
+    const creationIsUncertain =
+      persistedFailure?.publicationStatus === "publishing" &&
+      persistedFailure.publicationFailureStage === "uncertain";
+    const persistedMessage = creationIsUncertain
+      ? `Результат создания карточки неизвестен: ${message}. Автоматический повтор остановлен, чтобы не создать дубликат.`
+      : message;
+    const [failedProduct] = await db
+      .update(productsTable)
+      .set({
+        publicationStatus: creationIsUncertain ? "publishing" : "error",
+        publicationError: persistedMessage,
+        publicationFailureStage:
+          creationIsUncertain
+            ? "uncertain"
+            : persistedFailure?.publicationFailureStage ?? "category",
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, item.productId))
+      .returning();
+    item.status = "failed";
+    item.digisellerId = failedProduct?.digisellerId ?? null;
+    item.error = persistedMessage;
+    logger.error(
+      { err: error, productId: item.productId, taskId },
+      "Background batch Digiseller product publication failed",
+    );
+    } finally {
+    await savePublicationJobItems(taskId, items);
+    }
+  });
+}
+
+async function runPublicationJob(taskId: string) {
+  const lockClient = await pool.connect();
+  const lockResult = await lockClient.query<{ acquired: boolean }>(
+    "select pg_try_advisory_lock(hashtext($1)) as acquired",
+    [taskId],
+  );
+  if (!lockResult.rows[0]?.acquired) {
+    lockClient.release();
+    return;
+  }
+  try {
+  const [job] = await db
+    .select()
+    .from(publicationJobsTable)
+    .where(eq(publicationJobsTable.id, taskId));
+  if (!job || job.status === "completed") return;
+
+  const items = job.items.map((item) => ({
+    ...item,
+    status:
+      item.status === "publishing" ? ("queued" as const) : item.status,
+  }));
+  await db
+    .update(publicationJobsTable)
+    .set({ status: "running", items, updatedAt: new Date() })
+    .where(eq(publicationJobsTable.id, taskId));
+
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex++];
+      if (item.status === "queued") {
+        await publishJobItem(taskId, item, items);
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(2, items.length) }, () => worker()),
+  );
+
+  const succeeded = items.filter((item) => item.status === "published").length;
+  const failed = items.filter((item) => item.status === "failed").length;
+  const imageFailures = items.filter(
+    (item) => item.imageStatus === "failed",
+  ).length;
+  const completedAt = new Date();
+  await db
+    .update(publicationJobsTable)
+    .set({
+      status: "completed",
+      items,
+      succeeded,
+      failed,
+      updatedAt: completedAt,
+      completedAt,
+    })
+    .where(eq(publicationJobsTable.id, taskId));
+  await db.insert(activitiesTable).values({
+    type: "publish",
+    title: "Пакетная публикация завершена",
+    description: `Опубликовано ${succeeded}, ошибок ${failed}, изображений не загружено ${imageFailures}.`,
+    status: failed > 0 || imageFailures > 0 ? "warning" : "success",
+  });
+  } finally {
+    await lockClient.query("select pg_advisory_unlock(hashtext($1))", [taskId]);
+    lockClient.release();
+  }
+}
+
+function launchPublicationJob(taskId: string) {
+  setImmediate(() => {
+    void runPublicationJob(taskId).catch((error) => {
+      logger.error({ err: error, taskId }, "Background publication job crashed");
+    });
+  });
+}
+
+setImmediate(() => {
+  void db
+    .select({ id: publicationJobsTable.id })
+    .from(publicationJobsTable)
+    .where(sql`${publicationJobsTable.status} in ('queued', 'running')`)
+    .then((jobs) => jobs.forEach((job) => launchPublicationJob(job.id)))
+    .catch((error) => {
+      logger.error({ err: error }, "Failed to recover publication jobs");
+    });
+});
+
 router.post("/products/publish-batch", async (req, res): Promise<void> => {
   const body = PublishProductsBatchBody.safeParse(req.body);
   if (!body.success) {
@@ -571,108 +833,77 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
     return;
   }
 
-  const ids = body.data.productIds;
-  const rows = await db
+  const ids = [...body.data.productIds].sort((a, b) => a - b);
+  const [existing] = await db
     .select()
+    .from(publicationJobsTable)
+    .where(
+      and(
+        sql`${publicationJobsTable.status} in ('queued', 'running')`,
+        eq(publicationJobsTable.productIds, ids),
+      ),
+    )
+    .orderBy(desc(publicationJobsTable.createdAt))
+    .limit(1);
+  if (existing) {
+    res.status(202).json(
+      PublishProductsBatchResponse.parse(toPublicationJobResponse(existing)),
+    );
+    return;
+  }
+
+  const rows = await db
+    .select({ id: productsTable.id, name: productsTable.name })
     .from(productsTable)
     .where(inArray(productsTable.id, ids));
-  const rowsById = new Map(rows.map((row) => [row.id, row]));
-  const items: Array<{
-    productId: number;
-    name: string;
-    status: "published" | "failed";
-    digisellerId: number | null;
-    imageStatus: "uploaded" | "skipped" | "failed";
-    error: string | null;
-  }> = [];
-  let nextIndex = 0;
-
-  const worker = async () => {
-    while (nextIndex < ids.length) {
-      const productId = ids[nextIndex++];
-      const current = rowsById.get(productId);
-      if (!current) {
-        items.push({
-          productId,
-          name: `Товар #${productId}`,
-          status: "failed",
-          digisellerId: null,
-          imageStatus: "skipped",
-          error: "Товар не найден",
-        });
-        continue;
-      }
-      try {
-        const result = await publishProductRecord(current);
-        items.push({
-          productId,
-          name: current.name,
-          status: result.imageStatus === "failed" ? "failed" : "published",
-          digisellerId: result.product.digisellerId,
-          imageStatus: result.imageStatus,
-          error: result.imageError,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Ошибка публикации";
-        const [persistedFailure] = await db
-          .select({
-            publicationFailureStage: productsTable.publicationFailureStage,
-          })
-          .from(productsTable)
-          .where(eq(productsTable.id, current.id));
-        const [failedProduct] = await db
-          .update(productsTable)
-          .set({
-            publicationStatus: "error",
-            publicationError: message,
-            publicationFailureStage:
-              persistedFailure?.publicationFailureStage ?? "category",
-            updatedAt: new Date(),
-          })
-          .where(eq(productsTable.id, current.id))
-          .returning();
-        req.log.error(
-          { err: error, productId },
-          "Batch Digiseller product publication failed",
-        );
-        items.push({
-          productId,
-          name: current.name,
-          status: "failed",
-          digisellerId: failedProduct?.digisellerId ?? current.digisellerId,
-          imageStatus: "skipped",
-          error: message,
-        });
-      }
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(2, ids.length) }, () => worker()),
-  );
-  items.sort(
-    (left, right) =>
-      ids.indexOf(left.productId) - ids.indexOf(right.productId),
-  );
-  const succeeded = items.filter((item) => item.status === "published").length;
-  const failed = items.length - succeeded;
-  const imageFailures = items.filter(
-    (item) => item.imageStatus === "failed",
-  ).length;
-  await db.insert(activitiesTable).values({
-    type: "publish",
-    title: "Пакетная публикация завершена",
-    description: `Опубликовано ${succeeded}, ошибок ${failed}, изображений не загружено ${imageFailures}.`,
-    status: failed > 0 || imageFailures > 0 ? "warning" : "success",
-  });
-  res.json(
-    PublishProductsBatchResponse.parse({
+  const names = new Map(rows.map((row) => [row.id, row.name]));
+  const items: PublicationJobItem[] = ids.map((productId) => ({
+    productId,
+    name: names.get(productId) ?? `Товар #${productId}`,
+    status: "queued",
+    digisellerId: null,
+    imageStatus: "skipped",
+    error: null,
+  }));
+  const [job] = await db
+    .insert(publicationJobsTable)
+    .values({
+      id: randomUUID(),
+      productIds: ids,
       requested: ids.length,
-      succeeded,
-      failed,
       items,
-    }),
+    })
+    .returning();
+  launchPublicationJob(job.id);
+  res.status(202).json(
+    PublishProductsBatchResponse.parse(toPublicationJobResponse(job)),
+  );
+});
+
+router.get("/products/publish-batch", async (_req, res): Promise<void> => {
+  const [job] = await db
+    .select()
+    .from(publicationJobsTable)
+    .orderBy(desc(publicationJobsTable.createdAt))
+    .limit(1);
+  res.json(
+    GetLatestPublishProductsBatchResponse.parse(
+      job ? toPublicationJobResponse(job) : null,
+    ),
+  );
+});
+
+router.get("/products/publish-batch/:taskId", async (req, res): Promise<void> => {
+  const [job] = await db
+    .select()
+    .from(publicationJobsTable)
+    .where(eq(publicationJobsTable.id, req.params.taskId));
+  if (!job) {
+    res.status(404).json({ error: "Задача публикации не найдена" });
+    return;
+  }
+  res.json(
+    GetPublishProductsBatchResponse.parse(toPublicationJobResponse(job)),
   );
 });
 
@@ -691,7 +922,14 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const result = await publishProductRecord(current);
+    const result = await withProductPublicationLock(current.id, async () => {
+      const [latest] = await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.id, current.id));
+      if (!latest) throw new Error("Товар не найден");
+      return publishProductRecord(latest);
+    });
     await db.insert(activitiesTable).values({
       type: "publish",
       title: "Товар готов к публикации",
@@ -707,17 +945,27 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
       error instanceof Error ? error.message : "Digiseller publication failed";
     const [persistedFailure] = await db
       .select({
+        publicationStatus: productsTable.publicationStatus,
+        digisellerId: productsTable.digisellerId,
         publicationFailureStage: productsTable.publicationFailureStage,
       })
       .from(productsTable)
       .where(eq(productsTable.id, current.id));
+    const creationIsUncertain =
+      persistedFailure?.publicationStatus === "publishing" &&
+      persistedFailure.publicationFailureStage === "uncertain";
+    const persistedMessage = creationIsUncertain
+      ? `Результат создания карточки неизвестен: ${message}. Автоматический повтор остановлен, чтобы не создать дубликат.`
+      : message;
     await db
       .update(productsTable)
       .set({
-        publicationStatus: "error",
-        publicationError: message,
+        publicationStatus: creationIsUncertain ? "publishing" : "error",
+        publicationError: persistedMessage,
         publicationFailureStage:
-          persistedFailure?.publicationFailureStage ?? "category",
+          creationIsUncertain
+            ? "uncertain"
+            : persistedFailure?.publicationFailureStage ?? "category",
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, current.id));
@@ -726,7 +974,7 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
       "Digiseller product publication failed",
     );
     res.status(502).json({
-      error: message,
+      error: persistedMessage,
     });
   }
 });

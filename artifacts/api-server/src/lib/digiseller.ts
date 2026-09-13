@@ -55,6 +55,21 @@ type DigisellerErrorResult = {
   errors?: Array<{ message?: string; description?: string }>;
 };
 
+export class DigisellerCreationRejectedError extends Error {
+  readonly creationWasRejected = true;
+}
+
+export function isDigisellerCreationRejected(
+  error: unknown,
+): error is DigisellerCreationRejectedError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "creationWasRejected" in error &&
+    error.creationWasRejected === true
+  );
+}
+
 type ProductInput = {
   name: string;
   descriptionRu: string;
@@ -408,11 +423,12 @@ export async function createDigisellerProduct(input: {
   descriptionEn: string;
   priceRub: number;
   productType: string;
-}, providedToken?: string, platiCategoryId?: number | null): Promise<number> {
+}, providedToken?: string, platiCategoryId?: number | null, onBeforeCreate?: () => Promise<void>, onCreateRejected?: () => Promise<void>): Promise<number> {
   const token = providedToken ?? (await loginDigiseller());
   const categories = await resolveProductCategories(input, token, platiCategoryId);
   const payload = buildProductPayload(input, categories);
   const productKind = input.productType === "2" ? "uniquefixed" : "arbitrary";
+  await onBeforeCreate?.();
   const response = await fetch(
     `https://api.digiseller.com/api/product/create/${productKind}?token=${encodeURIComponent(token)}`,
     {
@@ -425,7 +441,10 @@ export async function createDigisellerProduct(input: {
   const json = (await response.json()) as CreateProductResult;
   const productId = json.content?.product_id;
   if (!response.ok || json.retval !== 0 || !productId) {
-    throw new Error(getDigisellerError(json, `Digiseller API returned ${response.status}`));
+    await onCreateRejected?.();
+    throw new DigisellerCreationRejectedError(
+      getDigisellerError(json, `Digiseller API returned ${response.status}`),
+    );
   }
   return productId;
 }
