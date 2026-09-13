@@ -1,17 +1,8 @@
-import { type ReactNode, useEffect, useRef } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, Show, useAuth, useClerk } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
-import {
-  Route,
-  Switch,
-  useLocation,
-  Router as WouterRouter,
-  Redirect,
-} from 'wouter';
+import { Route, Switch, Router as WouterRouter, Redirect } from 'wouter';
 import { AppLayout } from '@/components/layout';
 import DashboardPage from '@/pages/dashboard';
 import ProductsPage from '@/pages/products';
@@ -27,132 +18,104 @@ const queryClient = new QueryClient({
   },
 });
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || '/'
-    : path;
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: 'clerk',
-  options: {
-    logoPlacement: 'inside' as const,
-    logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: '#2563eb',
-    colorForeground: '#0f172a',
-    colorMutedForeground: '#64748b',
-    colorDanger: '#dc2626',
-    colorBackground: '#ffffff',
-    colorInput: '#f8fafc',
-    colorInputForeground: '#0f172a',
-    colorNeutral: '#cbd5e1',
-    fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-    borderRadius: '0.75rem',
-  },
-  elements: {
-    rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-white rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: 'text-slate-950',
-    headerSubtitle: 'text-slate-600',
-    socialButtonsBlockButtonText: 'text-slate-900',
-    formFieldLabel: 'text-slate-800',
-    footerActionLink: 'text-blue-600',
-    footerActionText: 'text-slate-600',
-    footerAction: 'hidden',
-    dividerText: 'text-slate-500',
-    formButtonPrimary: 'bg-blue-600 hover:bg-blue-700',
-    formFieldInput: 'bg-slate-50 text-slate-950 border-slate-300',
-  },
-};
-
 function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in zoom-in duration-500">
-      <h2 className="text-3xl font-bold mb-2 tracking-tight text-foreground">404</h2>
-      <p className="text-muted-foreground mb-6">Страница, которую вы ищете, не существует.</p>
-    </div>
-  )
-}
-
-function Router() {
-  return (
-    <Switch>
-      <Route path="/sign-in/*?" component={SignInPage} />
-      <Route>
-        <Show when="signed-in">
-          <AuthenticatedApp />
-        </Show>
-        <Show when="signed-out">
-          <Redirect to="/sign-in" />
-        </Show>
-      </Route>
-    </Switch>
-  );
-}
-
-function SignInPage() {
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-100 px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} />
+    <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <h2 className="mb-2 text-3xl font-bold tracking-tight text-foreground">404</h2>
+      <p className="mb-6 text-muted-foreground">Страница, которую вы ищете, не существует.</p>
     </div>
   );
 }
 
-function AuthenticatedApp() {
-  const { signOut } = useClerk();
-  const { sessionClaims } = useAuth();
-  const claims = sessionClaims as {
-    role?: unknown;
-    metadata?: { role?: unknown };
-    publicMetadata?: { role?: unknown };
-    public_metadata?: { role?: unknown };
-  } | null;
-  const role =
-    claims?.role ??
-    claims?.metadata?.role ??
-    claims?.publicMetadata?.role ??
-    claims?.public_metadata?.role;
-  const isOperator = role === 'operator' || role === 'owner';
+function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  if (!isOperator) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-100 px-4">
-        <div className="max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
-          <h1 className="text-2xl font-semibold text-slate-950">Доступ не назначен</h1>
-          <p className="mt-3 text-slate-600">
-            Эта учётная запись не имеет роли оператора.
-          </p>
-          <button
-            type="button"
-            className="mt-6 rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
-            onClick={() => signOut({ redirectUrl: `${basePath}/sign-in` })}
-          >
-            Выйти
-          </button>
-        </div>
-      </div>
-    );
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Не удалось войти');
+      queryClient.clear();
+      onSignedIn();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось войти');
+    } finally {
+      setSubmitting(false);
+    }
   }
+
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-slate-100 px-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="mx-auto mb-5 h-12 w-12" />
+        <h1 className="text-center text-2xl font-semibold text-slate-950">Вход администратора</h1>
+        <p className="mt-2 text-center text-sm text-slate-600">
+          Введите логин и пароль для управления сервисом
+        </p>
+        <label className="mt-7 block text-sm font-medium text-slate-800">
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <label className="mt-4 block text-sm font-medium text-slate-800">
+          Пароль
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        {error ? <p role="alert" className="mt-4 text-sm text-red-600">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? 'Входим…' : 'Войти'}
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>;
+}
+
+function AuthenticatedApp({ onSignedOut }: { onSignedOut: () => void }) {
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    queryClient.clear();
+    onSignedOut();
+  }
+
   return (
     <AppLayout>
       <div className="fixed right-4 top-4 z-50">
         <button
           type="button"
           className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm"
-          onClick={() => signOut({ redirectUrl: `${basePath}/sign-in` })}
+          onClick={() => void signOut()}
         >
           Выйти
         </button>
@@ -170,54 +133,43 @@ function AuthenticatedApp() {
   );
 }
 
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const client = useQueryClient();
-  const previousUserId = useRef<string | null | undefined>(undefined);
-  useEffect(() => addListener(({ user }) => {
-    const userId = user?.id ?? null;
-    if (previousUserId.current !== undefined && previousUserId.current !== userId) {
-      client.clear();
-    }
-    previousUserId.current = userId;
-  }), [addListener, client]);
-  return null;
+function SessionRouter() {
+  const [status, setStatus] = useState<'loading' | 'authenticated' | 'signed-out'>('loading');
+
+  useEffect(() => {
+    void fetch('/api/auth/session', { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('session check failed');
+        const body = await response.json() as { authenticated?: boolean };
+        setStatus(body.authenticated ? 'authenticated' : 'signed-out');
+      })
+      .catch(() => setStatus('signed-out'));
+  }, []);
+
+  if (status === 'loading') {
+    return <div className="flex min-h-[100dvh] items-center justify-center bg-slate-100 text-slate-600">Загрузка…</div>;
+  }
+  if (status === 'signed-out') {
+    return (
+      <Switch>
+        <Route path="/sign-in">
+          <SignInPage onSignedIn={() => setStatus('authenticated')} />
+        </Route>
+        <Route><Redirect to="/sign-in" /></Route>
+      </Switch>
+    );
+  }
+  return <AuthenticatedApp onSignedOut={() => setStatus('signed-out')} />;
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
-      signInUrl={`${basePath}/sign-in`}
-      localization={{
-        signIn: { start: { title: 'Вход оператора', subtitle: 'Войдите для управления товарами и заказами' } },
-      }}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <Router />
-        <Toaster />
-      </QueryClientProvider>
-    </ClerkProvider>
-  );
-}
-
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
-}
-
-function App() {
+export default function App() {
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   return (
     <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
+      <QueryClientProvider client={queryClient}>
+        <SessionRouter />
+        <Toaster />
+      </QueryClientProvider>
     </WouterRouter>
   );
 }
-
-export default App;

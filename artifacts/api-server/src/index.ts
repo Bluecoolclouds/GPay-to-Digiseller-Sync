@@ -2,7 +2,6 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { syncKeyPrices } from "./lib/price-sync";
 import { syncDigisellerOrders } from "./lib/orders";
-import { ensureAdminAccount } from "./lib/admin-bootstrap";
 
 const rawPort = process.env["PORT"];
 
@@ -17,9 +16,6 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-
-const adminAccountStatus = await ensureAdminAccount();
-logger.info({ adminAccountStatus }, "Administrator account is ready");
 
 const server = app.listen(port, (err) => {
   if (err) {

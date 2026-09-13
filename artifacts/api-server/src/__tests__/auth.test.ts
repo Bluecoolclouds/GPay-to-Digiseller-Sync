@@ -1,27 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getOperatorAuthorization } from "../middlewares/auth";
+import { createAdminSession, isAdminSession } from "../middlewares/auth";
 
-test("rejects a request without an authenticated user", () => {
-  const result = getOperatorAuthorization({ userId: null, sessionClaims: null });
-  assert.equal(result.allowed, false);
-  if (result.allowed) return;
-  assert.equal(result.status, 401);
+process.env.SESSION_SECRET = "test-session-secret-that-is-at-least-32-characters";
+
+test("accepts a server-signed administrator session", () => {
+  assert.equal(isAdminSession(createAdminSession()), true);
 });
 
-test("rejects an authenticated user without an operator role", () => {
-  const result = getOperatorAuthorization({ userId: "user_1", sessionClaims: {} });
-  assert.equal(result.allowed, false);
-  if (result.allowed) return;
-  assert.equal(result.status, 403);
+test("rejects a missing administrator session", () => {
+  assert.equal(isAdminSession(undefined), false);
 });
 
-test("allows operator and owner roles", () => {
-  for (const role of ["operator", "owner"]) {
-    const result = getOperatorAuthorization({
-      userId: "user_1",
-      sessionClaims: { public_metadata: { role } },
-    });
-    assert.equal(result.allowed, true);
-  }
+test("rejects a modified administrator session", () => {
+  const valid = createAdminSession();
+  const modified = `${valid.slice(0, -1)}${valid.endsWith("a") ? "b" : "a"}`;
+  assert.equal(isAdminSession(modified), false);
 });
