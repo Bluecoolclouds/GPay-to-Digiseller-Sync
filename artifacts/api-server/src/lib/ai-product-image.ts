@@ -61,7 +61,9 @@ export async function generateAiProductImage(input: {
       quality: "medium",
       output_format: "png",
     }),
-    signal: AbortSignal.timeout(180_000),
+    // Publication requests are terminated by the Replit proxy after about two
+    // minutes. Fall back to the generated local card before that happens.
+    signal: AbortSignal.timeout(45_000),
   });
   const json = (await response.json()) as ImageGenerationResponse;
   const image = json.data?.[0];

@@ -298,6 +298,7 @@ async function publishProductRecord(current: ProductRecord) {
   let deliveryType = current.digisellerDeliveryType;
   let digisellerTextStocked = current.digisellerTextStocked;
   let digisellerImageUploaded = current.digisellerImageUploaded;
+  let platiCategoryId = current.platiCategoryId;
   let createdCodeProduct = false;
   const historicalDigisellerIds = new Set<number>(
     [current.digisellerId, current.previousDigisellerId].filter(
@@ -309,6 +310,27 @@ async function publishProductRecord(current: ProductRecord) {
     (isKey && deliveryType === "code" && Boolean(previousDigisellerId))
       ? "text"
       : "form";
+  const runWithCategoryRecovery = async <T>(
+    operation: (categoryId: number | null) => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await operation(platiCategoryId);
+    } catch (error) {
+      if (
+        !platiCategoryId ||
+        !(error instanceof Error) ||
+        !error.message.includes('"code":"marketplace-1"')
+      ) {
+        throw error;
+      }
+      platiCategoryId = null;
+      await db
+        .update(productsTable)
+        .set({ platiCategoryId: null, updatedAt: new Date() })
+        .where(eq(productsTable.id, current.id));
+      return operation(null);
+    }
+  };
 
   if (
     isKey &&
@@ -319,10 +341,8 @@ async function publishProductRecord(current: ProductRecord) {
     // Text cards cannot be converted in place. Keep the old ID until the
     // replacement code card has stock and an image, then disable it.
     previousDigisellerId = digisellerId;
-    digisellerId = await createDigisellerProduct(
-      input,
-      token,
-      current.platiCategoryId,
+    digisellerId = await runWithCategoryRecovery((categoryId) =>
+      createDigisellerProduct(input, token, categoryId),
     );
     deliveryType = "code";
     createdCodeProduct = true;
@@ -356,10 +376,8 @@ async function publishProductRecord(current: ProductRecord) {
     deliveryType !== "code"
   ) {
     previousDigisellerId = digisellerId;
-    digisellerId = await createDigisellerProduct(
-      input,
-      token,
-      current.platiCategoryId,
+    digisellerId = await runWithCategoryRecovery((categoryId) =>
+      createDigisellerProduct(input, token, categoryId),
     );
     deliveryType = "code";
     createdCodeProduct = true;
@@ -387,18 +405,54 @@ async function publishProductRecord(current: ProductRecord) {
       [...historicalDigisellerIds],
     );
   } else if (digisellerId) {
-    await addDigisellerProductToPlati(
-      digisellerId,
-      input,
-      token,
-      current.platiCategoryId,
-      isKey ? (deliveryType === "text" ? "text" : "code") : "form",
-    );
+    try {
+      await runWithCategoryRecovery((categoryId) =>
+        addDigisellerProductToPlati(
+          digisellerId!,
+          input,
+          token,
+          categoryId,
+          isKey ? (deliveryType === "text" ? "text" : "code") : "form",
+        ),
+      );
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes('"code":"product-0"')
+      ) {
+        throw error;
+      }
+      historicalDigisellerIds.add(digisellerId);
+      digisellerId = await runWithCategoryRecovery((categoryId) =>
+        createDigisellerProduct(input, token, categoryId),
+      );
+      deliveryType = isKey ? "code" : "form";
+      createdCodeProduct = isKey;
+      digisellerTextStocked = false;
+      digisellerImageUploaded = false;
+      historicalDigisellerIds.add(digisellerId);
+      await db
+        .update(productsTable)
+        .set({
+          digisellerId,
+          digisellerDeliveryType: deliveryType,
+          digisellerTextStocked,
+          digisellerImageUploaded,
+          publicationStatus: "draft",
+          publicationError: null,
+          publicationFailureStage: isKey ? "image" : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(productsTable.id, current.id));
+      await recordDigisellerProductIds(
+        db,
+        current.id,
+        [...historicalDigisellerIds],
+      );
+    }
   } else {
-    digisellerId = await createDigisellerProduct(
-      input,
-      token,
-      current.platiCategoryId,
+    digisellerId = await runWithCategoryRecovery((categoryId) =>
+      createDigisellerProduct(input, token, categoryId),
     );
     deliveryType = isKey ? "code" : "form";
     createdCodeProduct = isKey;
@@ -481,7 +535,7 @@ async function publishProductRecord(current: ProductRecord) {
       previousDigisellerId,
       input,
       token,
-      current.platiCategoryId,
+      platiCategoryId,
       legacyDeliveryType,
     );
     previousDigisellerId = null;
