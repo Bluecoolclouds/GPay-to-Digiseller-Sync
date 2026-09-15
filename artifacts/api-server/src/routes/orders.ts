@@ -199,6 +199,7 @@ router.post("/orders/:invoiceId/gpay-reconcile", requireOperatorRole, async (req
       invoiceId: params.data.invoiceId,
       uniqueCode: body.data.uniqueCode,
       orderId: body.data.orderId,
+      searchHistory: body.data.searchHistory,
       reason: body.data.reason,
     });
     if (!updated) {

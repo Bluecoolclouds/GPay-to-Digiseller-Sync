@@ -494,6 +494,8 @@ export interface GPayReconciliationInput {
   uniqueCode?: string;
   /** @minimum 1 */
   orderId?: number;
+  /** Search the documented GPay partner order history without creating a new purchase. */
+  searchHistory?: boolean;
   /**
      * @minLength 5
      * @maxLength 1000

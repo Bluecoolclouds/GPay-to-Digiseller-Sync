@@ -692,4 +692,7 @@ components:
       properties:
         uniqueCode: { type: string, minLength: 3, maxLength: 200 }
         orderId: { type: integer, minimum: 1 }
+        searchHistory:
+          type: boolean
+          description: Search the documented GPay partner order history without creating a new purchase.
         reason: { type: string, minLength: 5, maxLength: 1000 }

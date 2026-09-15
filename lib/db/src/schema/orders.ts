@@ -40,6 +40,9 @@ export const syncOrdersTable = pgTable(
     gpayPurchaseStatus: text("gpay_purchase_status"),
     gpayPurchaseUniqueCode: text("gpay_purchase_unique_code"),
     gpayPurchaseOrderId: integer("gpay_purchase_order_id"),
+    gpayPurchaseExpectedAmountUsd: doublePrecision(
+      "gpay_purchase_expected_amount_usd",
+    ),
     gpayPurchaseStartedAt: timestamp("gpay_purchase_started_at", {
       withTimezone: true,
     }),
@@ -61,6 +64,12 @@ export const syncOrdersTable = pgTable(
     publicTokenHashUnique: uniqueIndex("sync_orders_public_token_hash_unique").on(
       table.publicTokenHash,
     ),
+    gpayPurchaseOrderIdUnique: uniqueIndex(
+      "sync_orders_gpay_purchase_order_id_unique",
+    ).on(table.gpayPurchaseOrderId),
+    gpayPurchaseUniqueCodeUnique: uniqueIndex(
+      "sync_orders_gpay_purchase_unique_code_unique",
+    ).on(table.gpayPurchaseUniqueCode),
   }),
 );
 

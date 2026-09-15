@@ -13,7 +13,10 @@ import {
   getPublicOrder,
   submitPublicOrderCode,
 } from "../lib/public-orders";
-import { reconcileUnknownGPayPurchase } from "../lib/gpay-reconciliation";
+import {
+  findGPayPurchaseCandidates,
+  reconcileUnknownGPayPurchase,
+} from "../lib/gpay-reconciliation";
 import app from "../app";
 import { redactSensitiveRequestUrl } from "../lib/request-log";
 
@@ -95,7 +98,7 @@ async function createMappedOrder(productType: "1" | "2") {
     paidAmountRub: 1_000,
     saleTimestamp: new Date(),
   });
-  return { invoiceId, gpayId, productId: product.id };
+  return { invoiceId, gpayId, productId: product.id, digisellerProductId };
 }
 
 async function removeMappedOrder(fixture: {
@@ -481,5 +484,221 @@ test("manual reconciliation keeps an unknown purchase blocked", async () => {
     assert.match(updated?.gpayPurchaseError ?? "", /Ручная сверка/);
   } finally {
     await removeOrder(invoiceId);
+  }
+});
+
+test("automatic reconciliation finds one matching GPay history order", async () => {
+  const fixture = await createMappedOrder("2");
+  const startedAt = new Date(Date.now() - 4 * 60 * 1_000);
+  const originalFetch = globalThis.fetch;
+  let createCalls = 0;
+  let loginCalls = 0;
+  await db
+    .update(syncOrdersTable)
+    .set({
+      gpayPurchaseStatus: "unknown",
+      gpayPurchaseStartedAt: startedAt,
+      gpayPurchaseExpectedAmountUsd: 10,
+    })
+    .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      loginCalls++;
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/orders/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          orders: [{
+            id: 987,
+            uniqueCode: "history-code",
+            productType: 2,
+            itemId: fixture.gpayId,
+            totalAmount: 10,
+            createdAt: startedAt.toISOString(),
+          }],
+          totalCount: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/orders/history-code")) {
+      return Response.json({
+        status: "success",
+        data: {
+          orderId: 987,
+          uniqueCode: "history-code",
+          deliveryStatus: "processing",
+          isTerminal: false,
+        },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/order")) createCalls++;
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const updated = await reconcileUnknownGPayPurchase({
+      invoiceId: fixture.invoiceId,
+      searchHistory: true,
+      reason: "Автоматический поиск по истории GPay",
+    });
+    assert.equal(createCalls, 0);
+    assert.equal(loginCalls, 2);
+    assert.equal(updated?.gpayPurchaseOrderId, 987);
+    assert.equal(updated?.gpayPurchaseUniqueCode, "history-code");
+    assert.equal(updated?.gpayPurchaseStatus, "processing");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await removeMappedOrder(fixture);
+  }
+});
+
+test("automatic reconciliation waits until the matching window closes", async () => {
+  const fixture = await createMappedOrder("2");
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  await db
+    .update(syncOrdersTable)
+    .set({
+      gpayPurchaseStatus: "unknown",
+      gpayPurchaseStartedAt: new Date(),
+      gpayPurchaseExpectedAmountUsd: 10,
+    })
+    .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+  globalThis.fetch = async () => {
+    fetchCalls++;
+    throw new Error("History must not be read while the window is open");
+  };
+  try {
+    await assert.rejects(
+      reconcileUnknownGPayPurchase({
+        invoiceId: fixture.invoiceId,
+        searchHistory: true,
+        reason: "Слишком ранний автоматический поиск",
+      }),
+      /История ещё формируется/,
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await removeMappedOrder(fixture);
+  }
+});
+
+test("multiple GPay history matches remain unknown", () => {
+  const startedAt = new Date();
+  const matching = {
+    productType: 2,
+    itemId: 123,
+    totalAmount: 10,
+    createdAt: startedAt.toISOString(),
+  };
+  const candidates = findGPayPurchaseCandidates({
+    orders: [
+      { ...matching, id: 1, uniqueCode: "first" },
+      { ...matching, id: 2, uniqueCode: "second" },
+      { ...matching, id: 3, uniqueCode: null },
+      { ...matching, id: 4, uniqueCode: "wrong-price", totalAmount: 11 },
+      { ...matching, id: 5, uniqueCode: "adjacent-cent", totalAmount: 10.009 },
+    ],
+    productId: 123,
+    expectedAmountUsd: 10,
+    startedAt,
+  });
+  assert.deepEqual(candidates.map((candidate) => candidate.id), [1, 2]);
+});
+
+test("one GPay history purchase cannot be linked to two local orders", async () => {
+  const fixture = await createMappedOrder("2");
+  const secondInvoiceId = `${fixture.invoiceId}-second`;
+  const startedAt = new Date(Date.now() - 4 * 60 * 1_000);
+  const originalFetch = globalThis.fetch;
+  await db.insert(syncOrdersTable).values({
+    invoiceId: secondInvoiceId,
+    digisellerProductId: fixture.digisellerProductId,
+    productName: "Second ambiguous order",
+    paidAmountRub: 1_000,
+    saleTimestamp: new Date(),
+  });
+  await db
+    .update(syncOrdersTable)
+    .set({
+      gpayPurchaseStatus: "unknown",
+      gpayPurchaseStartedAt: startedAt,
+      gpayPurchaseExpectedAmountUsd: 10,
+    })
+    .where(eq(syncOrdersTable.digisellerProductId, fixture.digisellerProductId));
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/orders/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          orders: [{
+            id: 654,
+            uniqueCode: "single-supplier-order",
+            productType: 2,
+            itemId: fixture.gpayId,
+            totalAmount: 10,
+            createdAt: startedAt.toISOString(),
+          }],
+          totalCount: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/orders/single-supplier-order")) {
+      return Response.json({
+        status: "success",
+        data: {
+          orderId: 654,
+          uniqueCode: "single-supplier-order",
+          deliveryStatus: "processing",
+          isTerminal: false,
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const results = await Promise.allSettled(
+      [fixture.invoiceId, secondInvoiceId].map((invoiceId) =>
+        reconcileUnknownGPayPurchase({
+          invoiceId,
+          searchHistory: true,
+          reason: "Параллельная автоматическая сверка",
+        }),
+      ),
+    );
+    assert.equal(
+      results.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    assert.equal(
+      results.filter((result) => result.status === "rejected").length,
+      1,
+    );
+    const linked = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.gpayPurchaseOrderId, 654));
+    assert.equal(linked.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await removeOrder(secondInvoiceId);
+    await removeMappedOrder(fixture);
   }
 });

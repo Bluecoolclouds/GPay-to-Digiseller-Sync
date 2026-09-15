@@ -514,6 +514,7 @@ export const reconcileOrderGPayPurchaseBodyReasonMax = 1000;
 export const ReconcileOrderGPayPurchaseBody = zod.object({
   "uniqueCode": zod.string().min(reconcileOrderGPayPurchaseBodyUniqueCodeMin).max(reconcileOrderGPayPurchaseBodyUniqueCodeMax).optional(),
   "orderId": zod.number().int().min(1).optional(),
+  "searchHistory": zod.boolean().optional().describe('Search the documented GPay partner order history without creating a new purchase.'),
   "reason": zod.string().min(reconcileOrderGPayPurchaseBodyReasonMin).max(reconcileOrderGPayPurchaseBodyReasonMax)
 })
 

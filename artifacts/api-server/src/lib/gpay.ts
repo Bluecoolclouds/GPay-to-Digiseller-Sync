@@ -54,6 +54,22 @@ type WholesaleKeysOrderStatusResponse = {
   errorMessage?: string | null;
 };
 
+export type GPayPartnerOrder = {
+  id: number;
+  uniqueCode?: string | null;
+  productType: number;
+  itemId?: number | null;
+  totalAmount: number;
+  createdAt: string;
+};
+
+type PartnersOrdersListResponse = {
+  orders?: GPayPartnerOrder[] | null;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+};
+
 export type GPayProduct = {
   id: number;
   appId?: number | null;
@@ -102,6 +118,15 @@ async function authenticatedGPayRequest<T>(
   timeoutMs: number,
 ) {
   const token = await loginGPay();
+  return authenticatedGPayRequestWithToken<T>(token, path, init, timeoutMs);
+}
+
+async function authenticatedGPayRequestWithToken<T>(
+  token: string,
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+) {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
@@ -200,6 +225,83 @@ export async function fetchGPayKeyPurchaseStatus(
     isTerminal: result.isTerminal,
     errorMessage: result.errorMessage ?? null,
   };
+}
+
+export async function fetchGPayKeyOrderHistory(
+  pageSize = 100,
+): Promise<GPayPartnerOrder[]> {
+  const token = await loginGPay();
+  const fetchPage = (page: number, requestedPageSize: number) =>
+    authenticatedGPayRequestWithToken<PartnersOrdersListResponse>(
+      token,
+      "/partner-api/orders/list",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          page,
+          pageSize: requestedPageSize,
+          productType: 2,
+        }),
+      },
+      30_000,
+    );
+
+  const readCompleteSnapshot = async () => {
+    const firstPage = await fetchPage(1, pageSize);
+    const effectivePageSize = firstPage.pageSize;
+    if (
+      firstPage.page !== 1 ||
+      !Number.isInteger(effectivePageSize) ||
+      effectivePageSize <= 0 ||
+      firstPage.totalCount < 0
+    ) {
+      throw new Error("GPay вернул некорректную пагинацию истории");
+    }
+    const totalPages = Math.ceil(firstPage.totalCount / effectivePageSize);
+    if (totalPages > 100) {
+      throw new Error(
+        "История GPay слишком велика для полной безопасной сверки",
+      );
+    }
+    const orders = [...(firstPage.orders ?? [])];
+    for (let page = 2; page <= totalPages; page++) {
+      const result = await fetchPage(page, effectivePageSize);
+      if (
+        result.page !== page ||
+        result.pageSize !== effectivePageSize ||
+        result.totalCount !== firstPage.totalCount
+      ) {
+        throw new Error("История GPay изменилась во время сверки");
+      }
+      orders.push(...(result.orders ?? []));
+    }
+    const unique = new Map(orders.map((order) => [order.id, order]));
+    if (unique.size !== orders.length || orders.length !== firstPage.totalCount) {
+      throw new Error("Не удалось получить полный снимок истории GPay");
+    }
+    return [...unique.values()];
+  };
+
+  const first = await readCompleteSnapshot();
+  const second = await readCompleteSnapshot();
+  const fingerprint = (orders: GPayPartnerOrder[]) =>
+    orders
+      .map((order) =>
+        [
+          order.id,
+          order.uniqueCode ?? "",
+          order.productType,
+          order.itemId ?? "",
+          order.totalAmount,
+          order.createdAt,
+        ].join("|"),
+      )
+      .sort()
+      .join("\n");
+  if (fingerprint(first) !== fingerprint(second)) {
+    throw new Error("История GPay изменилась между проверками");
+  }
+  return second;
 }
 
 export async function loginGPay(): Promise<string> {

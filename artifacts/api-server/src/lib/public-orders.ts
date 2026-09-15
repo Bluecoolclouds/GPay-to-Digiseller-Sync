@@ -216,6 +216,7 @@ export async function processGPayPurchase(orderId: number) {
       startedAt: syncOrdersTable.gpayPurchaseStartedAt,
       gpayId: productsTable.gpayId,
       productType: productsTable.productType,
+      supplierPriceUsd: productsTable.supplierPriceUsd,
     })
     .from(syncOrdersTable)
     .leftJoin(
@@ -292,6 +293,7 @@ export async function processGPayPurchase(orderId: number) {
     .set({
       gpayPurchaseStatus: "creating",
       gpayPurchaseStartedAt: new Date(),
+      gpayPurchaseExpectedAmountUsd: order.supplierPriceUsd,
       gpayPurchaseError: null,
       updatedAt: new Date(),
     })

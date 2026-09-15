@@ -449,6 +449,31 @@ function OrderRow({
     )
   }
 
+  function searchGPayHistory() {
+    reconcileMutation.mutate(
+      {
+        invoiceId: order.invoiceId,
+        data: {
+          searchHistory: true,
+          reason: "Автоматический поиск по истории GPay",
+        },
+      },
+      {
+        onSuccess: (updated) => {
+          onUpdateRef.current(updated)
+          toast.success(
+            updated.gpayPurchaseUniqueCode
+              ? "Операция GPay найдена и привязана"
+              : "Однозначного совпадения нет — заказ оставлен на ручной проверке",
+          )
+        },
+        onError: (error) => {
+          toast.error(getMutationErrorMessage(error, "Не удалось проверить историю GPay"))
+        },
+      },
+    )
+  }
+
   return (
     <tr className={cn("hover:bg-muted/30 transition-colors group", order.status === "new" && "bg-rose-50/30 dark:bg-rose-950/10")}>
       <td className="px-4 py-3 align-top">
@@ -525,15 +550,25 @@ function OrderRow({
           </div>
         )}
         {order.gpayPurchaseStatus === "unknown" && (
-          <button
-            type="button"
-            onClick={reconcileGPay}
-            disabled={reconcileMutation.isPending}
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/30 dark:text-amber-200"
-          >
-            <SearchCheck className="h-3 w-3" />
-            {reconcileMutation.isPending ? "Проверяем…" : "Сверить GPay"}
-          </button>
+          <div className="mt-2 flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={searchGPayHistory}
+              disabled={reconcileMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              <SearchCheck className="h-3 w-3" />
+              {reconcileMutation.isPending ? "Ищем…" : "Найти в истории"}
+            </button>
+            <button
+              type="button"
+              onClick={reconcileGPay}
+              disabled={reconcileMutation.isPending}
+              className="px-1 text-[10px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              Ввести uniqueCode вручную
+            </button>
+          </div>
         )}
         {(order.gpayPurchaseOrderId || order.gpayPurchaseUniqueCode) && (
           <div className="mt-1 max-w-[180px] break-all font-mono text-[9px] text-muted-foreground">
