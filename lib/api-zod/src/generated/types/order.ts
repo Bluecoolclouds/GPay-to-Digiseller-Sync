@@ -19,6 +19,14 @@ export interface Order {
   isReturned: boolean;
   /** @nullable */
   operatorNote: string | null;
+  /** @nullable */
+  publicLinkExpiresAt: Date | null;
+  /** @nullable */
+  publicOpenedAt: Date | null;
+  /** @nullable */
+  publicSubmittedAt: Date | null;
+  /** @nullable */
+  publicSubmissionError: string | null;
   syncedAt: Date;
   updatedAt: Date;
 }

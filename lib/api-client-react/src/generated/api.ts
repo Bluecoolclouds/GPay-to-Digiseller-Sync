@@ -25,6 +25,7 @@ import type {
   BatchPublishTask,
   CatalogSyncInput,
   Connections,
+  CreateOrderPublicLinkInput,
   Dashboard,
   ExchangeRate,
   HealthStatus,
@@ -33,13 +34,17 @@ import type {
   ListProductsParams,
   Order,
   OrderPage,
+  OrderPublicLink,
   OrderSyncResult,
   OrderUpdate,
   Product,
   ProductPage,
   ProductUpdate,
+  PublicOrder,
+  PublicOrderCodeInput,
   Settings,
   SettingsInput,
+  SubmitPublicOrderCode200,
   SyncResult
 } from './api.schemas';
 
@@ -1333,5 +1338,208 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateOrderMutationOptions(options));
+    }
+
+export const getCreateOrderPublicLinkUrl = (invoiceId: string,) => {
+
+
+
+
+  return `/api/orders/${invoiceId}/public-link`
+}
+
+export const createOrderPublicLink = async (invoiceId: string,
+    createOrderPublicLinkInput: CreateOrderPublicLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<OrderPublicLink> => {
+
+  return customFetch<OrderPublicLink>(getCreateOrderPublicLinkUrl(invoiceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createOrderPublicLinkInput)
+  }
+);}
+
+
+
+
+
+export const getCreateOrderPublicLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrderPublicLink>>, TError,{invoiceId: string;data: BodyType<CreateOrderPublicLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOrderPublicLink>>, TError,{invoiceId: string;data: BodyType<CreateOrderPublicLinkInput>}, TContext> => {
+
+const mutationKey = ['createOrderPublicLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOrderPublicLink>>, {invoiceId: string;data: BodyType<CreateOrderPublicLinkInput>}> = (props) => {
+          const {invoiceId,data} = props ?? {};
+
+          return  createOrderPublicLink(invoiceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOrderPublicLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createOrderPublicLink>>>
+    export type CreateOrderPublicLinkMutationBody = BodyType<CreateOrderPublicLinkInput>
+    export type CreateOrderPublicLinkMutationError = ErrorType<unknown>
+
+    export const useCreateOrderPublicLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrderPublicLink>>, TError,{invoiceId: string;data: BodyType<CreateOrderPublicLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOrderPublicLink>>,
+        TError,
+        {invoiceId: string;data: BodyType<CreateOrderPublicLinkInput>},
+        TContext
+      > => {
+      return useMutation(getCreateOrderPublicLinkMutationOptions(options));
+    }
+
+export const getGetPublicOrderUrl = (token: string,) => {
+
+
+
+
+  return `/api/public/orders/${token}`
+}
+
+export const getPublicOrder = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<PublicOrder> => {
+
+  return customFetch<PublicOrder>(getGetPublicOrderUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicOrderQueryKey = (token: string,) => {
+    return [
+    `/api/public/orders/${token}`
+    ] as const;
+    }
+
+
+export const getGetPublicOrderQueryOptions = <TData = Awaited<ReturnType<typeof getPublicOrder>>, TError = ErrorType<unknown>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicOrderQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicOrder>>> = ({ signal }) => getPublicOrder(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicOrder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicOrderQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicOrder>>>
+export type GetPublicOrderQueryError = ErrorType<unknown>
+
+
+
+export function useGetPublicOrder<TData = Awaited<ReturnType<typeof getPublicOrder>>, TError = ErrorType<unknown>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicOrderQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitPublicOrderCodeUrl = (token: string,) => {
+
+
+
+
+  return `/api/public/orders/${token}`
+}
+
+export const submitPublicOrderCode = async (token: string,
+    publicOrderCodeInput: PublicOrderCodeInput, options?: Parameters<typeof customFetch>[1]): Promise<SubmitPublicOrderCode200> => {
+
+  return customFetch<SubmitPublicOrderCode200>(getSubmitPublicOrderCodeUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicOrderCodeInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitPublicOrderCodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicOrderCode>>, TError,{token: string;data: BodyType<PublicOrderCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPublicOrderCode>>, TError,{token: string;data: BodyType<PublicOrderCodeInput>}, TContext> => {
+
+const mutationKey = ['submitPublicOrderCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPublicOrderCode>>, {token: string;data: BodyType<PublicOrderCodeInput>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  submitPublicOrderCode(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPublicOrderCodeMutationResult = NonNullable<Awaited<ReturnType<typeof submitPublicOrderCode>>>
+    export type SubmitPublicOrderCodeMutationBody = BodyType<PublicOrderCodeInput>
+    export type SubmitPublicOrderCodeMutationError = ErrorType<unknown>
+
+    export const useSubmitPublicOrderCode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicOrderCode>>, TError,{token: string;data: BodyType<PublicOrderCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPublicOrderCode>>,
+        TError,
+        {token: string;data: BodyType<PublicOrderCodeInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitPublicOrderCodeMutationOptions(options));
     }
 

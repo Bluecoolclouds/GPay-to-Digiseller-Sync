@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { redactSensitiveRequestUrl } from "./lib/request-log";
 
 const app: Express = express();
 
@@ -14,7 +15,7 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          url: redactSensitiveRequestUrl(req.url),
         };
       },
       res(res) {

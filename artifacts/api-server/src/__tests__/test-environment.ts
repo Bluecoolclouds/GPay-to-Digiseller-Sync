@@ -15,6 +15,7 @@ databaseUrl.searchParams.set("options", `-c search_path=${schema}`);
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
+const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
 
 const authTestFile = path.join(compiledDir, "auth.test.mjs");
 const isolatedEnvironment = {
@@ -119,6 +120,13 @@ try {
       status text not null default 'new',
       is_returned boolean not null default false,
       operator_note text,
+      public_token_hash text unique,
+      public_link_expires_at timestamptz,
+      public_code_encrypted text,
+      public_opened_at timestamptz,
+      public_submitted_at timestamptz,
+      public_submitted_code_hash text,
+      public_submission_error text,
       synced_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
@@ -139,6 +147,7 @@ try {
       updated_at timestamptz not null default now()
     );
   `);
+  run(process.execPath, ["--test", publicOrdersTestFile]);
   run(process.execPath, ["--test", testFile]);
 } finally {
   await pool.query(`drop schema if exists "${schema}" cascade`);

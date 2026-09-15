@@ -377,6 +377,14 @@ export interface Order {
   isReturned: boolean;
   /** @nullable */
   operatorNote: string | null;
+  /** @nullable */
+  publicLinkExpiresAt: string | null;
+  /** @nullable */
+  publicOpenedAt: string | null;
+  /** @nullable */
+  publicSubmittedAt: string | null;
+  /** @nullable */
+  publicSubmissionError: string | null;
   syncedAt: string;
   updatedAt: string;
 }
@@ -436,6 +444,34 @@ export interface OrderSyncResult {
   ignored: number;
   skipped: boolean;
   stage: OrderSyncResultStage;
+}
+
+export interface OrderPublicLink {
+  urlPath: string;
+  expiresAt: string;
+}
+
+export interface CreateOrderPublicLinkInput {
+  /**
+     * @maxLength 500
+     * @pattern ^$|^.{3,500}$
+     */
+  code?: string;
+}
+
+export interface PublicOrderCodeInput {
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  code: string;
+}
+
+export interface PublicOrder {
+  productName: string;
+  code: string;
+  expiresAt: string;
+  alreadySubmitted: boolean;
 }
 
 export type ListProductsParams = {
@@ -505,4 +541,9 @@ export const ListOrdersStatus = {
   processing: 'processing',
   delivered: 'delivered',
 } as const;
+
+export type SubmitPublicOrderCode200 = {
+  accepted: boolean;
+  alreadySubmitted: boolean;
+};
 

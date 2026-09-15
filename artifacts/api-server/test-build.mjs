@@ -17,6 +17,7 @@ await build({
     path.resolve(artifactDir, "src/__tests__/sync-product-types.test.ts"),
     path.resolve(artifactDir, "src/__tests__/test-environment.ts"),
     path.resolve(artifactDir, "src/__tests__/auth.test.ts"),
+    path.resolve(artifactDir, "src/__tests__/public-orders.test.ts"),
   ],
   platform: "node",
   bundle: true,

@@ -8,6 +8,7 @@ import DashboardPage from '@/pages/dashboard';
 import ProductsPage from '@/pages/products';
 import OrdersPage from '@/pages/orders';
 import SettingsPage from '@/pages/settings';
+import PublicOrderPage from '@/pages/public-order';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,7 +168,10 @@ export default function App() {
   return (
     <WouterRouter base={basePath}>
       <QueryClientProvider client={queryClient}>
-        <SessionRouter />
+        <Switch>
+          <Route path="/order/:token" component={PublicOrderPage} />
+          <Route><SessionRouter /></Route>
+        </Switch>
         <Toaster />
       </QueryClientProvider>
     </WouterRouter>

@@ -319,6 +319,64 @@ paths:
           description: Order not found
         "409":
           description: Explicit confirmation is required to fulfill a returned order
+  /orders/{invoiceId}/public-link:
+    post:
+      operationId: createOrderPublicLink
+      parameters:
+        - in: path
+          name: invoiceId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderPublicLinkInput"
+      responses:
+        "200":
+          description: Public order link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderPublicLink" }
+  /public/orders/{token}:
+    get:
+      operationId: getPublicOrder
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 200 }
+      responses:
+        "200":
+          description: Public order data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicOrder" }
+    post:
+      operationId: submitPublicOrderCode
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicOrderCodeInput"
+      responses:
+        "200":
+          description: Code accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted, alreadySubmitted]
+                properties:
+                  accepted: { type: boolean }
+                  alreadySubmitted: { type: boolean }
 components:
   schemas:
     HealthStatus:
@@ -513,7 +571,7 @@ components:
         isFallback: { type: boolean }
     Order:
       type: object
-      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, syncedAt, updatedAt]
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, syncedAt, updatedAt]
       properties:
         id: { type: integer }
         invoiceId: { type: string }
@@ -524,6 +582,10 @@ components:
         status: { type: string, enum: [new, processing, delivered] }
         isReturned: { type: boolean }
         operatorNote: { type: [string, "null"] }
+        publicLinkExpiresAt: { type: [string, "null"], format: date-time }
+        publicOpenedAt: { type: [string, "null"], format: date-time }
+        publicSubmittedAt: { type: [string, "null"], format: date-time }
+        publicSubmissionError: { type: [string, "null"] }
         syncedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     OrderPage:
@@ -566,3 +628,29 @@ components:
         ignored: { type: integer }
         skipped: { type: boolean }
         stage: { type: string, enum: [incremental, backfill] }
+    OrderPublicLink:
+      type: object
+      required: [urlPath, expiresAt]
+      properties:
+        urlPath: { type: string }
+        expiresAt: { type: string, format: date-time }
+    CreateOrderPublicLinkInput:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 500
+          pattern: '^$|^.{3,500}$'
+    PublicOrderCodeInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, minLength: 3, maxLength: 500 }
+    PublicOrder:
+      type: object
+      required: [productName, code, expiresAt, alreadySubmitted]
+      properties:
+        productName: { type: string }
+        code: { type: string }
+        expiresAt: { type: string, format: date-time }
+        alreadySubmitted: { type: boolean }

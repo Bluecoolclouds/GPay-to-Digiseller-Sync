@@ -402,6 +402,10 @@ export const ListOrdersResponse = zod.object({
   "status": zod.enum(['new', 'processing', 'delivered']),
   "isReturned": zod.boolean(),
   "operatorNote": zod.string().nullable(),
+  "publicLinkExpiresAt": zod.coerce.date().nullable(),
+  "publicOpenedAt": zod.coerce.date().nullable(),
+  "publicSubmittedAt": zod.coerce.date().nullable(),
+  "publicSubmissionError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -453,8 +457,73 @@ export const UpdateOrderResponse = zod.object({
   "status": zod.enum(['new', 'processing', 'delivered']),
   "isReturned": zod.boolean(),
   "operatorNote": zod.string().nullable(),
+  "publicLinkExpiresAt": zod.coerce.date().nullable(),
+  "publicOpenedAt": zod.coerce.date().nullable(),
+  "publicSubmittedAt": zod.coerce.date().nullable(),
+  "publicSubmissionError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+export const CreateOrderPublicLinkParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const createOrderPublicLinkBodyCodeMax = 500;
+
+
+export const createOrderPublicLinkBodyCodeRegExp = new RegExp('^$|^.{3,500}$');
+
+
+export const CreateOrderPublicLinkBody = zod.object({
+  "code": zod.string().max(createOrderPublicLinkBodyCodeMax).regex(createOrderPublicLinkBodyCodeRegExp).optional()
+})
+
+export const CreateOrderPublicLinkResponse = zod.object({
+  "urlPath": zod.string(),
+  "expiresAt": zod.coerce.date()
+})
+
+
+export const getPublicOrderPathTokenMin = 32;
+export const getPublicOrderPathTokenMax = 200;
+
+
+
+export const GetPublicOrderParams = zod.object({
+  "token": zod.coerce.string().min(getPublicOrderPathTokenMin).max(getPublicOrderPathTokenMax)
+})
+
+export const GetPublicOrderResponse = zod.object({
+  "productName": zod.string(),
+  "code": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "alreadySubmitted": zod.boolean()
+})
+
+
+export const submitPublicOrderCodePathTokenMin = 32;
+export const submitPublicOrderCodePathTokenMax = 200;
+
+
+
+export const SubmitPublicOrderCodeParams = zod.object({
+  "token": zod.coerce.string().min(submitPublicOrderCodePathTokenMin).max(submitPublicOrderCodePathTokenMax)
+})
+
+export const submitPublicOrderCodeBodyCodeMin = 3;
+export const submitPublicOrderCodeBodyCodeMax = 500;
+
+
+
+export const SubmitPublicOrderCodeBody = zod.object({
+  "code": zod.string().min(submitPublicOrderCodeBodyCodeMin).max(submitPublicOrderCodeBodyCodeMax)
+})
+
+export const SubmitPublicOrderCodeResponse = zod.object({
+  "accepted": zod.boolean(),
+  "alreadySubmitted": zod.boolean()
 })
 
 

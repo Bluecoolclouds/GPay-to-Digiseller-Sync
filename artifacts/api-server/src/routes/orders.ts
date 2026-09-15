@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createHash } from "node:crypto";
 import {
   ListOrdersQueryParams,
   ListOrdersResponse,
@@ -6,6 +7,14 @@ import {
   UpdateOrderBody,
   UpdateOrderParams,
   UpdateOrderResponse,
+  CreateOrderPublicLinkBody,
+  CreateOrderPublicLinkParams,
+  CreateOrderPublicLinkResponse,
+  GetPublicOrderParams,
+  GetPublicOrderResponse,
+  SubmitPublicOrderCodeBody,
+  SubmitPublicOrderCodeParams,
+  SubmitPublicOrderCodeResponse,
 } from "@workspace/api-zod";
 import {
   listOrders,
@@ -14,8 +23,14 @@ import {
   updateOrder,
 } from "../lib/orders";
 import { requireOperatorRole } from "../middlewares/auth";
+import {
+  createPublicOrderLink,
+  getPublicOrder,
+  submitPublicOrderCode,
+} from "../lib/public-orders";
 
 const router: IRouter = Router();
+export const publicOrdersRouter: IRouter = Router();
 
 function serializeOrder(order: {
   id: number;
@@ -29,14 +44,80 @@ function serializeOrder(order: {
   operatorNote: string | null;
   syncedAt: Date;
   updatedAt: Date;
+  publicLinkExpiresAt: Date | null;
+  publicOpenedAt: Date | null;
+  publicSubmittedAt: Date | null;
+  publicSubmissionError: string | null;
 }) {
   return {
     ...order,
     saleTimestamp: order.saleTimestamp.toISOString(),
     syncedAt: order.syncedAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    publicLinkExpiresAt: order.publicLinkExpiresAt?.toISOString() ?? null,
+    publicOpenedAt: order.publicOpenedAt?.toISOString() ?? null,
+    publicSubmittedAt: order.publicSubmittedAt?.toISOString() ?? null,
   };
 }
+
+const attemptsByToken = new Map<string, { count: number; resetAt: number }>();
+function publicAttemptAllowed(token: string) {
+  const now = Date.now();
+  if (attemptsByToken.size >= 10_000) {
+    for (const [key, value] of attemptsByToken) {
+      if (value.resetAt <= now) attemptsByToken.delete(key);
+    }
+    if (attemptsByToken.size >= 10_000) {
+      attemptsByToken.delete(attemptsByToken.keys().next().value as string);
+    }
+  }
+  const key = createHash("sha256").update(token).digest("hex");
+  const current = attemptsByToken.get(key);
+  if (!current || current.resetAt <= now) {
+    attemptsByToken.set(key, { count: 1, resetAt: now + 15 * 60 * 1_000 });
+    return true;
+  }
+  current.count++;
+  return current.count <= 10;
+}
+
+publicOrdersRouter.get("/public/orders/:token", async (req, res): Promise<void> => {
+  const params = GetPublicOrderParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(404).json({ error: "Ссылка недоступна" });
+    return;
+  }
+  const order = await getPublicOrder(params.data.token);
+  if (!order || order.returned) {
+    res.status(order?.returned ? 409 : 404).json({ error: "Ссылка недоступна или истекла" });
+    return;
+  }
+  res.setHeader("cache-control", "no-store");
+  res.json(GetPublicOrderResponse.parse({
+    productName: order.productName,
+    code: order.code,
+    expiresAt: order.expiresAt.toISOString(),
+    alreadySubmitted: order.alreadySubmitted,
+  }));
+});
+
+publicOrdersRouter.post("/public/orders/:token", async (req, res): Promise<void> => {
+  const params = SubmitPublicOrderCodeParams.safeParse(req.params);
+  const body = SubmitPublicOrderCodeBody.safeParse(req.body);
+  if (!params.success || !body.success || (params.success && !publicAttemptAllowed(params.data.token))) {
+    res.status(!params.success || !body.success ? 400 : 429).json({ error: "Не удалось принять код" });
+    return;
+  }
+  const result = await submitPublicOrderCode(params.data.token, body.data.code);
+  if (!result || result.returned) {
+    res.status(result?.returned ? 409 : 404).json({ error: "Ссылка недоступна или истекла" });
+    return;
+  }
+  res.json(SubmitPublicOrderCodeResponse.parse({
+    accepted: true,
+    alreadySubmitted: result.alreadySubmitted,
+  }));
+});
 
 router.get("/orders", async (req, res): Promise<void> => {
   const parsed = ListOrdersQueryParams.safeParse(req.query);
@@ -70,6 +151,24 @@ router.post("/orders/sync", requireOperatorRole, async (req, res): Promise<void>
         error instanceof Error ? error.message : "Digiseller sales API error",
     });
   }
+});
+
+router.post("/orders/:invoiceId/public-link", requireOperatorRole, async (req, res): Promise<void> => {
+  const params = CreateOrderPublicLinkParams.safeParse(req.params);
+  const body = CreateOrderPublicLinkBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Некорректные параметры ссылки" });
+    return;
+  }
+  const link = await createPublicOrderLink(params.data.invoiceId, body.data.code ?? "");
+  if (!link) {
+    res.status(404).json({ error: "Order not found" });
+    return;
+  }
+  res.json(CreateOrderPublicLinkResponse.parse({
+    urlPath: `/order/${link.token}`,
+    expiresAt: link.expiresAt.toISOString(),
+  }));
 });
 
 router.patch("/orders/:invoiceId", requireOperatorRole, async (req, res): Promise<void> => {

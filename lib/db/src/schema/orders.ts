@@ -30,6 +30,13 @@ export const syncOrdersTable = pgTable(
     status: syncOrderStatus("status").notNull().default("new"),
     isReturned: boolean("is_returned").notNull().default(false),
     operatorNote: text("operator_note"),
+    publicTokenHash: text("public_token_hash"),
+    publicLinkExpiresAt: timestamp("public_link_expires_at", { withTimezone: true }),
+    publicCodeEncrypted: text("public_code_encrypted"),
+    publicOpenedAt: timestamp("public_opened_at", { withTimezone: true }),
+    publicSubmittedAt: timestamp("public_submitted_at", { withTimezone: true }),
+    publicSubmittedCodeHash: text("public_submitted_code_hash"),
+    publicSubmissionError: text("public_submission_error"),
     syncedAt: timestamp("synced_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -40,6 +47,9 @@ export const syncOrdersTable = pgTable(
   (table) => ({
     invoiceIdUnique: uniqueIndex("sync_orders_invoice_id_unique").on(
       table.invoiceId,
+    ),
+    publicTokenHashUnique: uniqueIndex("sync_orders_public_token_hash_unique").on(
+      table.publicTokenHash,
     ),
   }),
 );

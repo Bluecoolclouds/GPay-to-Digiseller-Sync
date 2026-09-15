@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box, AlertTriangle } from "lucide-react"
+import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box, AlertTriangle, Link2, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -257,8 +257,10 @@ function OrderRow({
   order: Order
   onUpdate: (o: Order) => void
 }) {
+  const queryClient = useQueryClient()
   const [note, setNote] = useState(order.operatorNote || "")
   const [isNoteFocused, setIsNoteFocused] = useState(false)
+  const [creatingLink, setCreatingLink] = useState(false)
   const updateMutation = useUpdateOrder()
 
   const lastSavedNote = useRef(order.operatorNote || "")
@@ -353,6 +355,35 @@ function OrderRow({
     hour: '2-digit', minute: '2-digit'
   })
 
+  async function createLink() {
+    const code = window.prompt("Введите код для автоматического заполнения. Оставьте пустым, если покупатель введёт его сам.", "")
+    if (code === null) return
+    if (code.length > 0 && code.trim().length < 3) {
+      toast.error("Код должен содержать минимум 3 символа")
+      return
+    }
+    setCreatingLink(true)
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.invoiceId)}/public-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+      const body = await response.json() as { urlPath?: string; error?: string }
+      if (!response.ok || !body.urlPath) throw new Error(body.error || "Не удалось создать ссылку")
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+      const url = `${window.location.origin}${base}${body.urlPath}`
+      await navigator.clipboard.writeText(url)
+      toast.success("Персональная ссылка скопирована")
+      queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось создать ссылку")
+    } finally {
+      setCreatingLink(false)
+    }
+  }
+
   return (
     <tr className={cn("hover:bg-muted/30 transition-colors group", order.status === "new" && "bg-rose-50/30 dark:bg-rose-950/10")}>
       <td className="px-4 py-3 align-top">
@@ -367,6 +398,15 @@ function OrderRow({
         <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
           {saleDate}
         </div>
+        <button
+          type="button"
+          onClick={() => void createLink()}
+          disabled={creatingLink || order.isReturned}
+          className="mt-2 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-300"
+        >
+          {order.publicSubmittedAt ? <CheckCircle2 className="h-3 w-3" /> : order.publicOpenedAt ? <Copy className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+          {creatingLink ? "Создаём…" : order.publicSubmittedAt ? "Код принят" : order.publicOpenedAt ? "Создать новую ссылку" : "Ссылка покупателю"}
+        </button>
       </td>
       <td className="px-4 py-3 align-top">
         <div className="font-medium text-foreground text-sm line-clamp-2 leading-tight" title={order.productName}>
