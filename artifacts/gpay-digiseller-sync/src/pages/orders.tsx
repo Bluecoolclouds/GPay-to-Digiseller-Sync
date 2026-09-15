@@ -8,6 +8,7 @@ import {
   OrderStatus,
   OrderUpdateStatus,
   getListOrdersQueryKey,
+  useReconcileOrderGPayPurchase,
 } from "@workspace/api-client-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box, AlertTriangle, Link2, Copy } from "lucide-react"
+import { Search, Filter, RefreshCw, Clock, CheckCircle2, Clock4, Box, AlertTriangle, Link2, Copy, SearchCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -276,6 +277,7 @@ function OrderRow({
   const [isNoteFocused, setIsNoteFocused] = useState(false)
   const [creatingLink, setCreatingLink] = useState(false)
   const updateMutation = useUpdateOrder()
+  const reconcileMutation = useReconcileOrderGPayPurchase()
 
   const lastSavedNote = useRef(order.operatorNote || "")
   const initializedForId = useRef<number | null>(null)
@@ -398,6 +400,55 @@ function OrderRow({
     }
   }
 
+  function reconcileGPay() {
+    const uniqueCode = window.prompt(
+      "Введите uniqueCode из истории GPay. Оставьте пустым, чтобы зафиксировать ручную проверку без изменения статуса.",
+      order.gpayPurchaseUniqueCode || "",
+    )
+    if (uniqueCode === null) return
+    const orderIdText = uniqueCode.trim()
+      ? window.prompt("Введите orderId GPay, если он известен. Можно оставить пустым.", order.gpayPurchaseOrderId?.toString() || "")
+      : ""
+    if (orderIdText === null) return
+    const orderId = orderIdText.trim() ? Number(orderIdText) : undefined
+    if (orderId !== undefined && (!Number.isInteger(orderId) || orderId <= 0)) {
+      toast.error("orderId должен быть положительным целым числом")
+      return
+    }
+    const reason = window.prompt(
+      "Опишите, где и как вы проверили операцию. Причина попадёт в журнал.",
+      "",
+    )
+    if (reason === null) return
+    if (reason.trim().length < 5) {
+      toast.error("Добавьте краткое пояснение для журнала")
+      return
+    }
+    reconcileMutation.mutate(
+      {
+        invoiceId: order.invoiceId,
+        data: {
+          reason: reason.trim(),
+          ...(uniqueCode.trim() ? { uniqueCode: uniqueCode.trim() } : {}),
+          ...(orderId !== undefined ? { orderId } : {}),
+        },
+      },
+      {
+        onSuccess: (updated) => {
+          onUpdateRef.current(updated)
+          toast.success(
+            uniqueCode.trim()
+              ? "Операция GPay найдена и привязана"
+              : "Заказ оставлен на ручной проверке",
+          )
+        },
+        onError: (error) => {
+          toast.error(getMutationErrorMessage(error, "Не удалось выполнить сверку GPay"))
+        },
+      },
+    )
+  }
+
   return (
     <tr className={cn("hover:bg-muted/30 transition-colors group", order.status === "new" && "bg-rose-50/30 dark:bg-rose-950/10")}>
       <td className="px-4 py-3 align-top">
@@ -471,6 +522,24 @@ function OrderRow({
             title={order.gpayPurchaseError}
           >
             {order.gpayPurchaseError}
+          </div>
+        )}
+        {order.gpayPurchaseStatus === "unknown" && (
+          <button
+            type="button"
+            onClick={reconcileGPay}
+            disabled={reconcileMutation.isPending}
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            <SearchCheck className="h-3 w-3" />
+            {reconcileMutation.isPending ? "Проверяем…" : "Сверить GPay"}
+          </button>
+        )}
+        {(order.gpayPurchaseOrderId || order.gpayPurchaseUniqueCode) && (
+          <div className="mt-1 max-w-[180px] break-all font-mono text-[9px] text-muted-foreground">
+            {order.gpayPurchaseOrderId ? `orderId: ${order.gpayPurchaseOrderId}` : ""}
+            {order.gpayPurchaseOrderId && order.gpayPurchaseUniqueCode ? " · " : ""}
+            {order.gpayPurchaseUniqueCode ? `uniqueCode: ${order.gpayPurchaseUniqueCode}` : ""}
           </div>
         )}
       </td>

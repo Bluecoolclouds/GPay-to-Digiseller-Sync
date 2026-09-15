@@ -407,6 +407,8 @@ export const ListOrdersResponse = zod.object({
   "publicSubmittedAt": zod.coerce.date().nullable(),
   "publicSubmissionError": zod.string().nullable(),
   "gpayPurchaseStatus": zod.string().nullable(),
+  "gpayPurchaseUniqueCode": zod.string().nullable(),
+  "gpayPurchaseOrderId": zod.number().int().nullable(),
   "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
   "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
   "gpayPurchaseError": zod.string().nullable(),
@@ -466,6 +468,8 @@ export const UpdateOrderResponse = zod.object({
   "publicSubmittedAt": zod.coerce.date().nullable(),
   "publicSubmissionError": zod.string().nullable(),
   "gpayPurchaseStatus": zod.string().nullable(),
+  "gpayPurchaseUniqueCode": zod.string().nullable(),
+  "gpayPurchaseOrderId": zod.number().int().nullable(),
   "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
   "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
   "gpayPurchaseError": zod.string().nullable(),
@@ -491,6 +495,50 @@ export const CreateOrderPublicLinkBody = zod.object({
 export const CreateOrderPublicLinkResponse = zod.object({
   "urlPath": zod.string(),
   "expiresAt": zod.coerce.date()
+})
+
+
+export const ReconcileOrderGPayPurchaseParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const reconcileOrderGPayPurchaseBodyUniqueCodeMin = 3;
+export const reconcileOrderGPayPurchaseBodyUniqueCodeMax = 200;
+
+
+export const reconcileOrderGPayPurchaseBodyReasonMin = 5;
+export const reconcileOrderGPayPurchaseBodyReasonMax = 1000;
+
+
+
+export const ReconcileOrderGPayPurchaseBody = zod.object({
+  "uniqueCode": zod.string().min(reconcileOrderGPayPurchaseBodyUniqueCodeMin).max(reconcileOrderGPayPurchaseBodyUniqueCodeMax).optional(),
+  "orderId": zod.number().int().min(1).optional(),
+  "reason": zod.string().min(reconcileOrderGPayPurchaseBodyReasonMin).max(reconcileOrderGPayPurchaseBodyReasonMax)
+})
+
+export const ReconcileOrderGPayPurchaseResponse = zod.object({
+  "id": zod.number().int(),
+  "invoiceId": zod.string(),
+  "digisellerProductId": zod.number().int(),
+  "productName": zod.string(),
+  "paidAmountRub": zod.number().nullable(),
+  "saleTimestamp": zod.coerce.date(),
+  "status": zod.enum(['new', 'processing', 'delivered']),
+  "isReturned": zod.boolean(),
+  "operatorNote": zod.string().nullable(),
+  "publicLinkExpiresAt": zod.coerce.date().nullable(),
+  "publicOpenedAt": zod.coerce.date().nullable(),
+  "publicSubmittedAt": zod.coerce.date().nullable(),
+  "publicSubmissionError": zod.string().nullable(),
+  "gpayPurchaseStatus": zod.string().nullable(),
+  "gpayPurchaseUniqueCode": zod.string().nullable(),
+  "gpayPurchaseOrderId": zod.number().int().nullable(),
+  "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseError": zod.string().nullable(),
+  "syncedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

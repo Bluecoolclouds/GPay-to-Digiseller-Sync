@@ -339,6 +339,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OrderPublicLink" }
+  /orders/{invoiceId}/gpay-reconcile:
+    post:
+      operationId: reconcileOrderGPayPurchase
+      tags: [orders]
+      parameters:
+        - in: path
+          name: invoiceId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GPayReconciliationInput" }
+      responses:
+        "200":
+          description: Reconciled order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404":
+          description: Order not found
+        "409":
+          description: Purchase is not unknown or identifiers do not match
+        "502":
+          description: GPay status could not be checked
   /public/orders/{token}:
     get:
       operationId: getPublicOrder
@@ -571,7 +597,7 @@ components:
         isFallback: { type: boolean }
     Order:
       type: object
-      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, gpayPurchaseStatus, gpayPurchaseStartedAt, gpayPurchaseCompletedAt, gpayPurchaseError, syncedAt, updatedAt]
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, gpayPurchaseStatus, gpayPurchaseUniqueCode, gpayPurchaseOrderId, gpayPurchaseStartedAt, gpayPurchaseCompletedAt, gpayPurchaseError, syncedAt, updatedAt]
       properties:
         id: { type: integer }
         invoiceId: { type: string }
@@ -587,6 +613,8 @@ components:
         publicSubmittedAt: { type: [string, "null"], format: date-time }
         publicSubmissionError: { type: [string, "null"] }
         gpayPurchaseStatus: { type: [string, "null"] }
+        gpayPurchaseUniqueCode: { type: [string, "null"] }
+        gpayPurchaseOrderId: { type: [integer, "null"] }
         gpayPurchaseStartedAt: { type: [string, "null"], format: date-time }
         gpayPurchaseCompletedAt: { type: [string, "null"], format: date-time }
         gpayPurchaseError: { type: [string, "null"] }
@@ -658,3 +686,10 @@ components:
         code: { type: string }
         expiresAt: { type: string, format: date-time }
         alreadySubmitted: { type: boolean }
+    GPayReconciliationInput:
+      type: object
+      required: [reason]
+      properties:
+        uniqueCode: { type: string, minLength: 3, maxLength: 200 }
+        orderId: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 5, maxLength: 1000 }

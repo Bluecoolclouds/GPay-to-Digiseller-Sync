@@ -30,6 +30,10 @@ export interface Order {
   /** @nullable */
   gpayPurchaseStatus: string | null;
   /** @nullable */
+  gpayPurchaseUniqueCode: string | null;
+  /** @nullable */
+  gpayPurchaseOrderId: number | null;
+  /** @nullable */
   gpayPurchaseStartedAt: Date | null;
   /** @nullable */
   gpayPurchaseCompletedAt: Date | null;

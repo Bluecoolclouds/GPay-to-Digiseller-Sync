@@ -15,6 +15,9 @@ import {
   SubmitPublicOrderCodeBody,
   SubmitPublicOrderCodeParams,
   SubmitPublicOrderCodeResponse,
+  ReconcileOrderGPayPurchaseBody,
+  ReconcileOrderGPayPurchaseParams,
+  ReconcileOrderGPayPurchaseResponse,
 } from "@workspace/api-zod";
 import {
   listOrders,
@@ -28,6 +31,11 @@ import {
   getPublicOrder,
   submitPublicOrderCode,
 } from "../lib/public-orders";
+import {
+  GPayReconciliationConflictError,
+  GPayReconciliationUnavailableError,
+  reconcileUnknownGPayPurchase,
+} from "../lib/gpay-reconciliation";
 
 const router: IRouter = Router();
 export const publicOrdersRouter: IRouter = Router();
@@ -49,6 +57,8 @@ function serializeOrder(order: {
   publicSubmittedAt: Date | null;
   publicSubmissionError: string | null;
   gpayPurchaseStatus: string | null;
+  gpayPurchaseUniqueCode: string | null;
+  gpayPurchaseOrderId: number | null;
   gpayPurchaseStartedAt: Date | null;
   gpayPurchaseCompletedAt: Date | null;
   gpayPurchaseError: string | null;
@@ -175,6 +185,38 @@ router.post("/orders/:invoiceId/public-link", requireOperatorRole, async (req, r
     urlPath: `/order/${link.token}`,
     expiresAt: link.expiresAt.toISOString(),
   }));
+});
+
+router.post("/orders/:invoiceId/gpay-reconcile", requireOperatorRole, async (req, res): Promise<void> => {
+  const params = ReconcileOrderGPayPurchaseParams.safeParse(req.params);
+  const body = ReconcileOrderGPayPurchaseBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Укажите причину сверки и корректные идентификаторы GPay" });
+    return;
+  }
+  try {
+    const updated = await reconcileUnknownGPayPurchase({
+      invoiceId: params.data.invoiceId,
+      uniqueCode: body.data.uniqueCode,
+      orderId: body.data.orderId,
+      reason: body.data.reason,
+    });
+    if (!updated) {
+      res.status(404).json({ error: "Заказ не найден" });
+      return;
+    }
+    res.json(ReconcileOrderGPayPurchaseResponse.parse(serializeOrder(updated)));
+  } catch (error) {
+    if (error instanceof GPayReconciliationConflictError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    if (error instanceof GPayReconciliationUnavailableError) {
+      res.status(502).json({ error: `Не удалось проверить операцию GPay: ${error.message}` });
+      return;
+    }
+    throw error;
+  }
 });
 
 router.patch("/orders/:invoiceId", requireOperatorRole, async (req, res): Promise<void> => {

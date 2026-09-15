@@ -3,6 +3,7 @@ import test from "node:test";
 import { eq } from "drizzle-orm";
 import {
   db,
+  activitiesTable,
   productsTable,
   syncOrdersTable,
   syncProductDigisellerIdsTable,
@@ -12,6 +13,7 @@ import {
   getPublicOrder,
   submitPublicOrderCode,
 } from "../lib/public-orders";
+import { reconcileUnknownGPayPurchase } from "../lib/gpay-reconciliation";
 import app from "../app";
 import { redactSensitiveRequestUrl } from "../lib/request-log";
 
@@ -400,5 +402,84 @@ test("GPay purchase authentication rejection releases the claim for a safe retry
   } finally {
     globalThis.fetch = originalFetch;
     await removeMappedOrder(fixture);
+  }
+});
+
+test("operator reconciliation links a confirmed unknown GPay purchase", async () => {
+  const invoiceId = await createOrder();
+  const originalFetch = globalThis.fetch;
+  let statusCalls = 0;
+  await db
+    .update(syncOrdersTable)
+    .set({
+      gpayPurchaseStatus: "unknown",
+      gpayPurchaseStartedAt: new Date(),
+      gpayPurchaseError: "Purchase response was not received",
+    })
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/orders/recovered-code")) {
+      statusCalls++;
+      return Response.json({
+        status: "success",
+        data: {
+          orderId: 765,
+          uniqueCode: "recovered-code",
+          deliveryStatus: "processing",
+          isTerminal: false,
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const updated = await reconcileUnknownGPayPurchase({
+      invoiceId,
+      uniqueCode: "recovered-code",
+      orderId: 765,
+      reason: "Найдено в истории GPay",
+    });
+    assert.equal(statusCalls, 1);
+    assert.equal(updated?.gpayPurchaseOrderId, 765);
+    assert.equal(updated?.gpayPurchaseUniqueCode, "recovered-code");
+    assert.equal(updated?.gpayPurchaseStatus, "processing");
+    const decisions = await db
+      .select()
+      .from(activitiesTable);
+    assert(decisions.some((item) =>
+      item.title === "Закупка GPay сверена" &&
+      item.description.includes(invoiceId),
+    ));
+  } finally {
+    globalThis.fetch = originalFetch;
+    await removeOrder(invoiceId);
+  }
+});
+
+test("manual reconciliation keeps an unknown purchase blocked", async () => {
+  const invoiceId = await createOrder();
+  await db
+    .update(syncOrdersTable)
+    .set({
+      gpayPurchaseStatus: "unknown",
+      gpayPurchaseStartedAt: new Date(),
+    })
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  try {
+    const updated = await reconcileUnknownGPayPurchase({
+      invoiceId,
+      reason: "Передано в поддержку GPay",
+    });
+    assert.equal(updated?.gpayPurchaseStatus, "unknown");
+    assert.match(updated?.gpayPurchaseError ?? "", /Ручная сверка/);
+  } finally {
+    await removeOrder(invoiceId);
   }
 });

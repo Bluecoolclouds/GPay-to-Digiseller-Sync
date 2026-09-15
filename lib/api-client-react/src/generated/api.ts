@@ -28,6 +28,7 @@ import type {
   CreateOrderPublicLinkInput,
   Dashboard,
   ExchangeRate,
+  GPayReconciliationInput,
   HealthStatus,
   ListActivitiesParams,
   ListOrdersParams,
@@ -1404,6 +1405,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateOrderPublicLinkMutationOptions(options));
+    }
+
+export const getReconcileOrderGPayPurchaseUrl = (invoiceId: string,) => {
+
+
+
+
+  return `/api/orders/${invoiceId}/gpay-reconcile`
+}
+
+export const reconcileOrderGPayPurchase = async (invoiceId: string,
+    gPayReconciliationInput: GPayReconciliationInput, options?: Parameters<typeof customFetch>[1]): Promise<Order> => {
+
+  return customFetch<Order>(getReconcileOrderGPayPurchaseUrl(invoiceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gPayReconciliationInput)
+  }
+);}
+
+
+
+
+
+export const getReconcileOrderGPayPurchaseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>, TError,{invoiceId: string;data: BodyType<GPayReconciliationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>, TError,{invoiceId: string;data: BodyType<GPayReconciliationInput>}, TContext> => {
+
+const mutationKey = ['reconcileOrderGPayPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>, {invoiceId: string;data: BodyType<GPayReconciliationInput>}> = (props) => {
+          const {invoiceId,data} = props ?? {};
+
+          return  reconcileOrderGPayPurchase(invoiceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReconcileOrderGPayPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>>
+    export type ReconcileOrderGPayPurchaseMutationBody = BodyType<GPayReconciliationInput>
+    export type ReconcileOrderGPayPurchaseMutationError = ErrorType<void>
+
+    export const useReconcileOrderGPayPurchase = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>, TError,{invoiceId: string;data: BodyType<GPayReconciliationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reconcileOrderGPayPurchase>>,
+        TError,
+        {invoiceId: string;data: BodyType<GPayReconciliationInput>},
+        TContext
+      > => {
+      return useMutation(getReconcileOrderGPayPurchaseMutationOptions(options));
     }
 
 export const getGetPublicOrderUrl = (token: string,) => {

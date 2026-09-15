@@ -388,6 +388,10 @@ export interface Order {
   /** @nullable */
   gpayPurchaseStatus: string | null;
   /** @nullable */
+  gpayPurchaseUniqueCode: string | null;
+  /** @nullable */
+  gpayPurchaseOrderId: number | null;
+  /** @nullable */
   gpayPurchaseStartedAt: string | null;
   /** @nullable */
   gpayPurchaseCompletedAt: string | null;
@@ -480,6 +484,21 @@ export interface PublicOrder {
   code: string;
   expiresAt: string;
   alreadySubmitted: boolean;
+}
+
+export interface GPayReconciliationInput {
+  /**
+     * @minLength 3
+     * @maxLength 200
+     */
+  uniqueCode?: string;
+  /** @minimum 1 */
+  orderId?: number;
+  /**
+     * @minLength 5
+     * @maxLength 1000
+     */
+  reason: string;
 }
 
 export type ListProductsParams = {

@@ -24,6 +24,7 @@ export * from './createOrderPublicLinkInput';
 export * from './dashboard';
 export * from './dashboardAutomationMode';
 export * from './exchangeRate';
+export * from './gPayReconciliationInput';
 export * from './healthStatus';
 export * from './listActivitiesParams';
 export * from './listOrdersParams';
