@@ -127,6 +127,12 @@ try {
       public_submitted_at timestamptz,
       public_submitted_code_hash text,
       public_submission_error text,
+      gpay_purchase_status text,
+      gpay_purchase_unique_code text,
+      gpay_purchase_order_id integer,
+      gpay_purchase_started_at timestamptz,
+      gpay_purchase_completed_at timestamptz,
+      gpay_purchase_error text,
       synced_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );

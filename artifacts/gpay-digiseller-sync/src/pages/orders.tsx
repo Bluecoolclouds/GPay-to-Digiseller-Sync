@@ -33,6 +33,20 @@ function getMutationErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+function getPurchaseLabel(status: string | null) {
+  switch (status) {
+    case "queued": return "GPay: в очереди"
+    case "creating": return "GPay: создаётся"
+    case "processing": return "GPay: закупается"
+    case "awaitingActivation": return "GPay: ждёт активации"
+    case "delivered": return "GPay: доставлен"
+    case "failed": return "GPay: ошибка"
+    case "unknown": return "GPay: статус неизвестен"
+    case "manual": return "GPay: вручную"
+    default: return null
+  }
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
@@ -434,6 +448,31 @@ function OrderRow({
             <SelectItem value="delivered">Выполнен</SelectItem>
           </SelectContent>
         </Select>
+        {getPurchaseLabel(order.gpayPurchaseStatus) && (
+          <div className="mt-1.5">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px]",
+                order.gpayPurchaseStatus === "failed" || order.gpayPurchaseStatus === "unknown"
+                  ? "border-red-300 text-red-700 dark:text-red-400"
+                  : order.gpayPurchaseStatus === "delivered"
+                    ? "border-emerald-300 text-emerald-700 dark:text-emerald-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {getPurchaseLabel(order.gpayPurchaseStatus)}
+            </Badge>
+          </div>
+        )}
+        {order.gpayPurchaseError && (
+          <div
+            className="mt-1 max-w-[180px] text-[10px] leading-tight text-red-600 dark:text-red-400"
+            title={order.gpayPurchaseError}
+          >
+            {order.gpayPurchaseError}
+          </div>
+        )}
       </td>
       <td className="px-4 py-3 align-top min-w-[200px]">
         <div className="relative">

@@ -48,6 +48,10 @@ function serializeOrder(order: {
   publicOpenedAt: Date | null;
   publicSubmittedAt: Date | null;
   publicSubmissionError: string | null;
+  gpayPurchaseStatus: string | null;
+  gpayPurchaseStartedAt: Date | null;
+  gpayPurchaseCompletedAt: Date | null;
+  gpayPurchaseError: string | null;
 }) {
   return {
     ...order,
@@ -57,6 +61,8 @@ function serializeOrder(order: {
     publicLinkExpiresAt: order.publicLinkExpiresAt?.toISOString() ?? null,
     publicOpenedAt: order.publicOpenedAt?.toISOString() ?? null,
     publicSubmittedAt: order.publicSubmittedAt?.toISOString() ?? null,
+    gpayPurchaseStartedAt: order.gpayPurchaseStartedAt?.toISOString() ?? null,
+    gpayPurchaseCompletedAt: order.gpayPurchaseCompletedAt?.toISOString() ?? null,
   };
 }
 

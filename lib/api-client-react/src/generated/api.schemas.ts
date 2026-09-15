@@ -385,6 +385,14 @@ export interface Order {
   publicSubmittedAt: string | null;
   /** @nullable */
   publicSubmissionError: string | null;
+  /** @nullable */
+  gpayPurchaseStatus: string | null;
+  /** @nullable */
+  gpayPurchaseStartedAt: string | null;
+  /** @nullable */
+  gpayPurchaseCompletedAt: string | null;
+  /** @nullable */
+  gpayPurchaseError: string | null;
   syncedAt: string;
   updatedAt: string;
 }

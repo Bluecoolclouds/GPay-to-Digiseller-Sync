@@ -571,7 +571,7 @@ components:
         isFallback: { type: boolean }
     Order:
       type: object
-      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, syncedAt, updatedAt]
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, gpayPurchaseStatus, gpayPurchaseStartedAt, gpayPurchaseCompletedAt, gpayPurchaseError, syncedAt, updatedAt]
       properties:
         id: { type: integer }
         invoiceId: { type: string }
@@ -586,6 +586,10 @@ components:
         publicOpenedAt: { type: [string, "null"], format: date-time }
         publicSubmittedAt: { type: [string, "null"], format: date-time }
         publicSubmissionError: { type: [string, "null"] }
+        gpayPurchaseStatus: { type: [string, "null"] }
+        gpayPurchaseStartedAt: { type: [string, "null"], format: date-time }
+        gpayPurchaseCompletedAt: { type: [string, "null"], format: date-time }
+        gpayPurchaseError: { type: [string, "null"] }
         syncedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     OrderPage:

@@ -7,3 +7,4 @@
 - [Isolated PostgreSQL API tests](isolated-postgres-api-tests.md) — create test tables explicitly in a unique schema; schema push may inspect public despite search_path.
 - [Supplier availability retries](supplier-availability-retries.md) — persist unavailable only after marketplace disable succeeds, so failures remain retryable.
 - [Ambiguous Digiseller creation](ambiguous-digiseller-creation.md) — fail closed when creation may have succeeded but its product ID was not persisted.
+- [GPay key purchase idempotency](gpay-key-purchase-idempotency.md) — GPay has no client idempotency key; claim once locally and never repeat an ambiguous create.

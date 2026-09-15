@@ -406,6 +406,10 @@ export const ListOrdersResponse = zod.object({
   "publicOpenedAt": zod.coerce.date().nullable(),
   "publicSubmittedAt": zod.coerce.date().nullable(),
   "publicSubmissionError": zod.string().nullable(),
+  "gpayPurchaseStatus": zod.string().nullable(),
+  "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -461,6 +465,10 @@ export const UpdateOrderResponse = zod.object({
   "publicOpenedAt": zod.coerce.date().nullable(),
   "publicSubmittedAt": zod.coerce.date().nullable(),
   "publicSubmissionError": zod.string().nullable(),
+  "gpayPurchaseStatus": zod.string().nullable(),
+  "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
+  "gpayPurchaseError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

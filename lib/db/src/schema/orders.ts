@@ -37,6 +37,16 @@ export const syncOrdersTable = pgTable(
     publicSubmittedAt: timestamp("public_submitted_at", { withTimezone: true }),
     publicSubmittedCodeHash: text("public_submitted_code_hash"),
     publicSubmissionError: text("public_submission_error"),
+    gpayPurchaseStatus: text("gpay_purchase_status"),
+    gpayPurchaseUniqueCode: text("gpay_purchase_unique_code"),
+    gpayPurchaseOrderId: integer("gpay_purchase_order_id"),
+    gpayPurchaseStartedAt: timestamp("gpay_purchase_started_at", {
+      withTimezone: true,
+    }),
+    gpayPurchaseCompletedAt: timestamp("gpay_purchase_completed_at", {
+      withTimezone: true,
+    }),
+    gpayPurchaseError: text("gpay_purchase_error"),
     syncedAt: timestamp("synced_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

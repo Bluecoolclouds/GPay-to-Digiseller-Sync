@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { syncKeyPrices } from "./lib/price-sync";
 import { syncDigisellerOrders } from "./lib/orders";
+import { reconcilePendingGPayPurchases } from "./lib/public-orders";
 
 const rawPort = process.env["PORT"];
 
@@ -30,6 +31,8 @@ const PRICE_SYNC_INTERVAL_MS = 60 * 60 * 1_000;
 const PRICE_SYNC_INITIAL_DELAY_MS = 60 * 1_000;
 const ORDER_SYNC_INTERVAL_MS = 5 * 60 * 1_000;
 const ORDER_SYNC_INITIAL_DELAY_MS = 60 * 1_000;
+const GPAY_PURCHASE_SYNC_INTERVAL_MS = 60 * 1_000;
+const GPAY_PURCHASE_SYNC_INITIAL_DELAY_MS = 10 * 1_000;
 
 async function runScheduledPriceSync() {
   try {
@@ -70,9 +73,34 @@ const orderIntervalTimer = setInterval(() => {
 orderInitialTimer.unref();
 orderIntervalTimer.unref();
 
+async function runGPayPurchaseSync() {
+  try {
+    const result = await reconcilePendingGPayPurchases();
+    if (result.checked > 0) {
+      logger.info(
+        { gpayPurchaseSync: result },
+        "Scheduled GPay purchase status sync finished",
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, "Scheduled GPay purchase status sync failed");
+  }
+}
+
+const purchaseInitialTimer = setTimeout(() => {
+  void runGPayPurchaseSync();
+}, GPAY_PURCHASE_SYNC_INITIAL_DELAY_MS);
+const purchaseIntervalTimer = setInterval(() => {
+  void runGPayPurchaseSync();
+}, GPAY_PURCHASE_SYNC_INTERVAL_MS);
+purchaseInitialTimer.unref();
+purchaseIntervalTimer.unref();
+
 server.on("close", () => {
   clearTimeout(initialTimer);
   clearInterval(intervalTimer);
   clearTimeout(orderInitialTimer);
   clearInterval(orderIntervalTimer);
+  clearTimeout(purchaseInitialTimer);
+  clearInterval(purchaseIntervalTimer);
 });
