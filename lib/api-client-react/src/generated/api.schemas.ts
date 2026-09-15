@@ -397,6 +397,14 @@ export interface Order {
   gpayPurchaseCompletedAt: string | null;
   /** @nullable */
   gpayPurchaseError: string | null;
+  /** @nullable */
+  digisellerDeliveryStatus: string | null;
+  /** @nullable */
+  digisellerDeliveryStartedAt: string | null;
+  /** @nullable */
+  digisellerDeliveryCompletedAt: string | null;
+  /** @nullable */
+  digisellerDeliveryError: string | null;
   syncedAt: string;
   updatedAt: string;
 }
@@ -473,8 +481,8 @@ export interface CreateOrderPublicLinkInput {
 
 export interface PublicOrderCodeInput {
   /**
-     * @minLength 3
-     * @maxLength 500
+     * @minLength 16
+     * @maxLength 16
      */
   code: string;
 }
@@ -482,6 +490,9 @@ export interface PublicOrderCodeInput {
 export interface PublicOrder {
   productName: string;
   code: string;
+  deliveredKey: string;
+  /** @nullable */
+  deliveryStatus: string | null;
   expiresAt: string;
   alreadySubmitted: boolean;
 }
@@ -575,4 +586,3 @@ export type SubmitPublicOrderCode200 = {
   accepted: boolean;
   alreadySubmitted: boolean;
 };
-

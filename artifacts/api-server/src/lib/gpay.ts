@@ -11,6 +11,7 @@ export type GPayKeyPurchase = {
   deliveryStatus: string;
   isTerminal: boolean;
   errorMessage: string | null;
+  deliveredKey: string | null;
 };
 
 export class GPayPurchaseAmbiguousError extends Error {
@@ -42,6 +43,10 @@ type WholesaleKeysOrderResponse = {
     isSuccess: boolean;
     deliveryStatus?: string | null;
     errorMessage?: string | null;
+    key?: string | null;
+    activationKey?: string | null;
+    productKey?: string | null;
+    deliveryData?: string | null;
   }> | null;
   errorMessage?: string | null;
 };
@@ -52,7 +57,32 @@ type WholesaleKeysOrderStatusResponse = {
   deliveryStatus?: string | null;
   isTerminal: boolean;
   errorMessage?: string | null;
+  key?: string | null;
+  activationKey?: string | null;
+  productKey?: string | null;
+  deliveryData?: string | null;
 };
+
+function extractDeliveredKey(input: {
+  key?: string | null;
+  activationKey?: string | null;
+  productKey?: string | null;
+  deliveryData?: string | null;
+}) {
+  const candidates = [
+    input.key,
+    input.activationKey,
+    input.productKey,
+    input.deliveryData,
+  ]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  const distinct = [...new Set(candidates)];
+  if (distinct.length > 1) {
+    throw new Error("GPay returned conflicting delivered key values");
+  }
+  return distinct[0] ?? null;
+}
 
 export type GPayPartnerOrder = {
   id: number;
@@ -207,6 +237,7 @@ export async function purchaseGPayKey(
     deliveryStatus: item.deliveryStatus || "processing",
     isTerminal: item.deliveryStatus === "delivered" || item.deliveryStatus === "failed",
     errorMessage: item.errorMessage ?? null,
+    deliveredKey: extractDeliveredKey(item),
   };
 }
 
@@ -218,12 +249,16 @@ export async function fetchGPayKeyPurchaseStatus(
     { method: "GET" },
     30_000,
   );
+  if (result.uniqueCode !== undefined && result.uniqueCode !== uniqueCode) {
+    throw new Error("GPay returned a status for a different purchase");
+  }
   return {
     orderId: result.orderId,
-    uniqueCode: result.uniqueCode || uniqueCode,
+    uniqueCode,
     deliveryStatus: result.deliveryStatus || "processing",
     isTerminal: result.isTerminal,
     errorMessage: result.errorMessage ?? null,
+    deliveredKey: extractDeliveredKey(result),
   };
 }
 

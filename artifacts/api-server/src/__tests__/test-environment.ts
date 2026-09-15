@@ -126,6 +126,7 @@ try {
       public_opened_at timestamptz,
       public_submitted_at timestamptz,
       public_submitted_code_hash text,
+      public_submitted_code_encrypted text,
       public_submission_error text,
       gpay_purchase_status text,
       gpay_purchase_unique_code text unique,
@@ -134,6 +135,11 @@ try {
       gpay_purchase_started_at timestamptz,
       gpay_purchase_completed_at timestamptz,
       gpay_purchase_error text,
+      gpay_delivered_key_encrypted text,
+      digiseller_delivery_status text,
+      digiseller_delivery_started_at timestamptz,
+      digiseller_delivery_completed_at timestamptz,
+      digiseller_delivery_error text,
       synced_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );

@@ -8,8 +8,8 @@
 
 export interface PublicOrderCodeInput {
   /**
-     * @minLength 3
-     * @maxLength 500
+     * @minLength 16
+     * @maxLength 16
      */
   code: string;
 }

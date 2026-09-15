@@ -597,7 +597,7 @@ components:
         isFallback: { type: boolean }
     Order:
       type: object
-      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, gpayPurchaseStatus, gpayPurchaseUniqueCode, gpayPurchaseOrderId, gpayPurchaseStartedAt, gpayPurchaseCompletedAt, gpayPurchaseError, syncedAt, updatedAt]
+      required: [id, invoiceId, digisellerProductId, productName, paidAmountRub, saleTimestamp, status, isReturned, operatorNote, publicLinkExpiresAt, publicOpenedAt, publicSubmittedAt, publicSubmissionError, gpayPurchaseStatus, gpayPurchaseUniqueCode, gpayPurchaseOrderId, gpayPurchaseStartedAt, gpayPurchaseCompletedAt, gpayPurchaseError, digisellerDeliveryStatus, digisellerDeliveryStartedAt, digisellerDeliveryCompletedAt, digisellerDeliveryError, syncedAt, updatedAt]
       properties:
         id: { type: integer }
         invoiceId: { type: string }
@@ -618,6 +618,10 @@ components:
         gpayPurchaseStartedAt: { type: [string, "null"], format: date-time }
         gpayPurchaseCompletedAt: { type: [string, "null"], format: date-time }
         gpayPurchaseError: { type: [string, "null"] }
+        digisellerDeliveryStatus: { type: [string, "null"] }
+        digisellerDeliveryStartedAt: { type: [string, "null"], format: date-time }
+        digisellerDeliveryCompletedAt: { type: [string, "null"], format: date-time }
+        digisellerDeliveryError: { type: [string, "null"] }
         syncedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     OrderPage:
@@ -677,13 +681,15 @@ components:
       type: object
       required: [code]
       properties:
-        code: { type: string, minLength: 3, maxLength: 500 }
+        code: { type: string, minLength: 16, maxLength: 16 }
     PublicOrder:
       type: object
-      required: [productName, code, expiresAt, alreadySubmitted]
+      required: [productName, code, deliveredKey, deliveryStatus, expiresAt, alreadySubmitted]
       properties:
         productName: { type: string }
         code: { type: string }
+        deliveredKey: { type: string }
+        deliveryStatus: { type: [string, "null"] }
         expiresAt: { type: string, format: date-time }
         alreadySubmitted: { type: boolean }
     GPayReconciliationInput:

@@ -14,6 +14,7 @@ import {
   lt,
   notInArray,
   or,
+  sql,
 } from "drizzle-orm";
 import {
   db,
@@ -30,6 +31,10 @@ import {
   purchaseGPayKey,
   type GPayKeyPurchase,
 } from "./gpay";
+import {
+  markDigisellerUniqueCodeDelivered,
+  verifyDigisellerUniqueCode,
+} from "./digiseller";
 import { logger } from "./logger";
 
 const LINK_LIFETIME_MS = 24 * 60 * 60 * 1_000;
@@ -75,16 +80,15 @@ function decrypt(value: string | null) {
 export async function createPublicOrderLink(invoiceId: string, code: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + LINK_LIFETIME_MS);
+  const encryptedCode = encrypt(code.trim());
   const [order] = await db
     .update(syncOrdersTable)
     .set({
       publicTokenHash: hash(token),
       publicLinkExpiresAt: expiresAt,
-      publicCodeEncrypted: encrypt(code.trim()),
+      publicCodeEncrypted: sql`case when ${syncOrdersTable.publicSubmittedAt} is null then ${encryptedCode} else ${syncOrdersTable.publicCodeEncrypted} end`,
+      publicSubmissionError: sql`case when ${syncOrdersTable.publicSubmittedAt} is null then null else ${syncOrdersTable.publicSubmissionError} end`,
       publicOpenedAt: null,
-      publicSubmittedAt: null,
-      publicSubmittedCodeHash: null,
-      publicSubmissionError: null,
       updatedAt: new Date(),
     })
     .where(eq(syncOrdersTable.invoiceId, invoiceId))
@@ -100,6 +104,9 @@ export async function getPublicOrder(token: string) {
       code: syncOrdersTable.publicCodeEncrypted,
       expiresAt: syncOrdersTable.publicLinkExpiresAt,
       submittedAt: syncOrdersTable.publicSubmittedAt,
+      deliveredKey: syncOrdersTable.gpayDeliveredKeyEncrypted,
+      deliveryStatus: syncOrdersTable.digisellerDeliveryStatus,
+      deliveryError: syncOrdersTable.digisellerDeliveryError,
       isReturned: syncOrdersTable.isReturned,
     })
     .from(syncOrdersTable)
@@ -119,6 +126,10 @@ export async function getPublicOrder(token: string) {
     returned: false as const,
     productName: order.productName,
     code: order.submittedAt ? "" : decrypt(order.code),
+    deliveredKey:
+      order.deliveryStatus === "delivered" ? decrypt(order.deliveredKey) : "",
+    deliveryStatus: order.deliveryStatus,
+    deliveryError: order.deliveryError,
     expiresAt: order.expiresAt,
     alreadySubmitted: Boolean(order.submittedAt),
   };
@@ -130,6 +141,8 @@ export async function submitPublicOrderCode(token: string, code: string) {
   const [existing] = await db
     .select({
       id: syncOrdersTable.id,
+      invoiceId: syncOrdersTable.invoiceId,
+      digisellerProductId: syncOrdersTable.digisellerProductId,
       submittedAt: syncOrdersTable.publicSubmittedAt,
       expiresAt: syncOrdersTable.publicLinkExpiresAt,
       isReturned: syncOrdersTable.isReturned,
@@ -142,14 +155,61 @@ export async function submitPublicOrderCode(token: string, code: string) {
     queueGPayPurchase(existing.id);
     return { returned: false as const, alreadySubmitted: true };
   }
+  const submittedCode = code.trim();
+  let verified;
+  try {
+    verified = await verifyDigisellerUniqueCode(submittedCode);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Не удалось проверить код Digiseller";
+    await db
+      .update(syncOrdersTable)
+      .set({ publicSubmissionError: message, updatedAt: now })
+      .where(eq(syncOrdersTable.id, existing.id));
+    return {
+      returned: false as const,
+      alreadySubmitted: false,
+      error: message,
+    };
+  }
+  if (
+    verified.invoiceId !== existing.invoiceId ||
+    verified.productId !== existing.digisellerProductId
+  ) {
+    const message = "Код Digiseller относится к другому заказу или товару";
+    await db
+      .update(syncOrdersTable)
+      .set({ publicSubmissionError: message, updatedAt: now })
+      .where(eq(syncOrdersTable.id, existing.id));
+    return {
+      returned: false as const,
+      alreadySubmitted: false,
+      error: message,
+    };
+  }
+  if (![1, 5].includes(verified.state)) {
+    const message = "По этому коду Digiseller товар уже был передан";
+    await db
+      .update(syncOrdersTable)
+      .set({ publicSubmissionError: message, updatedAt: now })
+      .where(eq(syncOrdersTable.id, existing.id));
+    return {
+      returned: false as const,
+      alreadySubmitted: false,
+      error: message,
+    };
+  }
   const [updated] = await db
     .update(syncOrdersTable)
     .set({
       publicSubmittedAt: now,
-      publicSubmittedCodeHash: hash(code.trim()),
+      publicSubmittedCodeHash: hash(submittedCode),
+      publicSubmittedCodeEncrypted: encrypt(submittedCode),
       publicSubmissionError: null,
       gpayPurchaseStatus: "queued",
       gpayPurchaseError: null,
+      digisellerDeliveryStatus: "queued",
+      digisellerDeliveryError: null,
       status: "processing",
       updatedAt: now,
     })
@@ -192,7 +252,9 @@ async function savePurchaseResult(orderId: number, result: GPayKeyPurchase) {
       gpayPurchaseCompletedAt: terminal ? new Date() : null,
       gpayPurchaseError: result.errorMessage,
       publicSubmissionError: result.errorMessage,
-      ...(result.deliveryStatus === "delivered" ? { status: "delivered" as const } : {}),
+      ...(result.deliveredKey
+        ? { gpayDeliveredKeyEncrypted: encrypt(result.deliveredKey) }
+        : {}),
       updatedAt: new Date(),
     })
     .where(
@@ -204,8 +266,22 @@ async function savePurchaseResult(orderId: number, result: GPayKeyPurchase) {
         ),
       ),
     );
+  if (result.deliveryStatus === "delivered") {
+    await processDigisellerDelivery(orderId);
+  }
 }
 
+function assertMatchingDigisellerOrder(
+  expected: { invoiceId: string; digisellerProductId: number },
+  actual: { invoiceId: string; productId: number },
+) {
+  if (
+    actual.invoiceId !== expected.invoiceId ||
+    actual.productId !== expected.digisellerProductId
+  ) {
+    throw new Error("Digiseller подтвердил передачу для другого заказа или товара");
+  }
+}
 export async function processGPayPurchase(orderId: number) {
   const [order] = await db
     .select({
@@ -231,7 +307,11 @@ export async function processGPayPurchase(orderId: number) {
       eq(productsTable.id, syncProductDigisellerIdsTable.localProductId),
     )
     .where(eq(syncOrdersTable.id, orderId));
-  if (!order || order.purchaseStatus === "delivered" || order.purchaseStatus === "failed") return;
+  if (!order || order.purchaseStatus === "failed") return;
+  if (order.purchaseStatus === "delivered") {
+    await processDigisellerDelivery(orderId);
+    return;
+  }
   if (order.productType && classifyGPayProductType(order.productType) !== "key") {
     await db
       .update(syncOrdersTable)
@@ -357,6 +437,20 @@ export async function reconcilePendingGPayPurchases() {
         lt(syncOrdersTable.gpayPurchaseStartedAt, staleCreatingBefore),
       ),
     );
+  await db
+    .update(syncOrdersTable)
+    .set({
+      digisellerDeliveryStatus: "failed",
+      digisellerDeliveryError:
+        "Процесс прервался во время передачи; выполняется безопасный повтор",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(syncOrdersTable.digisellerDeliveryStatus, "delivering"),
+        lt(syncOrdersTable.digisellerDeliveryStartedAt, staleCreatingBefore),
+      ),
+    );
   const pending = await db
     .select({ id: syncOrdersTable.id })
     .from(syncOrdersTable)
@@ -366,6 +460,13 @@ export async function reconcilePendingGPayPurchases() {
         or(
           eq(syncOrdersTable.gpayPurchaseStatus, "queued"),
           isNull(syncOrdersTable.gpayPurchaseStatus),
+          and(
+            eq(syncOrdersTable.gpayPurchaseStatus, "delivered"),
+            or(
+              isNull(syncOrdersTable.digisellerDeliveryStatus),
+              eq(syncOrdersTable.digisellerDeliveryStatus, "failed"),
+            ),
+          ),
           and(
             inArray(syncOrdersTable.gpayPurchaseStatus, [
               "processing",
@@ -380,4 +481,96 @@ export async function reconcilePendingGPayPurchases() {
     await processGPayPurchase(order.id);
   }
   return { checked: pending.length };
+}
+
+async function processDigisellerDelivery(orderId: number) {
+  const [order] = await db
+    .select({
+      invoiceId: syncOrdersTable.invoiceId,
+      digisellerProductId: syncOrdersTable.digisellerProductId,
+      submittedCode: syncOrdersTable.publicSubmittedCodeEncrypted,
+      deliveredKey: syncOrdersTable.gpayDeliveredKeyEncrypted,
+      purchaseStatus: syncOrdersTable.gpayPurchaseStatus,
+      deliveryStatus: syncOrdersTable.digisellerDeliveryStatus,
+    })
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.id, orderId));
+  if (
+    !order ||
+    order.deliveryStatus === "delivered" ||
+    order.purchaseStatus !== "delivered"
+  ) {
+    return;
+  }
+  if (!order.deliveredKey) {
+    await db
+      .update(syncOrdersTable)
+      .set({
+        digisellerDeliveryStatus: "failed",
+        digisellerDeliveryError:
+          "GPay сообщил о доставке, но не вернул ключ для передачи покупателю",
+        updatedAt: new Date(),
+      })
+      .where(eq(syncOrdersTable.id, orderId));
+    return;
+  }
+  if (!order.submittedCode) {
+    await db
+      .update(syncOrdersTable)
+      .set({
+        digisellerDeliveryStatus: "failed",
+        digisellerDeliveryError: "Код заказа Digiseller не сохранён",
+        updatedAt: new Date(),
+      })
+      .where(eq(syncOrdersTable.id, orderId));
+    return;
+  }
+  const [claimed] = await db
+    .update(syncOrdersTable)
+    .set({
+      digisellerDeliveryStatus: "delivering",
+      digisellerDeliveryStartedAt: new Date(),
+      digisellerDeliveryError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(syncOrdersTable.id, orderId),
+        or(
+          isNull(syncOrdersTable.digisellerDeliveryStatus),
+          eq(syncOrdersTable.digisellerDeliveryStatus, "queued"),
+          eq(syncOrdersTable.digisellerDeliveryStatus, "failed"),
+        ),
+      ),
+    )
+    .returning({ id: syncOrdersTable.id });
+  if (!claimed) return;
+  try {
+    const result = await markDigisellerUniqueCodeDelivered(
+      decrypt(order.submittedCode),
+    );
+    assertMatchingDigisellerOrder(order, result);
+    await db
+      .update(syncOrdersTable)
+      .set({
+        digisellerDeliveryStatus: "delivered",
+        digisellerDeliveryCompletedAt: new Date(),
+        digisellerDeliveryError: null,
+        publicSubmissionError: null,
+        status: "delivered",
+        updatedAt: new Date(),
+      })
+      .where(eq(syncOrdersTable.id, orderId));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Неизвестная ошибка передачи Digiseller";
+    await db
+      .update(syncOrdersTable)
+      .set({
+        digisellerDeliveryStatus: "failed",
+        digisellerDeliveryError: message,
+        updatedAt: new Date(),
+      })
+      .where(eq(syncOrdersTable.id, orderId));
+  }
 }

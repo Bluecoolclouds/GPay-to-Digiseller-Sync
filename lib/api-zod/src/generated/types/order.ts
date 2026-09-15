@@ -39,6 +39,14 @@ export interface Order {
   gpayPurchaseCompletedAt: Date | null;
   /** @nullable */
   gpayPurchaseError: string | null;
+  /** @nullable */
+  digisellerDeliveryStatus: string | null;
+  /** @nullable */
+  digisellerDeliveryStartedAt: Date | null;
+  /** @nullable */
+  digisellerDeliveryCompletedAt: Date | null;
+  /** @nullable */
+  digisellerDeliveryError: string | null;
   syncedAt: Date;
   updatedAt: Date;
 }

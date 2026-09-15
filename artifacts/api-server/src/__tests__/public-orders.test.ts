@@ -40,6 +40,50 @@ async function removeOrder(invoiceId: string) {
   await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
 }
 
+function verifiedDigisellerCode(invoiceId: string, productId: number, state = 5) {
+  return Response.json({
+    retval: 0,
+    inv: invoiceId,
+    id_goods: productId,
+    unique_code_state: { state },
+  });
+}
+
+test("Digiseller verification fails closed without a valid transaction state", async () => {
+  const invoiceId = await createOrder();
+  const [fixture] = await db
+    .select({ productId: syncOrdersTable.digisellerProductId })
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    return Response.json({
+      retval: 0,
+      inv: invoiceId,
+      id_goods: fixture.productId,
+    });
+  };
+  try {
+    const link = await createPublicOrderLink(invoiceId, "");
+    assert(link);
+    const result = await submitPublicOrderCode(link.token, "1234567890123456");
+    assert(result && !result.returned && "error" in result);
+    const [stored] = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    assert.equal(stored.publicSubmittedAt, null);
+    assert.equal(stored.gpayPurchaseStatus, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await removeOrder(invoiceId);
+  }
+});
+
 async function waitForPurchaseStatus(invoiceId: string, expected: string) {
   for (let attempt = 0; attempt < 100; attempt++) {
     const [order] = await db
@@ -50,6 +94,18 @@ async function waitForPurchaseStatus(invoiceId: string, expected: string) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.fail(`Purchase status did not become ${expected}`);
+}
+
+async function waitForDeliveryStatus(invoiceId: string, expected: string) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const [order] = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    if (order?.digisellerDeliveryStatus === expected) return order;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`Delivery status did not become ${expected}`);
 }
 
 async function waitForRetryablePurchaseError(invoiceId: string) {
@@ -114,7 +170,22 @@ async function removeMappedOrder(fixture: {
 
 test("public order link is replaced and code is submitted once", async () => {
   const invoiceId = await createOrder();
+  const originalFetch = globalThis.fetch;
   try {
+    const [fixture] = await db
+      .select({ productId: syncOrdersTable.digisellerProductId })
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, invoiceId));
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/apilogin")) {
+        return Response.json({ token: "digiseller-test-token" });
+      }
+      if (url.includes("/api/purchases/unique-code/")) {
+        return verifiedDigisellerCode(invoiceId, fixture.productId);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    };
     const first = await createPublicOrderLink(invoiceId, "FIRST-CODE");
     const second = await createPublicOrderLink(invoiceId, "SECOND-CODE");
     assert(first);
@@ -127,14 +198,15 @@ test("public order link is replaced and code is submitted once", async () => {
 
     const attempts = await Promise.all(
       Array.from({ length: 5 }, () =>
-        submitPublicOrderCode(second.token, "SECOND-CODE"),
+        submitPublicOrderCode(second.token, "1234567890123456"),
       ),
     );
     assert.equal(
       attempts.filter((attempt) => attempt && !attempt.returned && !attempt.alreadySubmitted).length,
       1,
+      JSON.stringify(attempts),
     );
-    const repeated = await submitPublicOrderCode(second.token, "SECOND-CODE");
+    const repeated = await submitPublicOrderCode(second.token, "1234567890123456");
     assert(repeated && !repeated.returned);
     assert.equal(repeated.alreadySubmitted, true);
 
@@ -145,8 +217,10 @@ test("public order link is replaced and code is submitted once", async () => {
     assert.equal(stored.status, "processing");
     assert(stored.publicSubmittedAt);
     assert(stored.publicSubmittedCodeHash);
-    assert.notEqual(stored.publicSubmittedCodeHash, "SECOND-CODE");
+    assert.notEqual(stored.publicSubmittedCodeHash, "1234567890123456");
+    assert.notEqual(stored.publicSubmittedCodeEncrypted, "1234567890123456");
   } finally {
+    globalThis.fetch = originalFetch;
     await removeOrder(invoiceId);
   }
 });
@@ -175,6 +249,22 @@ test("expired and returned links cannot be used", async () => {
 
 test("public HTTP flow validates codes and is idempotent", async () => {
   const invoiceId = await createOrder();
+  const [fixture] = await db
+    .select({ productId: syncOrdersTable.digisellerProductId })
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.startsWith(baseUrl)) return originalFetch(input, init);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/")) {
+      return verifiedDigisellerCode(invoiceId, fixture.productId);
+    }
+    return originalFetch(input);
+  };
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const address = server.address();
@@ -196,7 +286,7 @@ test("public HTTP flow validates codes and is idempotent", async () => {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "ABC" }),
+        body: JSON.stringify({ code: "1234567890123456" }),
       },
     );
     assert.equal(created.status, 200);
@@ -206,17 +296,18 @@ test("public HTTP flow validates codes and is idempotent", async () => {
 
     const opened = await fetch(`${baseUrl}/public/orders/${token}`);
     assert.equal(opened.status, 200);
-    assert.equal(((await opened.json()) as { code: string }).code, "ABC");
+    assert.equal(((await opened.json()) as { code: string }).code, "1234567890123456");
 
     const submit = () =>
       fetch(`${baseUrl}/public/orders/${token}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "ABC" }),
+        body: JSON.stringify({ code: "1234567890123456" }),
       });
     const responses = await Promise.all([submit(), submit(), submit()]);
     assert(responses.every((response) => response.status === 200));
   } finally {
+    globalThis.fetch = originalFetch;
     server.close();
     await removeOrder(invoiceId);
   }
@@ -234,8 +325,19 @@ test("accepted key code creates one GPay purchase and later checks its status", 
   const originalFetch = globalThis.fetch;
   let createCalls = 0;
   let statusCalls = 0;
+  let deliveryCalls = 0;
   globalThis.fetch = async (input) => {
     const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456/deliver")) {
+      deliveryCalls++;
+      return verifiedDigisellerCode(fixture.invoiceId, 700_000_000 + Number(fixture.invoiceId.split("-").at(-1)), 2);
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456")) {
+      return verifiedDigisellerCode(fixture.invoiceId, 700_000_000 + Number(fixture.invoiceId.split("-").at(-1)));
+    }
     if (url.endsWith("/partner-api/auth/login")) {
       return Response.json({
         status: "success",
@@ -266,6 +368,7 @@ test("accepted key code creates one GPay purchase and later checks its status", 
           uniqueCode: "purchase-unique-code",
           deliveryStatus: "delivered",
           isTerminal: true,
+          key: "DELIVERED-GAME-KEY",
           totalCharged: 10,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -275,22 +378,44 @@ test("accepted key code creates one GPay purchase and later checks its status", 
     throw new Error(`Unexpected fetch: ${url}`);
   };
   try {
-    const link = await createPublicOrderLink(fixture.invoiceId, "KEY-CODE");
+    const link = await createPublicOrderLink(fixture.invoiceId, "1234567890123456");
     assert(link);
-    await Promise.all(
+    const submissions = await Promise.all(
       Array.from({ length: 5 }, () =>
-        submitPublicOrderCode(link.token, "KEY-CODE"),
+        submitPublicOrderCode(link.token, "1234567890123456"),
       ),
+    );
+    assert.equal(
+      submissions.some((result) => result && "error" in result),
+      false,
+      JSON.stringify(submissions),
     );
     await waitForPurchaseStatus(fixture.invoiceId, "processing");
     assert.equal(createCalls, 1);
 
-    await submitPublicOrderCode(link.token, "KEY-CODE");
-    const delivered = await waitForPurchaseStatus(fixture.invoiceId, "delivered");
+    await submitPublicOrderCode(link.token, "1234567890123456");
+    await waitForPurchaseStatus(fixture.invoiceId, "delivered");
+    const delivered = await waitForDeliveryStatus(fixture.invoiceId, "delivered");
     assert.equal(createCalls, 1);
     assert.equal(statusCalls, 1);
+    assert.equal(deliveryCalls, 1);
     assert.equal(delivered.status, "delivered");
     assert.equal(delivered.gpayPurchaseError, null);
+    assert.equal(delivered.digisellerDeliveryStatus, "delivered");
+    assert.notEqual(delivered.gpayDeliveredKeyEncrypted, "DELIVERED-GAME-KEY");
+    const publicOrder = await getPublicOrder(link.token);
+    assert(publicOrder && !publicOrder.returned);
+    assert.equal(publicOrder.deliveredKey, "DELIVERED-GAME-KEY");
+    const rotated = await createPublicOrderLink(fixture.invoiceId, "UNVERIFIED-CODE");
+    assert(rotated);
+    const rotatedOrder = await getPublicOrder(rotated.token);
+    assert(rotatedOrder && !rotatedOrder.returned);
+    assert.equal(rotatedOrder.alreadySubmitted, true);
+    assert.equal(rotatedOrder.deliveredKey, "DELIVERED-GAME-KEY");
+    await submitPublicOrderCode(link.token, "1234567890123456");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(createCalls, 1);
+    assert.equal(deliveryCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
     await removeMappedOrder(fixture);
@@ -303,6 +428,15 @@ test("ambiguous GPay timeout cannot create a second purchase", async () => {
   let createCalls = 0;
   globalThis.fetch = async (input) => {
     const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456")) {
+      return verifiedDigisellerCode(
+        fixture.invoiceId,
+        700_000_000 + Number(fixture.invoiceId.split("-").at(-1)),
+      );
+    }
     if (url.endsWith("/partner-api/auth/login")) {
       return Response.json({
         status: "success",
@@ -316,15 +450,15 @@ test("ambiguous GPay timeout cannot create a second purchase", async () => {
     throw new Error(`Unexpected fetch: ${url}`);
   };
   try {
-    const link = await createPublicOrderLink(fixture.invoiceId, "KEY-CODE");
+    const link = await createPublicOrderLink(fixture.invoiceId, "1234567890123456");
     assert(link);
-    await submitPublicOrderCode(link.token, "KEY-CODE");
+    await submitPublicOrderCode(link.token, "1234567890123456");
     const unknown = await waitForPurchaseStatus(fixture.invoiceId, "unknown");
     assert.match(unknown.gpayPurchaseError ?? "", /автоматический повтор заблокирован/);
 
     await Promise.all(
       Array.from({ length: 3 }, () =>
-        submitPublicOrderCode(link.token, "KEY-CODE"),
+        submitPublicOrderCode(link.token, "1234567890123456"),
       ),
     );
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -339,17 +473,24 @@ test("Steam Gift remains manual after code confirmation", async () => {
   const fixture = await createMappedOrder("1");
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (input) => {
+    const url = String(input);
     fetchCalls++;
-    throw new Error("Steam Gift must not call GPay purchase API");
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    return verifiedDigisellerCode(
+      fixture.invoiceId,
+      700_000_000 + Number(fixture.invoiceId.split("-").at(-1)),
+    );
   };
   try {
-    const link = await createPublicOrderLink(fixture.invoiceId, "STEAM-CODE");
+    const link = await createPublicOrderLink(fixture.invoiceId, "1234567890123456");
     assert(link);
-    await submitPublicOrderCode(link.token, "STEAM-CODE");
+    await submitPublicOrderCode(link.token, "1234567890123456");
     const manual = await waitForPurchaseStatus(fixture.invoiceId, "manual");
     assert.match(manual.gpayPurchaseError ?? "", /ручной обработке/);
-    assert.equal(fetchCalls, 0);
+    assert.equal(fetchCalls, 2);
   } finally {
     globalThis.fetch = originalFetch;
     await removeMappedOrder(fixture);
@@ -362,6 +503,15 @@ test("GPay purchase authentication rejection releases the claim for a safe retry
   let createCalls = 0;
   globalThis.fetch = async (input) => {
     const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456")) {
+      return verifiedDigisellerCode(
+        fixture.invoiceId,
+        700_000_000 + Number(fixture.invoiceId.split("-").at(-1)),
+      );
+    }
     if (url.endsWith("/partner-api/auth/login")) {
       return Response.json({
         status: "success",
@@ -385,6 +535,7 @@ test("GPay purchase authentication rejection releases the claim for a safe retry
             uniqueCode: "retried-unique-code",
             isSuccess: true,
             deliveryStatus: "delivered",
+            key: "RETRIED-GAME-KEY",
           }],
         },
       });
@@ -392,13 +543,13 @@ test("GPay purchase authentication rejection releases the claim for a safe retry
     throw new Error(`Unexpected fetch: ${url}`);
   };
   try {
-    const link = await createPublicOrderLink(fixture.invoiceId, "KEY-CODE");
+    const link = await createPublicOrderLink(fixture.invoiceId, "1234567890123456");
     assert(link);
-    await submitPublicOrderCode(link.token, "KEY-CODE");
+    await submitPublicOrderCode(link.token, "1234567890123456");
     const queued = await waitForRetryablePurchaseError(fixture.invoiceId);
     assert.equal(queued.gpayPurchaseStartedAt, null);
 
-    await submitPublicOrderCode(link.token, "KEY-CODE");
+    await submitPublicOrderCode(link.token, "1234567890123456");
     const delivered = await waitForPurchaseStatus(fixture.invoiceId, "delivered");
     assert.equal(createCalls, 2);
     assert.equal(delivered.gpayPurchaseOrderId, 456);

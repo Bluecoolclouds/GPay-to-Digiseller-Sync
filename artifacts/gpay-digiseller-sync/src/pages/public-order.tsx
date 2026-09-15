@@ -5,6 +5,8 @@ import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
 type PublicOrder = {
   productName: string
   code: string
+  deliveredKey: string
+  deliveryStatus: string | null
   expiresAt: string
   alreadySubmitted: boolean
 }
@@ -21,32 +23,48 @@ export default function PublicOrderPage() {
 
   useEffect(() => {
     document.title = "Получение заказа"
-    void fetch(`/api/public/orders/${encodeURIComponent(token)}`, {
+    let stopped = false
+    let timer: number | undefined
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/public/orders/${encodeURIComponent(token)}`, {
       credentials: "omit",
       cache: "no-store",
-    }).then(async (response) => {
-      const body = await response.json() as PublicOrder & { error?: string }
-      if (!response.ok) throw new Error(body.error || "Ссылка недоступна")
-      setOrder(body)
-      setCode(body.code)
-      if (body.alreadySubmitted) {
+        })
+        const body = await response.json() as PublicOrder & { error?: string }
+        if (!response.ok) throw new Error(body.error || "Ссылка недоступна")
+        if (stopped) return
+        setOrder(body)
+        if (!body.alreadySubmitted) setCode(body.code)
+        if (body.deliveredKey) {
+          setState("done")
+          setMessage("Ключ успешно получен.")
+        } else if (body.alreadySubmitted) {
         setState("done")
-        setMessage("Код уже принят. Заказ находится в обработке.")
-      } else {
+          setMessage("Код принят. Получаем ключ, страница обновится автоматически.")
+          timer = window.setTimeout(load, 3_000)
+        } else {
         setState("ready")
-        if (body.code && !autoStarted.current) {
-          autoStarted.current = true
-          setAutoSeconds(3)
+          if (body.code && !autoStarted.current) {
+            autoStarted.current = true
+            setAutoSeconds(3)
+          }
         }
+      } catch (error) {
+        if (stopped) return
+        setMessage(error instanceof Error ? error.message : "Ссылка недоступна")
+        setState("error")
       }
-    }).catch((error) => {
-      setMessage(error instanceof Error ? error.message : "Ссылка недоступна")
-      setState("error")
-    })
+    }
+    void load()
+    return () => {
+      stopped = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
   }, [token])
 
   async function submit() {
-    if (state === "submitting" || code.trim().length < 3) return
+    if (state === "submitting" || code.trim().length !== 16) return
     setAutoSeconds(null)
     setState("submitting")
     setMessage("")
@@ -61,7 +79,7 @@ export default function PublicOrderPage() {
       if (!response.ok) throw new Error(body.error || "Не удалось принять код")
       setCode("")
       setState("done")
-      setMessage("Код принят. Заказ передан в обработку.")
+      setMessage("Код принят. Получаем ключ, обновите страницу через несколько секунд.")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось принять код")
       setState("error")
@@ -99,7 +117,15 @@ export default function PublicOrderPage() {
           <div className="mt-7 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
             <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-600" />
             <p className="mt-3 font-medium text-emerald-950">{message}</p>
-            <p className="mt-2 text-sm text-emerald-800">Эту страницу можно закрыть.</p>
+            {order?.deliveredKey ? (
+              <div className="mt-4 rounded-lg border border-emerald-300 bg-white px-4 py-3 font-mono text-base font-semibold text-slate-950">
+                {order.deliveredKey}
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-emerald-800">
+                <Loader2 className="h-4 w-4 animate-spin" /> Ожидаем доставку…
+              </div>
+            )}
           </div>
         ) : state === "error" && !order ? (
           <div role="alert" className="mt-7 rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-800">
@@ -119,8 +145,8 @@ export default function PublicOrderPage() {
                 }}
                 autoComplete="one-time-code"
                 required
-                minLength={3}
-                maxLength={500}
+                minLength={16}
+                maxLength={16}
                 className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-3 font-mono text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -133,7 +159,7 @@ export default function PublicOrderPage() {
             {message ? <p role="alert" className="mt-3 text-sm text-red-600">{message}</p> : null}
             <button
               type="submit"
-              disabled={state === "submitting" || code.trim().length < 3}
+              disabled={state === "submitting" || code.trim().length !== 16}
               className="mt-5 flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {state === "submitting" ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Отправляем…</> : "Продолжить"}

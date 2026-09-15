@@ -62,6 +62,10 @@ function serializeOrder(order: {
   gpayPurchaseStartedAt: Date | null;
   gpayPurchaseCompletedAt: Date | null;
   gpayPurchaseError: string | null;
+  digisellerDeliveryStatus: string | null;
+  digisellerDeliveryStartedAt: Date | null;
+  digisellerDeliveryCompletedAt: Date | null;
+  digisellerDeliveryError: string | null;
 }) {
   return {
     ...order,
@@ -73,6 +77,10 @@ function serializeOrder(order: {
     publicSubmittedAt: order.publicSubmittedAt?.toISOString() ?? null,
     gpayPurchaseStartedAt: order.gpayPurchaseStartedAt?.toISOString() ?? null,
     gpayPurchaseCompletedAt: order.gpayPurchaseCompletedAt?.toISOString() ?? null,
+    digisellerDeliveryStartedAt:
+      order.digisellerDeliveryStartedAt?.toISOString() ?? null,
+    digisellerDeliveryCompletedAt:
+      order.digisellerDeliveryCompletedAt?.toISOString() ?? null,
   };
 }
 
@@ -112,6 +120,8 @@ publicOrdersRouter.get("/public/orders/:token", async (req, res): Promise<void> 
   res.json(GetPublicOrderResponse.parse({
     productName: order.productName,
     code: order.code,
+    deliveredKey: order.deliveredKey,
+    deliveryStatus: order.deliveryStatus,
     expiresAt: order.expiresAt.toISOString(),
     alreadySubmitted: order.alreadySubmitted,
   }));
@@ -127,6 +137,10 @@ publicOrdersRouter.post("/public/orders/:token", async (req, res): Promise<void>
   const result = await submitPublicOrderCode(params.data.token, body.data.code);
   if (!result || result.returned) {
     res.status(result?.returned ? 409 : 404).json({ error: "Ссылка недоступна или истекла" });
+    return;
+  }
+  if ("error" in result) {
+    res.status(422).json({ error: result.error });
     return;
   }
   res.json(SubmitPublicOrderCodeResponse.parse({
@@ -199,7 +213,6 @@ router.post("/orders/:invoiceId/gpay-reconcile", requireOperatorRole, async (req
       invoiceId: params.data.invoiceId,
       uniqueCode: body.data.uniqueCode,
       orderId: body.data.orderId,
-      searchHistory: body.data.searchHistory,
       reason: body.data.reason,
     });
     if (!updated) {

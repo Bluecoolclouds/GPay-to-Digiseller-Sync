@@ -36,6 +36,7 @@ export const syncOrdersTable = pgTable(
     publicOpenedAt: timestamp("public_opened_at", { withTimezone: true }),
     publicSubmittedAt: timestamp("public_submitted_at", { withTimezone: true }),
     publicSubmittedCodeHash: text("public_submitted_code_hash"),
+    publicSubmittedCodeEncrypted: text("public_submitted_code_encrypted"),
     publicSubmissionError: text("public_submission_error"),
     gpayPurchaseStatus: text("gpay_purchase_status"),
     gpayPurchaseUniqueCode: text("gpay_purchase_unique_code"),
@@ -50,6 +51,15 @@ export const syncOrdersTable = pgTable(
       withTimezone: true,
     }),
     gpayPurchaseError: text("gpay_purchase_error"),
+    gpayDeliveredKeyEncrypted: text("gpay_delivered_key_encrypted"),
+    digisellerDeliveryStatus: text("digiseller_delivery_status"),
+    digisellerDeliveryStartedAt: timestamp("digiseller_delivery_started_at", {
+      withTimezone: true,
+    }),
+    digisellerDeliveryCompletedAt: timestamp("digiseller_delivery_completed_at", {
+      withTimezone: true,
+    }),
+    digisellerDeliveryError: text("digiseller_delivery_error"),
     syncedAt: timestamp("synced_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

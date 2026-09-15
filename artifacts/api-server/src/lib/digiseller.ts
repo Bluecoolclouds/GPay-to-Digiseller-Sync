@@ -139,6 +139,94 @@ export type DigisellerSale = {
   isReturned: boolean;
 };
 
+type DigisellerUniqueCodeState = {
+  state?: number;
+};
+
+type DigisellerUniqueCodeResponse = DigisellerErrorResult & {
+  inv?: number | string;
+  id_goods?: number | string;
+  unique_code_state?: DigisellerUniqueCodeState;
+};
+
+function parseUniqueCodeOrder(
+  json: DigisellerUniqueCodeResponse,
+  fallback: string,
+) {
+  const invoiceId = json.inv === undefined ? "" : String(json.inv).trim();
+  const productId = Number(json.id_goods);
+  const state = json.unique_code_state?.state;
+  if (
+    json.retval !== 0 ||
+    !invoiceId ||
+    !Number.isInteger(productId) ||
+    productId <= 0 ||
+    !Number.isInteger(state) ||
+    ![1, 2, 3, 4, 5].includes(state as number)
+  ) {
+    throw new Error(getDigisellerError(json, fallback));
+  }
+  return {
+    invoiceId,
+    productId,
+    state: state as number,
+  };
+}
+
+export async function verifyDigisellerUniqueCode(
+  uniqueCode: string,
+  providedToken?: string,
+) {
+  const token = providedToken ?? (await loginDigiseller());
+  const url = new URL(
+    `https://api.digiseller.com/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}`,
+  );
+  url.searchParams.set("token", token);
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await response.json()) as DigisellerUniqueCodeResponse;
+  if (!response.ok) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось проверить код заказа Digiseller (${response.status})`,
+      ),
+    );
+  }
+  return parseUniqueCodeOrder(json, "Digiseller не подтвердил код заказа");
+}
+
+export async function markDigisellerUniqueCodeDelivered(
+  uniqueCode: string,
+  providedToken?: string,
+) {
+  const token = providedToken ?? (await loginDigiseller());
+  const url = new URL(
+    `https://api.digiseller.com/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}/deliver`,
+  );
+  url.searchParams.set("token", token);
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await response.json()) as DigisellerUniqueCodeResponse;
+  if (!response.ok || (json.retval !== 0 && json.retval !== 4)) {
+    throw new Error(
+      getDigisellerError(
+        json,
+        `Не удалось передать результат в Digiseller (${response.status})`,
+      ),
+    );
+  }
+  return parseUniqueCodeOrder(
+    { ...json, retval: 0 },
+    "Digiseller не подтвердил передачу результата",
+  );
+}
+
 export function parseDigisellerDate(value: string) {
   const trimmed = value.trim();
   let normalized = trimmed;

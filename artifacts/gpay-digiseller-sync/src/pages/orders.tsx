@@ -570,6 +570,35 @@ function OrderRow({
             </button>
           </div>
         )}
+        {order.digisellerDeliveryStatus && (
+          <div className="mt-1.5">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px]",
+                order.digisellerDeliveryStatus === "failed"
+                  ? "border-red-300 text-red-700 dark:text-red-400"
+                  : order.digisellerDeliveryStatus === "delivered"
+                    ? "border-emerald-300 text-emerald-700 dark:text-emerald-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {order.digisellerDeliveryStatus === "delivered"
+                ? "Выдан покупателю"
+                : order.digisellerDeliveryStatus === "failed"
+                  ? "Ошибка выдачи"
+                  : "Выдача ключа"}
+            </Badge>
+          </div>
+        )}
+        {order.digisellerDeliveryError && (
+          <div
+            className="mt-1 max-w-[180px] text-[10px] leading-tight text-red-600 dark:text-red-400"
+            title={order.digisellerDeliveryError}
+          >
+            Выдача: {order.digisellerDeliveryError}
+          </div>
+        )}
         {(order.gpayPurchaseOrderId || order.gpayPurchaseUniqueCode) && (
           <div className="mt-1 max-w-[180px] break-all font-mono text-[9px] text-muted-foreground">
             {order.gpayPurchaseOrderId ? `orderId: ${order.gpayPurchaseOrderId}` : ""}

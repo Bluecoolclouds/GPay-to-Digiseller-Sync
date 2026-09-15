@@ -18,7 +18,6 @@ export const HealthCheckResponse = zod.object({
  */
 
 
-
 export const GetDashboardResponse = zod.object({
   "totalProducts": zod.number().int(),
   "availableProducts": zod.number().int(),
@@ -38,7 +37,6 @@ export const listProductsQueryPageDefault = 1;
 
 export const listProductsQueryPageSizeDefault = 20;
 export const listProductsQueryPageSizeMax = 100;
-
 
 
 export const ListProductsQueryParams = zod.object({
@@ -86,8 +84,6 @@ export const UpdateProductParams = zod.object({
 
 export const updateProductBodyMarginPercentMin = 0;
 export const updateProductBodyMarginPercentMax = 500;
-
-
 
 
 export const UpdateProductBody = zod.object({
@@ -152,9 +148,7 @@ export const PublishProductResponse = zod.object({
 })
 
 
-
 export const publishProductsBatchBodyProductIdsMax = 50;
-
 
 
 export const PublishProductsBatchBody = zod.object({
@@ -255,7 +249,6 @@ export const listActivitiesQueryLimitDefault = 20;
 export const listActivitiesQueryLimitMax = 50;
 
 
-
 export const ListActivitiesQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(listActivitiesQueryLimitMax).default(listActivitiesQueryLimitDefault)
 })
@@ -299,7 +292,6 @@ export const updateSettingsBodyDigisellerFeePercentMax = 100;
 export const updateSettingsBodyFixedReserveRubMin = 0;
 
 export const updateSettingsBodyMinimumProfitRubMin = 0;
-
 
 
 export const UpdateSettingsBody = zod.object({
@@ -383,7 +375,6 @@ export const listOrdersQueryPageSizeDefault = 20;
 export const listOrdersQueryPageSizeMax = 100;
 
 
-
 export const ListOrdersQueryParams = zod.object({
   "status": zod.enum(['all', 'new', 'processing', 'delivered']).default(listOrdersQueryStatusDefault),
   "search": zod.coerce.string().optional(),
@@ -412,6 +403,10 @@ export const ListOrdersResponse = zod.object({
   "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
   "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
   "gpayPurchaseError": zod.string().nullable(),
+  "digisellerDeliveryStatus": zod.string().nullable(),
+  "digisellerDeliveryStartedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryCompletedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -446,7 +441,6 @@ export const UpdateOrderParams = zod.object({
 export const updateOrderBodyNoteMax = 2000;
 
 
-
 export const UpdateOrderBody = zod.object({
   "status": zod.enum(['new', 'processing', 'delivered']).optional(),
   "confirmReturned": zod.boolean().optional().describe('Explicit confirmation required when moving a returned order out of the new queue.'),
@@ -473,6 +467,10 @@ export const UpdateOrderResponse = zod.object({
   "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
   "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
   "gpayPurchaseError": zod.string().nullable(),
+  "digisellerDeliveryStatus": zod.string().nullable(),
+  "digisellerDeliveryStartedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryCompletedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -510,7 +508,6 @@ export const reconcileOrderGPayPurchaseBodyReasonMin = 5;
 export const reconcileOrderGPayPurchaseBodyReasonMax = 1000;
 
 
-
 export const ReconcileOrderGPayPurchaseBody = zod.object({
   "uniqueCode": zod.string().min(reconcileOrderGPayPurchaseBodyUniqueCodeMin).max(reconcileOrderGPayPurchaseBodyUniqueCodeMax).optional(),
   "orderId": zod.number().int().min(1).optional(),
@@ -538,6 +535,10 @@ export const ReconcileOrderGPayPurchaseResponse = zod.object({
   "gpayPurchaseStartedAt": zod.coerce.date().nullable(),
   "gpayPurchaseCompletedAt": zod.coerce.date().nullable(),
   "gpayPurchaseError": zod.string().nullable(),
+  "digisellerDeliveryStatus": zod.string().nullable(),
+  "digisellerDeliveryStartedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryCompletedAt": zod.coerce.date().nullable(),
+  "digisellerDeliveryError": zod.string().nullable(),
   "syncedAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -547,7 +548,6 @@ export const getPublicOrderPathTokenMin = 32;
 export const getPublicOrderPathTokenMax = 200;
 
 
-
 export const GetPublicOrderParams = zod.object({
   "token": zod.coerce.string().min(getPublicOrderPathTokenMin).max(getPublicOrderPathTokenMax)
 })
@@ -555,6 +555,8 @@ export const GetPublicOrderParams = zod.object({
 export const GetPublicOrderResponse = zod.object({
   "productName": zod.string(),
   "code": zod.string(),
+  "deliveredKey": zod.string(),
+  "deliveryStatus": zod.string().nullable(),
   "expiresAt": zod.coerce.date(),
   "alreadySubmitted": zod.boolean()
 })
@@ -564,14 +566,12 @@ export const submitPublicOrderCodePathTokenMin = 32;
 export const submitPublicOrderCodePathTokenMax = 200;
 
 
-
 export const SubmitPublicOrderCodeParams = zod.object({
   "token": zod.coerce.string().min(submitPublicOrderCodePathTokenMin).max(submitPublicOrderCodePathTokenMax)
 })
 
-export const submitPublicOrderCodeBodyCodeMin = 3;
-export const submitPublicOrderCodeBodyCodeMax = 500;
-
+export const submitPublicOrderCodeBodyCodeMin = 16;
+export const submitPublicOrderCodeBodyCodeMax = 16;
 
 
 export const SubmitPublicOrderCodeBody = zod.object({
@@ -582,5 +582,3 @@ export const SubmitPublicOrderCodeResponse = zod.object({
   "accepted": zod.boolean(),
   "alreadySubmitted": zod.boolean()
 })
-
-

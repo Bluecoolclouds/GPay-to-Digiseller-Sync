@@ -9,6 +9,9 @@
 export interface PublicOrder {
   productName: string;
   code: string;
+  deliveredKey: string;
+  /** @nullable */
+  deliveryStatus: string | null;
   expiresAt: Date;
   alreadySubmitted: boolean;
 }
