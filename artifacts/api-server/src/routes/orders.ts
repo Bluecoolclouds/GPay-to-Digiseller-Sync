@@ -18,6 +18,8 @@ import {
   ReconcileOrderGPayPurchaseBody,
   ReconcileOrderGPayPurchaseParams,
   ReconcileOrderGPayPurchaseResponse,
+  AccessPublicOrderBody,
+  AccessPublicOrderResponse,
 } from "@workspace/api-zod";
 import {
   listOrders,
@@ -28,6 +30,7 @@ import {
 import { requireOperatorRole } from "../middlewares/auth";
 import {
   createPublicOrderLink,
+  createVerifiedPublicOrderLink,
   getPublicOrder,
   submitPublicOrderCode,
 } from "../lib/public-orders";
@@ -125,6 +128,35 @@ publicOrdersRouter.get("/public/orders/:token", async (req, res): Promise<void> 
     expiresAt: order.expiresAt.toISOString(),
     alreadySubmitted: order.alreadySubmitted,
   }));
+});
+
+publicOrdersRouter.post("/public/orders/access", async (req, res): Promise<void> => {
+  const body = AccessPublicOrderBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Не удалось проверить заказ" });
+    return;
+  }
+  const invoiceId = body.data.invoiceId.trim();
+  const code = body.data.code;
+  if (!publicAttemptAllowed(`access:${invoiceId}`)) {
+    res.status(429).json({ error: "Слишком много попыток. Попробуйте позже." });
+    return;
+  }
+  try {
+    const link = await createVerifiedPublicOrderLink(invoiceId, code);
+    if (!link) {
+      res.status(404).json({ error: "Заказ или код не найдены" });
+      return;
+    }
+    res.setHeader("cache-control", "no-store");
+    res.json(AccessPublicOrderResponse.parse({
+      urlPath: `/order/${link.token}`,
+      expiresAt: link.expiresAt.toISOString(),
+    }));
+  } catch (error) {
+    req.log.warn({ err: error }, "Public order access verification failed");
+    res.status(502).json({ error: "Не удалось проверить заказ. Попробуйте позже." });
+  }
 });
 
 publicOrdersRouter.post("/public/orders/:token", async (req, res): Promise<void> => {

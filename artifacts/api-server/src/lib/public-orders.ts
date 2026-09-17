@@ -96,6 +96,33 @@ export async function createPublicOrderLink(invoiceId: string, code: string) {
   return order ? { token, expiresAt } : null;
 }
 
+export async function createVerifiedPublicOrderLink(
+  invoiceId: string,
+  code: string,
+) {
+  const normalizedInvoiceId = invoiceId.trim();
+  const normalizedCode = code.trim();
+  const [order] = await db
+    .select({
+      invoiceId: syncOrdersTable.invoiceId,
+      digisellerProductId: syncOrdersTable.digisellerProductId,
+      isReturned: syncOrdersTable.isReturned,
+    })
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.invoiceId, normalizedInvoiceId));
+  if (!order || order.isReturned) return null;
+
+  const verified = await verifyDigisellerUniqueCode(normalizedCode);
+  if (
+    verified.invoiceId !== order.invoiceId ||
+    verified.productId !== order.digisellerProductId ||
+    ![1, 5].includes(verified.state)
+  ) {
+    return null;
+  }
+  return createPublicOrderLink(order.invoiceId, normalizedCode);
+}
+
 export async function getPublicOrder(token: string) {
   const tokenHash = hash(token);
   const [order] = await db
@@ -241,9 +268,13 @@ function purchaseError(error: unknown) {
   return error instanceof Error ? error.message : "Неизвестная ошибка закупки GPay";
 }
 
-async function savePurchaseResult(orderId: number, result: GPayKeyPurchase) {
+export async function saveGPayPurchaseResult(
+  orderId: number,
+  result: GPayKeyPurchase,
+  expectedStatuses?: string[],
+) {
   const terminal = result.isTerminal;
-  await db
+  const [updated] = await db
     .update(syncOrdersTable)
     .set({
       gpayPurchaseStatus: result.deliveryStatus,
@@ -261,14 +292,23 @@ async function savePurchaseResult(orderId: number, result: GPayKeyPurchase) {
       and(
         eq(syncOrdersTable.id, orderId),
         or(
-          isNull(syncOrdersTable.gpayPurchaseStatus),
-          notInArray(syncOrdersTable.gpayPurchaseStatus, ["delivered", "failed"]),
+          ...(expectedStatuses
+            ? [inArray(syncOrdersTable.gpayPurchaseStatus, expectedStatuses)]
+            : [
+                isNull(syncOrdersTable.gpayPurchaseStatus),
+                notInArray(syncOrdersTable.gpayPurchaseStatus, [
+                  "delivered",
+                  "failed",
+                ]),
+              ]),
         ),
       ),
-    );
-  if (result.deliveryStatus === "delivered") {
+    )
+    .returning({ id: syncOrdersTable.id });
+  if (updated && result.deliveryStatus === "delivered") {
     await processDigisellerDelivery(orderId);
   }
+  return Boolean(updated);
 }
 
 function assertMatchingDigisellerOrder(
@@ -290,6 +330,7 @@ export async function processGPayPurchase(orderId: number) {
       purchaseStatus: syncOrdersTable.gpayPurchaseStatus,
       uniqueCode: syncOrdersTable.gpayPurchaseUniqueCode,
       startedAt: syncOrdersTable.gpayPurchaseStartedAt,
+      deliveredKey: syncOrdersTable.gpayDeliveredKeyEncrypted,
       gpayId: productsTable.gpayId,
       productType: productsTable.productType,
       supplierPriceUsd: productsTable.supplierPriceUsd,
@@ -309,6 +350,26 @@ export async function processGPayPurchase(orderId: number) {
     .where(eq(syncOrdersTable.id, orderId));
   if (!order || order.purchaseStatus === "failed") return;
   if (order.purchaseStatus === "delivered") {
+    if (!order.deliveredKey && order.uniqueCode) {
+      try {
+        await saveGPayPurchaseResult(
+          orderId,
+          await fetchGPayKeyPurchaseStatus(order.uniqueCode),
+          ["delivered"],
+        );
+      } catch (error) {
+        const message = purchaseError(error);
+        await db
+          .update(syncOrdersTable)
+          .set({
+            gpayPurchaseError: message,
+            publicSubmissionError: message,
+            updatedAt: new Date(),
+          })
+          .where(eq(syncOrdersTable.id, orderId));
+      }
+      return;
+    }
     await processDigisellerDelivery(orderId);
     return;
   }
@@ -338,7 +399,7 @@ export async function processGPayPurchase(orderId: number) {
   }
   if (order.uniqueCode) {
     try {
-      await savePurchaseResult(
+      await saveGPayPurchaseResult(
         orderId,
         await fetchGPayKeyPurchaseStatus(order.uniqueCode),
       );
@@ -386,7 +447,10 @@ export async function processGPayPurchase(orderId: number) {
     .returning({ id: syncOrdersTable.id });
   if (!claimed) return;
   try {
-    await savePurchaseResult(orderId, await purchaseGPayKey(order.gpayId, token));
+    await saveGPayPurchaseResult(
+      orderId,
+      await purchaseGPayKey(order.gpayId, token),
+    );
   } catch (error) {
     const message = purchaseError(error);
     if (error instanceof GPayPurchaseUnauthorizedError) {
@@ -464,6 +528,7 @@ export async function reconcilePendingGPayPurchases() {
             eq(syncOrdersTable.gpayPurchaseStatus, "delivered"),
             or(
               isNull(syncOrdersTable.digisellerDeliveryStatus),
+                eq(syncOrdersTable.digisellerDeliveryStatus, "queued"),
               eq(syncOrdersTable.digisellerDeliveryStatus, "failed"),
             ),
           ),

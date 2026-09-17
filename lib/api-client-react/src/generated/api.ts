@@ -45,6 +45,7 @@ import type {
   ProductPage,
   ProductUpdate,
   PublicOrder,
+  PublicOrderAccessInput,
   PublicOrderCodeInput,
   Settings,
   SettingsInput,
@@ -1610,6 +1611,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getReconcileOrderGPayPurchaseMutationOptions(options));
+    }
+
+export const getAccessPublicOrderUrl = () => {
+
+
+
+
+  return `/api/public/orders/access`
+}
+
+export const accessPublicOrder = async (publicOrderAccessInput: PublicOrderAccessInput, options?: Parameters<typeof customFetch>[1]): Promise<OrderPublicLink> => {
+
+  return customFetch<OrderPublicLink>(getAccessPublicOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicOrderAccessInput)
+  }
+);}
+
+
+
+
+
+export const getAccessPublicOrderMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof accessPublicOrder>>, TError,{data: BodyType<PublicOrderAccessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof accessPublicOrder>>, TError,{data: BodyType<PublicOrderAccessInput>}, TContext> => {
+
+const mutationKey = ['accessPublicOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof accessPublicOrder>>, {data: BodyType<PublicOrderAccessInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  accessPublicOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AccessPublicOrderMutationResult = NonNullable<Awaited<ReturnType<typeof accessPublicOrder>>>
+    export type AccessPublicOrderMutationBody = BodyType<PublicOrderAccessInput>
+    export type AccessPublicOrderMutationError = ErrorType<void>
+
+    export const useAccessPublicOrder = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof accessPublicOrder>>, TError,{data: BodyType<PublicOrderAccessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof accessPublicOrder>>,
+        TError,
+        {data: BodyType<PublicOrderAccessInput>},
+        TContext
+      > => {
+      return useMutation(getAccessPublicOrderMutationOptions(options));
     }
 
 export const getGetPublicOrderUrl = (token: string,) => {

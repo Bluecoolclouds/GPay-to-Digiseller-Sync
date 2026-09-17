@@ -433,6 +433,25 @@ paths:
           description: Purchase is not unknown or identifiers do not match
         "502":
           description: GPay status could not be checked
+  /public/orders/access:
+    post:
+      operationId: accessPublicOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicOrderAccessInput"
+      responses:
+        "200":
+          description: Verified public order link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderPublicLink" }
+        "404":
+          description: Order or code not found
+        "502":
+          description: Digiseller verification unavailable
   /public/orders/{token}:
     get:
       operationId: getPublicOrder
@@ -478,6 +497,12 @@ components:
       required: [error]
       properties:
         error: { type: string }
+    PublicOrderAccessInput:
+      type: object
+      required: [invoiceId, code]
+      properties:
+        invoiceId: { type: string, minLength: 1, maxLength: 200 }
+        code: { type: string, pattern: '^\d{16}$' }
     HealthStatus:
       type: object
       required: [status]

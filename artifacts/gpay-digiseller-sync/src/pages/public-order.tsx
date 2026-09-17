@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { useRoute } from "wouter"
+import { useLocation, useRoute } from "wouter"
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
 
 type PublicOrder = {
@@ -12,9 +12,12 @@ type PublicOrder = {
 }
 
 export default function PublicOrderPage() {
+  const [, navigate] = useLocation()
   const [, params] = useRoute("/order/:token")
   const token = params?.token ?? ""
+  const isAccessPage = !token
   const [order, setOrder] = useState<PublicOrder | null>(null)
+  const [invoiceId, setInvoiceId] = useState("")
   const [code, setCode] = useState("")
   const [state, setState] = useState<"loading" | "ready" | "submitting" | "done" | "error">("loading")
   const [message, setMessage] = useState("")
@@ -23,6 +26,10 @@ export default function PublicOrderPage() {
 
   useEffect(() => {
     document.title = "Получение заказа"
+    if (isAccessPage) {
+      setState("ready")
+      return
+    }
     let stopped = false
     let timer: number | undefined
     const load = async () => {
@@ -61,7 +68,30 @@ export default function PublicOrderPage() {
       stopped = true
       if (timer !== undefined) window.clearTimeout(timer)
     }
-  }, [token])
+  }, [isAccessPage, token])
+
+  async function openOrder(event: FormEvent) {
+    event.preventDefault()
+    if (!invoiceId.trim() || code.trim().length !== 16) return
+    setState("submitting")
+    setMessage("")
+    try {
+      const response = await fetch("/api/public/orders/access", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoiceId.trim(), code: code.trim() }),
+      })
+      const body = await response.json() as { urlPath?: string; error?: string }
+      if (!response.ok || !body.urlPath) {
+        throw new Error(body.error || "Не удалось открыть заказ")
+      }
+      navigate(body.urlPath)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось открыть заказ")
+      setState("ready")
+    }
+  }
 
   async function submit() {
     if (state === "submitting" || code.trim().length !== 16) return
@@ -109,7 +139,45 @@ export default function PublicOrderPage() {
         </div>
         <h1 className="mt-5 text-center text-2xl font-semibold text-slate-950">Получение заказа</h1>
 
-        {state === "loading" ? (
+        {isAccessPage ? (
+          <form onSubmit={openOrder} className="mt-7">
+            <p className="text-center text-sm text-slate-600">
+              Введите данные с оплаченного заказа Digiseller.
+            </p>
+            <label className="mt-6 block text-sm font-medium text-slate-800">
+              Номер заказа
+              <input
+                value={invoiceId}
+                onChange={(event) => setInvoiceId(event.target.value)}
+                autoComplete="off"
+                required
+                maxLength={200}
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-3 text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-medium text-slate-800">
+              16-значный код заказа
+              <input
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 16))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                minLength={16}
+                maxLength={16}
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-3 font-mono text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            {message ? <p role="alert" className="mt-3 text-sm text-red-600">{message}</p> : null}
+            <button
+              type="submit"
+              disabled={state === "submitting" || !invoiceId.trim() || code.length !== 16}
+              className="mt-5 flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {state === "submitting" ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Проверяем…</> : "Открыть заказ"}
+            </button>
+          </form>
+        ) : state === "loading" ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-600">
             <Loader2 className="h-5 w-5 animate-spin" /> Проверяем ссылку…
           </div>

@@ -12,6 +12,7 @@ import {
   fetchGPayKeyPurchaseStatus,
   type GPayPartnerOrder,
 } from "./gpay";
+import { saveGPayPurchaseResult } from "./public-orders";
 
 const MATCH_WINDOW_MS = 3 * 60 * 1_000;
 const HISTORY_SETTLING_MS = 30 * 1_000;
@@ -217,30 +218,13 @@ export async function reconcileUnknownGPayPurchase(input: {
     );
   }
 
-  const completed = purchase.isTerminal ? new Date() : null;
-  let updated: SyncOrder | undefined;
+  let saved = false;
   try {
-    [updated] = await db
-      .update(syncOrdersTable)
-      .set({
-        gpayPurchaseUniqueCode: purchase.uniqueCode,
-        gpayPurchaseOrderId: purchase.orderId,
-        gpayPurchaseStatus: purchase.deliveryStatus,
-        gpayPurchaseCompletedAt: completed,
-        gpayPurchaseError: purchase.errorMessage,
-        publicSubmissionError: purchase.errorMessage,
-        ...(purchase.deliveryStatus === "delivered"
-          ? { status: "delivered" as const }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(syncOrdersTable.id, order.order.id),
-          eq(syncOrdersTable.gpayPurchaseStatus, "unknown"),
-        ),
-      )
-      .returning();
+    saved = await saveGPayPurchaseResult(
+      order.order.id,
+      purchase,
+      ["unknown"],
+    );
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
     await recordDecision({
@@ -253,7 +237,7 @@ export async function reconcileUnknownGPayPurchase(input: {
       "Операция GPay уже привязана к другому заказу",
     );
   }
-  if (!updated) {
+  if (!saved) {
     throw new GPayReconciliationConflictError(
       "Состояние закупки изменилось во время сверки",
     );
@@ -264,6 +248,10 @@ export async function reconcileUnknownGPayPurchase(input: {
     description: `${input.reason.trim()}. GPay подтвердил операцию ${purchase.orderId}, статус: ${purchase.deliveryStatus}`,
     status: "success",
   });
+  const [updated] = await db
+    .select()
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.id, order.order.id));
   return updated;
 }
 

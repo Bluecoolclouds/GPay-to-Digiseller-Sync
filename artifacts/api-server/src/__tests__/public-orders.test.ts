@@ -10,7 +10,9 @@ import {
 } from "@workspace/db";
 import {
   createPublicOrderLink,
+  createVerifiedPublicOrderLink,
   getPublicOrder,
+  reconcilePendingGPayPurchases,
   submitPublicOrderCode,
 } from "../lib/public-orders";
 import {
@@ -335,6 +337,44 @@ test("public order link is replaced and code is submitted once", async () => {
   }
 });
 
+test("buyer can create a verified order link without an operator", async () => {
+  const invoiceId = await createOrder();
+  const [fixture] = await db
+    .select({ productId: syncOrdersTable.digisellerProductId })
+    .from(syncOrdersTable)
+    .where(eq(syncOrdersTable.invoiceId, invoiceId));
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456")) {
+      return verifiedDigisellerCode(invoiceId, fixture.productId);
+    }
+    if (url.includes("/api/purchases/unique-code/0000000000000000")) {
+      return verifiedDigisellerCode("different-order", fixture.productId);
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const link = await createVerifiedPublicOrderLink(
+      invoiceId,
+      "1234567890123456",
+    );
+    assert(link);
+    const order = await getPublicOrder(link.token);
+    assert(order && !order.returned);
+    assert.equal(order.code, "1234567890123456");
+
+    assert.equal(
+      await createVerifiedPublicOrderLink(invoiceId, "0000000000000000"),
+      null,
+    );
+  } finally {
+    await removeOrder(invoiceId);
+  }
+});
+
 test("expired and returned links cannot be used", async () => {
   const expiredInvoice = await createOrder();
   const returnedInvoice = await createOrder(true);
@@ -381,6 +421,20 @@ test("public HTTP flow validates codes and is idempotent", async () => {
   assert(address && typeof address === "object");
   const baseUrl = `http://127.0.0.1:${address.port}/api`;
   try {
+    const buyerAccess = await fetch(`${baseUrl}/public/orders/access`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        invoiceId,
+        code: "1234567890123456",
+      }),
+    });
+    assert.equal(buyerAccess.status, 200);
+    assert.match(
+      ((await buyerAccess.json()) as { urlPath: string }).urlPath,
+      /^\/order\/[A-Za-z0-9_-]{32,}$/,
+    );
+
     const invalid = await fetch(
       `${baseUrl}/orders/${encodeURIComponent(invoiceId)}/public-link`,
       {
@@ -575,6 +629,174 @@ test("ambiguous GPay timeout cannot create a second purchase", async () => {
     assert.equal(createCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
+    await removeMappedOrder(fixture);
+  }
+});
+
+test("restart reconciliation blocks a second purchase after interrupted creation", async () => {
+  const fixture = await createMappedOrder("2");
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls++;
+    throw new Error("No supplier call is allowed");
+  };
+  try {
+    await db
+      .update(syncOrdersTable)
+      .set({
+        publicSubmittedAt: new Date(),
+        gpayPurchaseStatus: "creating",
+        gpayPurchaseStartedAt: new Date(Date.now() - 3 * 60 * 1_000),
+      })
+      .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+
+    await reconcilePendingGPayPurchases();
+    const [order] = await db
+      .select()
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+    assert.equal(order.gpayPurchaseStatus, "unknown");
+    assert.match(order.gpayPurchaseError ?? "", /повтор заблокирован/);
+    assert.equal(fetchCalls, 0);
+  } finally {
+    await removeMappedOrder(fixture);
+  }
+});
+
+test("restart reconciliation delivers a queued stored key without another purchase", async () => {
+  const fixture = await createMappedOrder("2");
+  let purchaseCalls = 0;
+  let deliveryCalls = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456/deliver")) {
+      deliveryCalls++;
+      return verifiedDigisellerCode(
+        fixture.invoiceId,
+        fixture.digisellerProductId,
+        2,
+      );
+    }
+    if (url.endsWith("/partner-api/keys/order")) purchaseCalls++;
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const link = await createPublicOrderLink(
+      fixture.invoiceId,
+      "1234567890123456",
+    );
+    assert(link);
+    const [encrypted] = await db
+      .select({ value: syncOrdersTable.publicCodeEncrypted })
+      .from(syncOrdersTable)
+      .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+    assert(encrypted.value);
+    await db
+      .update(syncOrdersTable)
+      .set({
+        publicSubmittedAt: new Date(),
+        publicSubmittedCodeEncrypted: encrypted.value,
+        gpayPurchaseStatus: "delivered",
+        gpayPurchaseUniqueCode: "already-purchased",
+        gpayDeliveredKeyEncrypted: encrypted.value,
+        digisellerDeliveryStatus: "queued",
+        status: "processing",
+      })
+      .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+
+    await reconcilePendingGPayPurchases();
+    const delivered = await waitForDeliveryStatus(fixture.invoiceId, "delivered");
+    assert.equal(delivered.status, "delivered");
+    assert.equal(purchaseCalls, 0);
+    assert.equal(deliveryCalls, 1);
+  } finally {
+    await removeMappedOrder(fixture);
+  }
+});
+
+test("delivered GPay status without a key is refetched and safely delivered", async () => {
+  const fixture = await createMappedOrder("2");
+  let statusCalls = 0;
+  let deliveryCalls = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456/deliver")) {
+      deliveryCalls++;
+      return verifiedDigisellerCode(
+        fixture.invoiceId,
+        fixture.digisellerProductId,
+        2,
+      );
+    }
+    if (url.includes("/api/purchases/unique-code/1234567890123456")) {
+      return verifiedDigisellerCode(
+        fixture.invoiceId,
+        fixture.digisellerProductId,
+      );
+    }
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/order")) {
+      return Response.json({
+        status: "success",
+        data: {
+          success: true,
+          items: [{
+            orderId: 321,
+            uniqueCode: "delivered-without-key",
+            isSuccess: true,
+            deliveryStatus: "delivered",
+          }],
+        },
+      });
+    }
+    if (url.endsWith("/partner-api/keys/orders/delivered-without-key")) {
+      statusCalls++;
+      return Response.json({
+        status: "success",
+        data: {
+          orderId: 321,
+          uniqueCode: "delivered-without-key",
+          deliveryStatus: "delivered",
+          isTerminal: true,
+          key: "RECOVERED-KEY",
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const link = await createVerifiedPublicOrderLink(
+      fixture.invoiceId,
+      "1234567890123456",
+    );
+    assert(link);
+    await submitPublicOrderCode(link.token, "1234567890123456");
+    await waitForDeliveryStatus(fixture.invoiceId, "failed");
+    await db
+      .update(syncOrdersTable)
+      .set({ digisellerDeliveryStatus: "queued" })
+      .where(eq(syncOrdersTable.invoiceId, fixture.invoiceId));
+
+    await reconcilePendingGPayPurchases();
+    const delivered = await waitForDeliveryStatus(fixture.invoiceId, "delivered");
+    assert.equal(statusCalls, 1);
+    assert.equal(deliveryCalls, 1);
+    assert.equal(delivered.status, "delivered");
+    const publicOrder = await getPublicOrder(link.token);
+    assert(publicOrder && !publicOrder.returned);
+    assert.equal(publicOrder.deliveredKey, "RECOVERED-KEY");
+  } finally {
     await removeMappedOrder(fixture);
   }
 });

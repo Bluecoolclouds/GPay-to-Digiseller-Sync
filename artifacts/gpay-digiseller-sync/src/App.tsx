@@ -169,6 +169,7 @@ export default function App() {
     <WouterRouter base={basePath}>
       <QueryClientProvider client={queryClient}>
         <Switch>
+          <Route path="/order" component={PublicOrderPage} />
           <Route path="/order/:token" component={PublicOrderPage} />
           <Route><SessionRouter /></Route>
         </Switch>

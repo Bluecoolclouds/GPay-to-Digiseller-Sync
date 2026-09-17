@@ -605,6 +605,22 @@ export const ReconcileOrderGPayPurchaseResponse = zod.object({
 })
 
 
+export const accessPublicOrderBodyInvoiceIdMax = 200;
+
+export const accessPublicOrderBodyCodeRegExp = new RegExp('^\\d{16}$');
+
+
+export const AccessPublicOrderBody = zod.object({
+  "invoiceId": zod.string().min(1).max(accessPublicOrderBodyInvoiceIdMax),
+  "code": zod.string().regex(accessPublicOrderBodyCodeRegExp)
+})
+
+export const AccessPublicOrderResponse = zod.object({
+  "urlPath": zod.string(),
+  "expiresAt": zod.coerce.date()
+})
+
+
 export const getPublicOrderPathTokenMin = 32;
 export const getPublicOrderPathTokenMax = 200;
 

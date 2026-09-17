@@ -9,6 +9,16 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface PublicOrderAccessInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  invoiceId: string;
+  /** @pattern ^\d{16}$ */
+  code: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

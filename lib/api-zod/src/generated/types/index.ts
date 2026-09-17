@@ -55,6 +55,7 @@ export * from './productPublicationStatus';
 export * from './productUpdate';
 export * from './productUpdatePublicationStatus';
 export * from './publicOrder';
+export * from './publicOrderAccessInput';
 export * from './publicOrderCodeInput';
 export * from './settings';
 export * from './settingsAutomationMode';

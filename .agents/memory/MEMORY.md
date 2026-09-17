@@ -10,3 +10,4 @@
 - [GPay key purchase idempotency](gpay-key-purchase-idempotency.md) — GPay has no client idempotency key; claim once locally and never repeat an ambiguous create.
 - [Existing Digiseller product linking](digiseller-existing-product-linking.md) — map seller cards explicitly; serialize linking with publishing and commit ownership atomically.
 - [API integration-test isolation](api-integration-test-isolation.md) — use separate schemas per suite and keep local HTTP requests outside outbound fetch mocks.
+- [Fulfillment crash recovery](fulfillment-crash-recovery.md) — recover every durable delivery state between supplier purchase and marketplace confirmation.
