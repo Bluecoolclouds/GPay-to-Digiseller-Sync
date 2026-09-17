@@ -253,6 +253,61 @@ type DigisellerUniqueCodeResponse = DigisellerErrorResult & {
   unique_code_state?: DigisellerUniqueCodeState;
 };
 
+const DIGISELLER_UNIQUE_CODE_HOSTS = [
+  "https://api.digiseller.com",
+  "https://oplata.info",
+] as const;
+
+async function requestDigisellerUniqueCode(
+  path: string,
+  token: string,
+  method: "GET" | "PUT",
+  failureMessage: string,
+) {
+  const availabilityFailures: string[] = [];
+
+  for (const host of DIGISELLER_UNIQUE_CODE_HOSTS) {
+    const url = new URL(`${host}${path}`);
+    url.searchParams.set("token", token);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (error) {
+      availabilityFailures.push(
+        `${host}: ${error instanceof Error ? error.message : "ошибка соединения"}`,
+      );
+      continue;
+    }
+
+    let json: DigisellerUniqueCodeResponse;
+    try {
+      json = (await response.json()) as DigisellerUniqueCodeResponse;
+    } catch {
+      json = {};
+    }
+    if (response.status >= 500 && response.status <= 599) {
+      availabilityFailures.push(
+        `${host}: ${getDigisellerError(json, `HTTP ${response.status}`)}`,
+      );
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(
+        getDigisellerError(json, `${failureMessage} (${response.status})`),
+      );
+    }
+    return json;
+  }
+
+  throw new Error(
+    `${failureMessage}: основной и резервный серверы недоступны (${availabilityFailures.join("; ")})`,
+  );
+}
+
 function parseUniqueCodeOrder(
   json: DigisellerUniqueCodeResponse,
   fallback: string,
@@ -282,23 +337,12 @@ export async function verifyDigisellerUniqueCode(
   providedToken?: string,
 ) {
   const token = providedToken ?? (await loginDigiseller());
-  const url = new URL(
-    `https://api.digiseller.com/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}`,
+  const json = await requestDigisellerUniqueCode(
+    `/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}`,
+    token,
+    "GET",
+    "Не удалось проверить код заказа Digiseller",
   );
-  url.searchParams.set("token", token);
-  const response = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const json = (await response.json()) as DigisellerUniqueCodeResponse;
-  if (!response.ok) {
-    throw new Error(
-      getDigisellerError(
-        json,
-        `Не удалось проверить код заказа Digiseller (${response.status})`,
-      ),
-    );
-  }
   return parseUniqueCodeOrder(json, "Digiseller не подтвердил код заказа");
 }
 
@@ -307,21 +351,17 @@ export async function markDigisellerUniqueCodeDelivered(
   providedToken?: string,
 ) {
   const token = providedToken ?? (await loginDigiseller());
-  const url = new URL(
-    `https://api.digiseller.com/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}/deliver`,
+  const json = await requestDigisellerUniqueCode(
+    `/api/purchases/unique-code/${encodeURIComponent(uniqueCode)}/deliver`,
+    token,
+    "PUT",
+    "Не удалось передать результат в Digiseller",
   );
-  url.searchParams.set("token", token);
-  const response = await fetch(url, {
-    method: "PUT",
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const json = (await response.json()) as DigisellerUniqueCodeResponse;
-  if (!response.ok || (json.retval !== 0 && json.retval !== 4)) {
+  if (json.retval !== 0 && json.retval !== 4) {
     throw new Error(
       getDigisellerError(
         json,
-        `Не удалось передать результат в Digiseller (${response.status})`,
+        "Не удалось передать результат в Digiseller",
       ),
     );
   }

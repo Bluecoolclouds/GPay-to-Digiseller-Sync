@@ -17,6 +17,10 @@ import {
   findGPayPurchaseCandidates,
   reconcileUnknownGPayPurchase,
 } from "../lib/gpay-reconciliation";
+import {
+  markDigisellerUniqueCodeDelivered,
+  verifyDigisellerUniqueCode,
+} from "../lib/digiseller";
 import app from "../app";
 import { redactSensitiveRequestUrl } from "../lib/request-log";
 
@@ -48,6 +52,107 @@ function verifiedDigisellerCode(invoiceId: string, productId: number, state = 5)
     unique_code_state: { state },
   });
 }
+
+test("Digiseller unique-code verification uses the primary host when available", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    calls.push(String(input));
+    return verifiedDigisellerCode("primary-invoice", 123);
+  };
+  try {
+    const result = await verifyDigisellerUniqueCode("code", "token");
+    assert.equal(result.invoiceId, "primary-invoice");
+    assert.deepEqual(calls.map((url) => new URL(url).host), ["api.digiseller.com"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Digiseller unique-code verification recovers through the reserve host", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (new URL(url).host === "api.digiseller.com") {
+      return Response.json({ retdesc: "temporarily unavailable" }, { status: 503 });
+    }
+    return verifiedDigisellerCode("reserve-invoice", 456);
+  };
+  try {
+    const result = await verifyDigisellerUniqueCode("code", "token");
+    assert.equal(result.invoiceId, "reserve-invoice");
+    assert.deepEqual(calls.map((url) => new URL(url).host), [
+      "api.digiseller.com",
+      "oplata.info",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Digiseller unique-code verification does not mask business rejection", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    calls.push(String(input));
+    return Response.json({ retval: 1, retdesc: "Invalid unique code" });
+  };
+  try {
+    await assert.rejects(
+      verifyDigisellerUniqueCode("code", "token"),
+      /Invalid unique code/,
+    );
+    assert.deepEqual(calls.map((url) => new URL(url).host), ["api.digiseller.com"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Digiseller delivery recovers through reserve and reports complete outage", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ host: string; method: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    const host = new URL(String(input)).host;
+    calls.push({ host, method: init?.method ?? "GET" });
+    if (host === "api.digiseller.com") throw new TypeError("primary offline");
+    return verifiedDigisellerCode("reserve-delivery", 789, 2);
+  };
+  try {
+    const result = await markDigisellerUniqueCodeDelivered("code", "token");
+    assert.equal(result.state, 2);
+    assert.deepEqual(calls, [
+      { host: "api.digiseller.com", method: "PUT" },
+      { host: "oplata.info", method: "PUT" },
+    ]);
+
+    calls.length = 0;
+    globalThis.fetch = async (input, init) => {
+      calls.push({
+        host: new URL(String(input)).host,
+        method: init?.method ?? "GET",
+      });
+      return Response.json({ retval: 2, retdesc: "Delivery is not permitted" });
+    };
+    await assert.rejects(
+      markDigisellerUniqueCodeDelivered("code", "token"),
+      /Delivery is not permitted/,
+    );
+    assert.deepEqual(calls, [
+      { host: "api.digiseller.com", method: "PUT" },
+    ]);
+
+    globalThis.fetch = async () =>
+      Response.json({ retdesc: "maintenance" }, { status: 502 });
+    await assert.rejects(
+      verifyDigisellerUniqueCode("code", "token"),
+      /основной и резервный серверы недоступны.*api\.digiseller\.com.*oplata\.info/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("Digiseller verification fails closed without a valid transaction state", async () => {
   const invoiceId = await createOrder();
