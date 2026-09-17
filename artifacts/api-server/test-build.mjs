@@ -21,6 +21,7 @@ await build({
     path.resolve(artifactDir, "src/__tests__/test-environment.ts"),
     path.resolve(artifactDir, "src/__tests__/auth.test.ts"),
     path.resolve(artifactDir, "src/__tests__/public-orders.test.ts"),
+    path.resolve(artifactDir, "src/__tests__/background-worker.test.ts"),
   ],
   platform: "node",
   bundle: true,

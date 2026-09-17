@@ -10,6 +10,12 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+export type BackgroundJobName =
+  | "scheduler"
+  | "order-sync"
+  | "price-sync"
+  | "purchase-reconciliation";
+
 export const syncOrderStatus = pgEnum("sync_order_status", [
   "new",
   "processing",
@@ -132,3 +138,20 @@ export const syncOrderStateTable = pgTable("sync_order_state", {
 });
 
 export type SyncOrderState = typeof syncOrderStateTable.$inferSelect;
+
+export const backgroundJobStateTable = pgTable("sync_background_job_state", {
+  name: text("name").$type<BackgroundJobName>().primaryKey(),
+  intervalSeconds: integer("interval_seconds").notNull(),
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
+  lastSuccessfulAt: timestamp("last_successful_at", { withTimezone: true }),
+  lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  lastError: text("last_error"),
+  lastResult: text("last_result"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type BackgroundJobState = typeof backgroundJobStateTable.$inferSelect;

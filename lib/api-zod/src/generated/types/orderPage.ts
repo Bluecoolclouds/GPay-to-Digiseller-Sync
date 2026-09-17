@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { BackgroundJobHealth } from './backgroundJobHealth';
 import type { Order } from './order';
 import type { OrderSyncStatus } from './orderSyncStatus';
 
@@ -14,4 +15,5 @@ export interface OrderPage {
   page: number;
   pageSize: number;
   sync: OrderSyncStatus;
+  workers: BackgroundJobHealth[];
 }

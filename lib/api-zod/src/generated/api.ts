@@ -479,7 +479,19 @@ export const ListOrdersResponse = zod.object({
   "lastError": zod.string().nullable(),
   "isBackfill": zod.boolean(),
   "isStale": zod.boolean()
-})
+}),
+  "workers": zod.array(zod.object({
+  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation']),
+  "intervalSeconds": zod.number().int(),
+  "lastHeartbeatAt": zod.coerce.date().nullable(),
+  "lastStartedAt": zod.coerce.date().nullable(),
+  "lastSuccessfulAt": zod.coerce.date().nullable(),
+  "lastFinishedAt": zod.coerce.date().nullable(),
+  "consecutiveFailures": zod.number().int(),
+  "lastError": zod.string().nullable(),
+  "isRunning": zod.boolean(),
+  "isStale": zod.boolean()
+}))
 })
 
 

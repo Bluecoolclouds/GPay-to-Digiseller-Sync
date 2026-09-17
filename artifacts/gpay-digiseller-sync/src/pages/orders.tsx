@@ -48,6 +48,21 @@ function getPurchaseLabel(status: string | null) {
   }
 }
 
+const workerLabels: Record<string, string> = {
+  scheduler: "Планировщик",
+  "order-sync": "Заказы",
+  "price-sync": "Цены",
+  "purchase-reconciliation": "Покупки и выдача",
+}
+
+function formatWorkerTime(value: Date | string | null) {
+  if (!value) return "нет успешного запуска"
+  return new Date(value).toLocaleString("ru-RU", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  })
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
@@ -115,6 +130,8 @@ export default function OrdersPage() {
   const hasSyncWarning = Boolean(
     syncStatus && (syncStatus.isStale || syncStatus.consecutiveFailures > 0),
   )
+  const workers = data?.workers ?? []
+  const hasWorkerWarning = workers.some((worker) => worker.isStale || worker.consecutiveFailures > 0)
 
   const updateOrderInCache = useCallback((updatedOrder: Order) => {
     const queryKey = getListOrdersQueryKey({
@@ -181,6 +198,49 @@ export default function OrdersPage() {
           </div>
         </div>
       </div>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Фоновые процессы</h2>
+            <p className="text-sm text-muted-foreground">
+              Работают независимо от посещений приложения.
+            </p>
+          </div>
+          <Badge variant={hasWorkerWarning ? "destructive" : "secondary"}>
+            {hasWorkerWarning ? "Требует внимания" : "Работает"}
+          </Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {workers.map((worker) => (
+            <div key={worker.name} className="rounded-md border px-3 py-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{workerLabels[worker.name] ?? worker.name}</span>
+                {worker.isStale || worker.consecutiveFailures > 0
+                  ? <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+              </div>
+              <p className="mt-1 text-muted-foreground">
+                {worker.name === "scheduler" ? "Heartbeat" : "Последний успех"}:{" "}
+                {formatWorkerTime(
+                  worker.name === "scheduler"
+                    ? worker.lastHeartbeatAt
+                    : worker.lastSuccessfulAt,
+                )}
+              </p>
+              {worker.isRunning && <p className="mt-1">Сейчас выполняется.</p>}
+              {worker.isStale && (
+                <p className="mt-1 text-amber-700 dark:text-amber-300">
+                  Процесс остановился или давно не завершался успешно.
+                </p>
+              )}
+              {worker.lastError && (
+                <p className="mt-1 text-destructive">Последняя ошибка: {worker.lastError}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="flex items-center gap-2 w-full sm:w-96">

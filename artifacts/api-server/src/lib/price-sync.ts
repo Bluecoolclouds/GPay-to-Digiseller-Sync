@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import {
   activitiesTable,
   db,
+  pool,
   productsTable,
   settingsTable,
 } from "@workspace/db";
@@ -83,10 +84,13 @@ export function getDigisellerProductInput(product: ProductRecord) {
 }
 
 export async function syncKeyPrices(): Promise<PriceSyncResult> {
-  const lock = await db.execute<{ locked: boolean }>(
-    `select pg_try_advisory_lock(${PRICE_SYNC_LOCK_ID}) as locked`,
+  const lockClient = await pool.connect();
+  const lock = await lockClient.query<{ locked: boolean }>(
+    "select pg_try_advisory_lock($1) as locked",
+    [PRICE_SYNC_LOCK_ID],
   );
   if (!lock.rows[0]?.locked) {
+    lockClient.release();
     return {
       checked: 0,
       changed: 0,
@@ -309,6 +313,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
     });
     return result;
   } finally {
-    await db.execute(`select pg_advisory_unlock(${PRICE_SYNC_LOCK_ID})`);
+    await lockClient.query("select pg_advisory_unlock($1)", [PRICE_SYNC_LOCK_ID]);
+    lockClient.release();
   }
 }

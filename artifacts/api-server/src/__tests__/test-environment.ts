@@ -9,8 +9,10 @@ import { pool } from "@workspace/db";
 const schemaSuffix = randomBytes(8).toString("hex");
 const syncSchema = `sync_product_types_test_${schemaSuffix}`;
 const publicOrdersSchema = `public_orders_test_${schemaSuffix}`;
+const backgroundWorkerSchema = `background_worker_test_${schemaSuffix}`;
 assert.match(syncSchema, /^sync_product_types_test_[a-f0-9]+$/);
 assert.match(publicOrdersSchema, /^public_orders_test_[a-f0-9]+$/);
+assert.match(backgroundWorkerSchema, /^background_worker_test_[a-f0-9]+$/);
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const schemaSql = await readFile(path.join(compiledDir, "schema.sql"), "utf8");
@@ -22,6 +24,7 @@ assert.doesNotMatch(
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
+const backgroundWorkerTestFile = path.join(compiledDir, "background-worker.test.mjs");
 
 const authTestFile = path.join(compiledDir, "auth.test.mjs");
 function environmentFor(schema: string) {
@@ -79,15 +82,22 @@ async function createTestSchema(schema: string) {
 
 try {
   await createTestSchema(publicOrdersSchema);
+  await createTestSchema(backgroundWorkerSchema);
   await createTestSchema(syncSchema);
   run(
     process.execPath,
     ["--test", "--test-concurrency=1", publicOrdersTestFile],
     environmentFor(publicOrdersSchema),
   );
+  run(
+    process.execPath,
+    ["--test", "--test-concurrency=1", backgroundWorkerTestFile],
+    environmentFor(backgroundWorkerSchema),
+  );
   run(process.execPath, ["--test", "--test-concurrency=1", testFile]);
 } finally {
   await pool.query(`drop schema if exists "${publicOrdersSchema}" cascade`);
+  await pool.query(`drop schema if exists "${backgroundWorkerSchema}" cascade`);
   await pool.query(`drop schema if exists "${syncSchema}" cascade`);
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });

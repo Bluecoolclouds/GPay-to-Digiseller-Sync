@@ -750,7 +750,7 @@ components:
         updatedAt: { type: string, format: date-time }
     OrderPage:
       type: object
-      required: [items, total, page, pageSize, sync]
+      required: [items, total, page, pageSize, sync, workers]
       properties:
         items:
           type: array
@@ -759,6 +759,25 @@ components:
         page: { type: integer }
         pageSize: { type: integer }
         sync: { $ref: "#/components/schemas/OrderSyncStatus" }
+        workers:
+          type: array
+          items: { $ref: "#/components/schemas/BackgroundJobHealth" }
+    BackgroundJobHealth:
+      type: object
+      required: [name, intervalSeconds, lastHeartbeatAt, lastStartedAt, lastSuccessfulAt, lastFinishedAt, consecutiveFailures, lastError, isRunning, isStale]
+      properties:
+        name:
+          type: string
+          enum: [scheduler, order-sync, price-sync, purchase-reconciliation]
+        intervalSeconds: { type: integer }
+        lastHeartbeatAt: { type: [string, "null"], format: date-time }
+        lastStartedAt: { type: [string, "null"], format: date-time }
+        lastSuccessfulAt: { type: [string, "null"], format: date-time }
+        lastFinishedAt: { type: [string, "null"], format: date-time }
+        consecutiveFailures: { type: integer }
+        lastError: { type: [string, "null"] }
+        isRunning: { type: boolean }
+        isStale: { type: boolean }
     OrderSyncStatus:
       type: object
       required: [lastSuccessfulAt, lastAttemptAt, consecutiveFailures, lastError, isBackfill, isStale]

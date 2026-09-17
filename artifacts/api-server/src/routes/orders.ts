@@ -27,6 +27,7 @@ import {
   syncDigisellerOrders,
   updateOrder,
 } from "../lib/orders";
+import { listBackgroundJobHealth } from "../lib/background-worker";
 import { requireOperatorRole } from "../middlewares/auth";
 import {
   createPublicOrderLink,
@@ -188,6 +189,7 @@ router.get("/orders", async (req, res): Promise<void> => {
     return;
   }
   const result = await listOrders(parsed.data);
+  const workers = await listBackgroundJobHealth();
   res.json(
     ListOrdersResponse.parse({
       items: result.items.map(serializeOrder),
@@ -199,6 +201,13 @@ router.get("/orders", async (req, res): Promise<void> => {
         lastSuccessfulAt: result.sync.lastSuccessfulAt?.toISOString() ?? null,
         lastAttemptAt: result.sync.lastAttemptAt?.toISOString() ?? null,
       },
+      workers: workers.map((worker) => ({
+        ...worker,
+        lastHeartbeatAt: worker.lastHeartbeatAt?.toISOString() ?? null,
+        lastStartedAt: worker.lastStartedAt?.toISOString() ?? null,
+        lastSuccessfulAt: worker.lastSuccessfulAt?.toISOString() ?? null,
+        lastFinishedAt: worker.lastFinishedAt?.toISOString() ?? null,
+      })),
     }),
   );
 });

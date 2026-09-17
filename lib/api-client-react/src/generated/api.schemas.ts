@@ -469,12 +469,41 @@ export interface OrderSyncStatus {
   isStale: boolean;
 }
 
+export type BackgroundJobHealthName = typeof BackgroundJobHealthName[keyof typeof BackgroundJobHealthName];
+
+
+export const BackgroundJobHealthName = {
+  scheduler: 'scheduler',
+  'order-sync': 'order-sync',
+  'price-sync': 'price-sync',
+  'purchase-reconciliation': 'purchase-reconciliation',
+} as const;
+
+export interface BackgroundJobHealth {
+  name: BackgroundJobHealthName;
+  intervalSeconds: number;
+  /** @nullable */
+  lastHeartbeatAt: string | null;
+  /** @nullable */
+  lastStartedAt: string | null;
+  /** @nullable */
+  lastSuccessfulAt: string | null;
+  /** @nullable */
+  lastFinishedAt: string | null;
+  consecutiveFailures: number;
+  /** @nullable */
+  lastError: string | null;
+  isRunning: boolean;
+  isStale: boolean;
+}
+
 export interface OrderPage {
   items: Order[];
   total: number;
   page: number;
   pageSize: number;
   sync: OrderSyncStatus;
+  workers: BackgroundJobHealth[];
 }
 
 export type OrderUpdateStatus = typeof OrderUpdateStatus[keyof typeof OrderUpdateStatus];
