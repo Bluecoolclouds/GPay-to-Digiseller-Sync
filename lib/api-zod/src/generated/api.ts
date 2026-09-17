@@ -145,7 +145,12 @@ export const updateProductsMarginBodyMarginPercentMax = 500;
 
 
 export const UpdateProductsMarginBody = zod.object({
-  "productIds": zod.array(zod.number().int().min(1)).min(1).max(updateProductsMarginBodyProductIdsMax),
+  "productIds": zod.array(zod.number().int().min(1)).min(1).max(updateProductsMarginBodyProductIdsMax).optional(),
+  "filter": zod.object({
+  "search": zod.string().optional(),
+  "status": zod.enum(['all', 'available', 'unavailable', 'published', 'draft']).optional(),
+  "productKind": zod.enum(['all', 'key', 'gift', 'unknown']).optional()
+}).optional(),
   "marginPercent": zod.number().min(updateProductsMarginBodyMarginPercentMin).max(updateProductsMarginBodyMarginPercentMax)
 })
 
@@ -159,6 +164,24 @@ export const UpdateProductsMarginResponse = zod.object({
   "updated": zod.number().int().min(updateProductsMarginResponseUpdatedMin),
   "publishedUpdated": zod.number().int().min(updateProductsMarginResponsePublishedUpdatedMin),
   "marginPercent": zod.number()
+})
+
+
+export const GetProductsMarginSummaryQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "status": zod.enum(['all', 'available', 'unavailable', 'published', 'draft']).optional(),
+  "productKind": zod.enum(['all', 'key', 'gift', 'unknown']).optional()
+})
+
+export const getProductsMarginSummaryResponseTotalMin = 0;
+
+export const getProductsMarginSummaryResponsePublishedMin = 0;
+
+
+
+export const GetProductsMarginSummaryResponse = zod.object({
+  "total": zod.number().int().min(getProductsMarginSummaryResponseTotalMin),
+  "published": zod.number().int().min(getProductsMarginSummaryResponsePublishedMin)
 })
 
 

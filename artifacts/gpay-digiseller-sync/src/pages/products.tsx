@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { useListProducts, useUpdateProduct, useUpdateProductsMargin, usePublishProduct, usePublishProductsBatch, useGetLatestPublishProductsBatch, getGetLatestPublishProductsBatchQueryKey, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
+import { useListProducts, useUpdateProduct, useUpdateProductsMargin, useGetProductsMarginSummary, getGetProductsMarginSummaryQueryKey, usePublishProduct, usePublishProductsBatch, useGetLatestPublishProductsBatch, getGetLatestPublishProductsBatchQueryKey, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,7 @@ export default function ProductsPage() {
   const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [allFilteredSelected, setAllFilteredSelected] = useState(false)
   const [bulkMargin, setBulkMargin] = useState("15")
   const [importProduct, setImportProduct] = useState<Product | null>(null)
   const batchMutation = usePublishProductsBatch()
@@ -57,6 +58,23 @@ export default function ProductsPage() {
     status: status !== "all" ? status : undefined,
     productKind: productKind !== "all" ? productKind : undefined
   })
+  const marginSummaryParams = {
+    search: debouncedSearch || undefined,
+    status: status !== "all" ? status : undefined,
+    productKind: productKind !== "all" ? productKind : undefined,
+  }
+  const {
+    data: filteredSummary,
+    isFetching: isFilteredSummaryLoading,
+  } = useGetProductsMarginSummary(
+    marginSummaryParams,
+    {
+      query: {
+        queryKey: getGetProductsMarginSummaryQueryKey(marginSummaryParams),
+        enabled: allFilteredSelected,
+      },
+    },
+  )
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -140,21 +158,42 @@ export default function ProductsPage() {
       return
     }
     const productIds = Array.from(selectedIds)
-    const publishedCount = visibleItems.filter(
-      (product) =>
-        selectedIds.has(product.id) &&
-        product.publicationStatus === ProductPublicationStatus.published,
-    ).length
+    const affectedCount = allFilteredSelected
+      ? filteredSummary?.total ?? 0
+      : productIds.length
+    const publishedCount = allFilteredSelected
+      ? filteredSummary?.published ?? 0
+      : visibleItems.filter(
+          (product) =>
+            selectedIds.has(product.id) &&
+            product.publicationStatus === ProductPublicationStatus.published,
+        ).length
+    if (affectedCount === 0) {
+      toast.error("По текущему выбору товары не найдены")
+      return
+    }
     if (
       !window.confirm(
-        `Установить маржу ${marginPercent}% для ${productIds.length} товаров?${publishedCount ? ` Цены ${publishedCount} опубликованных карточек будут обновлены в Digiseller.` : ""}`,
+        `Установить маржу ${marginPercent}% для ${affectedCount} товаров?${publishedCount ? ` Цены ${publishedCount} опубликованных карточек будут обновлены в Digiseller.` : ""}`,
       )
     ) return
     marginMutation.mutate(
-      { data: { productIds, marginPercent } },
+      {
+        data: allFilteredSelected
+          ? {
+              filter: {
+                search: debouncedSearch || undefined,
+                status,
+                productKind,
+              },
+              marginPercent,
+            }
+          : { productIds, marginPercent },
+      },
       {
         onSuccess: (result) => {
           setSelectedIds(new Set())
+          setAllFilteredSelected(false)
           void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
           toast.success(
             `Маржа ${result.marginPercent}% применена к ${result.updated} товарам`,
@@ -206,10 +245,16 @@ export default function ProductsPage() {
         </Button>
       </div>
 
-      {selectedIds.size > 0 && (
+      {(selectedIds.size > 0 || allFilteredSelected) && (
         <Card className="flex flex-col gap-3 border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="font-medium">Выбрано товаров: {selectedIds.size}</div>
+            <div className="font-medium">
+              {allFilteredSelected
+                ? isFilteredSummaryLoading
+                  ? "Считаем товары по фильтру…"
+                  : `Выбрано по фильтру: ${filteredSummary?.total ?? 0}`
+                : `Выбрано товаров на странице: ${selectedIds.size}`}
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Для опубликованных карточек цена сначала обновится в Digiseller, затем локально.
             </p>
@@ -234,7 +279,11 @@ export default function ProductsPage() {
               type="button"
               variant="secondary"
               onClick={handleBulkMargin}
-              disabled={marginMutation.isPending}
+              disabled={
+                marginMutation.isPending ||
+                (allFilteredSelected &&
+                  (isFilteredSummaryLoading || !filteredSummary?.total))
+              }
               className="gap-2"
             >
               <Save className="h-4 w-4" />
@@ -302,6 +351,31 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      <Card className="border-dashed p-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            onChange={(event) => {
+              setAllFilteredSelected(event.target.checked)
+              setSelectedIds(new Set())
+            }}
+            disabled={!data?.total}
+            className="mt-0.5 h-4 w-4 rounded border-input"
+          />
+          <span>
+            <span className="block text-sm font-medium">
+              Выбрать все товары по текущему фильтру
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {allFilteredSelected && filteredSummary
+                ? `Будет изменено ${filteredSummary.total}, опубликовано в Digiseller — ${filteredSummary.published}.`
+                : `Отдельный режим для всех ${data?.total ?? 0} товаров, включая другие страницы.`}
+            </span>
+          </span>
+        </label>
+      </Card>
+
       {batchTask && (
         <Card className="border-primary/20 bg-primary/5 p-4">
           <div className="flex items-center justify-between gap-4">
@@ -367,7 +441,7 @@ export default function ProductsPage() {
                     aria-label="Выбрать товары на странице"
                     checked={allEligibleSelected}
                     onChange={toggleAllEligible}
-                    disabled={visibleItems.length === 0}
+                    disabled={visibleItems.length === 0 || allFilteredSelected}
                     className="h-4 w-4 rounded border-input"
                   />
                 </th>
@@ -392,6 +466,7 @@ export default function ProductsPage() {
                     onImport={() => setImportProduct(product)}
                      batchIsActive={batchIsActive}
                     selected={selectedIds.has(product.id)}
+                    selectionDisabled={allFilteredSelected}
                     onSelectionChange={(selected) =>
                       setSelectedIds((current) => {
                         const next = new Set(current)
@@ -428,6 +503,7 @@ function ProductRow({
   onImport,
   batchIsActive,
   selected,
+  selectionDisabled,
   onSelectionChange,
 }: {
   product: Product
@@ -435,6 +511,7 @@ function ProductRow({
   onImport: () => void
   batchIsActive: boolean
   selected: boolean
+  selectionDisabled: boolean
   onSelectionChange: (selected: boolean) => void
 }) {
   const queryClient = useQueryClient()
@@ -526,6 +603,7 @@ function ProductRow({
           type="checkbox"
           aria-label={`Выбрать ${product.name}`}
           checked={selected}
+          disabled={selectionDisabled}
           onChange={(event) => onSelectionChange(event.target.checked)}
           className="h-4 w-4 rounded border-input"
         />

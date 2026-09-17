@@ -9,18 +9,53 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type ProductFilterStatus = typeof ProductFilterStatus[keyof typeof ProductFilterStatus];
+
+
+export const ProductFilterStatus = {
+  all: 'all',
+  available: 'available',
+  unavailable: 'unavailable',
+  published: 'published',
+  draft: 'draft',
+} as const;
+
+export type ProductFilterProductKind = typeof ProductFilterProductKind[keyof typeof ProductFilterProductKind];
+
+
+export const ProductFilterProductKind = {
+  all: 'all',
+  key: 'key',
+  gift: 'gift',
+  unknown: 'unknown',
+} as const;
+
+export interface ProductFilter {
+  search?: string;
+  status?: ProductFilterStatus;
+  productKind?: ProductFilterProductKind;
+}
+
 export interface ProductsMarginUpdate {
   /**
      * @minItems 1
      * @maxItems 100
      * @items.minimum 1
      */
-  productIds: number[];
+  productIds?: number[];
+  filter?: ProductFilter;
   /**
      * @minimum 0
      * @maximum 500
      */
   marginPercent: number;
+}
+
+export interface ProductsMarginSummary {
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  published: number;
 }
 
 export interface ProductsMarginUpdateResult {
@@ -717,6 +752,33 @@ export type ListProductsProductKind = typeof ListProductsProductKind[keyof typeo
 
 
 export const ListProductsProductKind = {
+  all: 'all',
+  key: 'key',
+  gift: 'gift',
+  unknown: 'unknown',
+} as const;
+
+export type GetProductsMarginSummaryParams = {
+search?: string;
+status?: GetProductsMarginSummaryStatus;
+productKind?: GetProductsMarginSummaryProductKind;
+};
+
+export type GetProductsMarginSummaryStatus = typeof GetProductsMarginSummaryStatus[keyof typeof GetProductsMarginSummaryStatus];
+
+
+export const GetProductsMarginSummaryStatus = {
+  all: 'all',
+  available: 'available',
+  unavailable: 'unavailable',
+  published: 'published',
+  draft: 'draft',
+} as const;
+
+export type GetProductsMarginSummaryProductKind = typeof GetProductsMarginSummaryProductKind[keyof typeof GetProductsMarginSummaryProductKind];
+
+
+export const GetProductsMarginSummaryProductKind = {
   all: 'all',
   key: 'key',
   gift: 'gift',

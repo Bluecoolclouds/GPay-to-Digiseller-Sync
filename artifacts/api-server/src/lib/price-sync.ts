@@ -328,29 +328,28 @@ export async function applyProductMargins(
               : "Не удалось войти в Digiseller",
         };
       }
-      let failures: Map<number, string>;
-      try {
-        failures = await updateDigisellerProductPrices(
-          published.map(({ product, calculated }) => ({
-            productId: product.digisellerId!,
-            priceRub: calculated.salePriceRub,
-          })),
-          token,
-        );
-      } catch (error) {
-        const rollbackFailures = await rollbackPublishedPrices(published, token);
-        await disableProductsWithUncertainPrices(
-          published,
-          rollbackFailures,
-          token,
-        );
-        return {
-          applied: false as const,
-          reason:
+      const failures = new Map<number, string>();
+      const batchSize = 100;
+      for (let start = 0; start < published.length; start += batchSize) {
+        const batch = published.slice(start, start + batchSize);
+        try {
+          const batchFailures = await updateDigisellerProductPrices(
+            batch.map(({ product, calculated }) => ({
+              productId: product.digisellerId!,
+              priceRub: calculated.salePriceRub,
+            })),
+            token,
+          );
+          for (const [id, message] of batchFailures) failures.set(id, message);
+        } catch (error) {
+          const message =
             error instanceof Error
-              ? `Digiseller не подтвердил изменение цен: ${error.message}`
-              : "Digiseller не подтвердил изменение цен",
-        };
+              ? error.message
+              : "Digiseller не подтвердил изменение цены";
+          for (const { product } of batch) {
+            failures.set(product.digisellerId!, message);
+          }
+        }
       }
       if (failures.size > 0) {
         const rollbackFailures = await rollbackPublishedPrices(published, token);

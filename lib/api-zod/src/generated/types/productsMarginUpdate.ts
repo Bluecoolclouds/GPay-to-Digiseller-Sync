@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductFilter } from './productFilter';
 
 export interface ProductsMarginUpdate {
   /**
@@ -12,7 +13,8 @@ export interface ProductsMarginUpdate {
      * @maxItems 100
      * @items.minimum 1
      */
-  productIds: number[];
+  productIds?: number[];
+  filter?: ProductFilter;
   /**
      * @minimum 0
      * @maximum 500

@@ -18,6 +18,8 @@ import {
   GetConnectionsResponse,
   GetDashboardResponse,
   GetExchangeRateResponse,
+  GetProductsMarginSummaryQueryParams,
+  GetProductsMarginSummaryResponse,
   GetSettingsResponse,
   LinkDigisellerProductBody,
   LinkDigisellerProductResponse,
@@ -219,6 +221,42 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
   );
 });
 
+type ProductFilterInput = {
+  search?: string;
+  status?: "all" | "available" | "unavailable" | "published" | "draft";
+  productKind?: "all" | "key" | "gift" | "unknown";
+};
+
+function buildProductWhere({
+  search,
+  status = "all",
+  productKind = "all",
+}: ProductFilterInput) {
+  const filters = [];
+  if (search) {
+    filters.push(
+      or(
+        ilike(productsTable.name, `%${search}%`),
+        sql`${productsTable.gpayId}::text ilike ${`%${search}%`}`,
+      ),
+    );
+  }
+  if (status === "available") filters.push(eq(productsTable.isAvailable, true));
+  if (status === "unavailable") filters.push(eq(productsTable.isAvailable, false));
+  if (status === "published") {
+    filters.push(eq(productsTable.publicationStatus, "published"));
+  }
+  if (status === "draft") {
+    filters.push(eq(productsTable.publicationStatus, "draft"));
+  }
+  if (productKind === "key") filters.push(eq(productsTable.productType, "2"));
+  if (productKind === "gift") filters.push(eq(productsTable.productType, "1"));
+  if (productKind === "unknown") {
+    filters.push(sql`${productsTable.productType} not in ('1', '2')`);
+  }
+  return filters.length ? and(...filters) : undefined;
+}
+
 router.get("/products", async (req, res): Promise<void> => {
   const parsed = ListProductsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -232,20 +270,7 @@ router.get("/products", async (req, res): Promise<void> => {
     page = 1,
     pageSize = 20,
   } = parsed.data;
-  const filters = [];
-  if (search) {
-    filters.push(or(ilike(productsTable.name, `%${search}%`), sql`${productsTable.gpayId}::text ilike ${`%${search}%`}`));
-  }
-  if (status === "available") filters.push(eq(productsTable.isAvailable, true));
-  if (status === "unavailable") filters.push(eq(productsTable.isAvailable, false));
-  if (status === "published") filters.push(eq(productsTable.publicationStatus, "published"));
-  if (status === "draft") filters.push(eq(productsTable.publicationStatus, "draft"));
-  if (productKind === "key") filters.push(eq(productsTable.productType, "2"));
-  if (productKind === "gift") filters.push(eq(productsTable.productType, "1"));
-  if (productKind === "unknown") {
-    filters.push(sql`${productsTable.productType} not in ('1', '2')`);
-  }
-  const where = filters.length ? and(...filters) : undefined;
+  const where = buildProductWhere({ search, status, productKind });
   const [countRow] = await db.select({ total: sql<number>`count(*)::int` }).from(productsTable).where(where);
   const rows = await db
     .select()
@@ -266,6 +291,23 @@ router.get("/products", async (req, res): Promise<void> => {
       pageSize,
     }),
   );
+});
+
+router.get("/products/bulk-margin-summary", async (req, res): Promise<void> => {
+  const parsed = GetProductsMarginSummaryQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const where = buildProductWhere(parsed.data);
+  const [summary] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      published: sql<number>`count(*) filter (where ${productsTable.publicationStatus} = 'published')::int`,
+    })
+    .from(productsTable)
+    .where(where);
+  res.json(GetProductsMarginSummaryResponse.parse(summary));
 });
 
 router.patch("/products/:id", async (req, res): Promise<void> => {
@@ -353,9 +395,36 @@ router.post("/products/bulk-margin", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const hasProductIds = body.data.productIds !== undefined;
+  const hasFilter = body.data.filter !== undefined;
+  if (hasProductIds === hasFilter) {
+    res.status(400).json({
+      error: "Укажите либо выбранные товары, либо фильтр всего каталога",
+    });
+    return;
+  }
   try {
+    const productIds = hasProductIds
+      ? body.data.productIds!
+      : (
+          await db
+            .select({ id: productsTable.id })
+            .from(productsTable)
+            .where(buildProductWhere(body.data.filter!))
+        ).map(({ id }) => id);
+    if (productIds.length === 0) {
+      res.json(
+        UpdateProductsMarginResponse.parse({
+          applied: true,
+          updated: 0,
+          publishedUpdated: 0,
+          marginPercent: body.data.marginPercent,
+        }),
+      );
+      return;
+    }
     const result = await applyProductMargins(
-      body.data.productIds,
+      productIds,
       body.data.marginPercent,
     );
     if (!result.applied) {

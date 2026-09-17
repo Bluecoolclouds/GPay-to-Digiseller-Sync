@@ -32,6 +32,7 @@ import type {
   ErrorResponse,
   ExchangeRate,
   GPayReconciliationInput,
+  GetProductsMarginSummaryParams,
   HealthStatus,
   ListActivitiesParams,
   ListOrdersParams,
@@ -45,6 +46,7 @@ import type {
   Product,
   ProductPage,
   ProductUpdate,
+  ProductsMarginSummary,
   ProductsMarginUpdate,
   ProductsMarginUpdateResult,
   PublicOrder,
@@ -571,6 +573,84 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUpdateProductsMarginMutationOptions(options));
     }
+
+export const getGetProductsMarginSummaryUrl = (params?: GetProductsMarginSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/products/bulk-margin-summary?${stringifiedParams}` : `/api/products/bulk-margin-summary`
+}
+
+export const getProductsMarginSummary = async (params?: GetProductsMarginSummaryParams, options?: Parameters<typeof customFetch>[1]): Promise<ProductsMarginSummary> => {
+
+  return customFetch<ProductsMarginSummary>(getGetProductsMarginSummaryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductsMarginSummaryQueryKey = (params?: GetProductsMarginSummaryParams,) => {
+    return [
+    `/api/products/bulk-margin-summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetProductsMarginSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getProductsMarginSummary>>, TError = ErrorType<unknown>>(params?: GetProductsMarginSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductsMarginSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductsMarginSummaryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductsMarginSummary>>> = ({ signal }) => getProductsMarginSummary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductsMarginSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductsMarginSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getProductsMarginSummary>>>
+export type GetProductsMarginSummaryQueryError = ErrorType<unknown>
+
+
+
+export function useGetProductsMarginSummary<TData = Awaited<ReturnType<typeof getProductsMarginSummary>>, TError = ErrorType<unknown>>(
+ params?: GetProductsMarginSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductsMarginSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductsMarginSummaryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getPublishProductUrl = (id: number,) => {
 

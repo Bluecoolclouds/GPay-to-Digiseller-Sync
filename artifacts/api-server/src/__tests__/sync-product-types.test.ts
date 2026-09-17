@@ -311,6 +311,53 @@ test("bulk margin update recalculates every selected draft atomically", async ()
   assert.ok(updated.every((product) => product.salePriceRub > 0));
 });
 
+test("filtered margin update reports exact totals and changes only matching products", async () => {
+  await seedProducts();
+  await db
+    .update(productsTable)
+    .set({
+      digisellerId: 1_914_001_001,
+      publicationStatus: "published",
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  usePriceSyncResponses({ Status: 3, ErrorCount: 0 });
+
+  try {
+    const summary = await request<{ total: number; published: number }>(
+      "/api/products/bulk-margin-summary?search=Regression&productKind=key",
+    );
+    const result = await request<{
+      updated: number;
+      publishedUpdated: number;
+      marginPercent: number;
+    }>("/api/products/bulk-margin", {
+      method: "POST",
+      body: JSON.stringify({
+        filter: {
+          search: "Regression",
+          status: "all",
+          productKind: "key",
+        },
+        marginPercent: 31,
+      }),
+    });
+    const products = await db
+      .select()
+      .from(productsTable)
+      .where(inArray(productsTable.gpayId, fixtureIds));
+    const key = products.find((product) => product.gpayId === keyGpayId);
+    const untouched = products.filter((product) => product.gpayId !== keyGpayId);
+
+    assert.deepEqual(summary, { total: 1, published: 1 });
+    assert.equal(result.updated, 1);
+    assert.equal(result.publishedUpdated, 1);
+    assert.equal(key?.marginPercent, 31);
+    assert.ok(untouched.every((product) => product.marginPercent === 15));
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 test("dashboard creates a warning after repeated price task timeouts and clears it after success", async () => {
   await db.delete(activitiesTable).where(eq(activitiesTable.type, "price"));
   const timeoutDescription = (count: number, error: string) =>

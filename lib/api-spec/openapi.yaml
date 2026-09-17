@@ -130,6 +130,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductsMarginUpdateResult"
+  /products/bulk-margin-summary:
+    get:
+      operationId: getProductsMarginSummary
+      tags: [products]
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, available, unavailable, published, draft]
+        - name: productKind
+          in: query
+          schema:
+            type: string
+            enum: [all, key, gift, unknown]
+      responses:
+        "200":
+          description: Exact number of products affected by the current filter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductsMarginSummary"
   /products/{id}/publish:
     post:
       operationId: publishProduct
@@ -555,7 +580,7 @@ components:
         error: { type: string }
     ProductsMarginUpdate:
       type: object
-      required: [productIds, marginPercent]
+      required: [marginPercent]
       properties:
         productIds:
           type: array
@@ -563,7 +588,25 @@ components:
           maxItems: 100
           uniqueItems: true
           items: { type: integer, minimum: 1 }
+        filter:
+          $ref: "#/components/schemas/ProductFilter"
         marginPercent: { type: number, minimum: 0, maximum: 500 }
+    ProductFilter:
+      type: object
+      properties:
+        search: { type: string }
+        status:
+          type: string
+          enum: [all, available, unavailable, published, draft]
+        productKind:
+          type: string
+          enum: [all, key, gift, unknown]
+    ProductsMarginSummary:
+      type: object
+      required: [total, published]
+      properties:
+        total: { type: integer, minimum: 0 }
+        published: { type: integer, minimum: 0 }
     ProductsMarginUpdateResult:
       type: object
       required: [updated, publishedUpdated, marginPercent]
