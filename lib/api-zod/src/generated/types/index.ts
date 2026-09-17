@@ -39,6 +39,7 @@ export * from './listOrdersStatus';
 export * from './listProductsParams';
 export * from './listProductsProductKind';
 export * from './listProductsStatus';
+export * from './notificationTestResult';
 export * from './order';
 export * from './orderPage';
 export * from './orderPublicLink';

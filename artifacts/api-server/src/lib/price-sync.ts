@@ -16,6 +16,7 @@ import { getOfficialUsdRubRate } from "./exchange-rate";
 import { createPriceTimeoutSummary } from "./price-timeout-warning";
 import { buildProductDescriptions } from "./product-description";
 import { calculateProductPrice } from "./pricing";
+import { notifyFailure, notifyRecovery } from "./notifications";
 
 const PRICE_SYNC_LOCK_ID = 704_291_163;
 
@@ -350,6 +351,11 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
     if (settings.exchangeRateMode !== "manual" && rate.isFallback) {
       const message =
         "Автоматическая проверка цен остановлена: актуальный курс BestChange недоступен";
+      await notifyFailure({
+        key: "exchange-rate:stale",
+        title: "Не удалось обновить курс валют",
+        reason: message,
+      });
       await db.insert(activitiesTable).values({
         type: "price",
         title: "Автоматическая проверка цен остановлена",
@@ -368,6 +374,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
         errors: [message],
       };
     }
+    await notifyRecovery("exchange-rate:stale", "Обновление курса валют");
     const effectiveSettings =
       !rate.isFallback && rate.usdRub !== settings.usdRubRate
         ? { ...settings, usdRubRate: rate.usdRub }
@@ -439,6 +446,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       let token: string;
       try {
         token = await loginDigiseller();
+        await notifyRecovery("supplier-auth:digiseller", "Авторизация Digiseller");
       } catch (error) {
         const message =
           error instanceof Error
@@ -447,6 +455,11 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
         for (const productId of publishedProductIds) {
           digisellerFailures.set(productId, message);
         }
+        await notifyFailure({
+          key: "supplier-auth:digiseller",
+          title: "Ошибка авторизации Digiseller",
+          reason: message,
+        });
         token = "";
       }
       const batchSize = 100;
@@ -554,6 +567,35 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
         ),
       ],
     };
+    if (result.failed > 0) {
+      await notifyFailure({
+        key: "price-sync:digiseller",
+        title: "Ошибки обновления опубликованных товаров",
+        reason: result.errors.join("; "),
+      });
+    } else {
+      await notifyRecovery(
+        "price-sync:digiseller",
+        "Обновление опубликованных товаров",
+      );
+    }
+    for (const product of localProducts) {
+      if (product.publicationStatus !== "published") continue;
+      const supplierAvailable =
+        supplierById.get(product.gpayId)?.isAvailable === true;
+      if (!supplierAvailable) {
+        await notifyFailure({
+          key: `product-unavailable:${product.id}`,
+          title: "Опубликованный товар недоступен у поставщика",
+          reason: `Внутренний ID товара: ${product.id}`,
+        });
+      } else {
+        await notifyRecovery(
+          `product-unavailable:${product.id}`,
+          `Доступность товара ${product.id}`,
+        );
+      }
+    }
     const timeoutSummary = createPriceTimeoutSummary(result.errors);
     await db.insert(activitiesTable).values({
       type: "price",

@@ -336,6 +336,7 @@ export interface Settings {
   automationMode: SettingsAutomationMode;
   disableOnUnavailable: boolean;
   credentialsConfigured: boolean;
+  notificationConfigured: boolean;
 }
 
 export type SettingsInputExchangeRateMode = typeof SettingsInputExchangeRateMode[keyof typeof SettingsInputExchangeRateMode];
@@ -379,6 +380,8 @@ export interface SettingsInput {
   minimumProfitRub: number;
   automationMode: SettingsInputAutomationMode;
   disableOnUnavailable: boolean;
+  /** HTTPS webhook URL. Omit to keep the current channel. */
+  notificationWebhookUrl?: string;
 }
 
 export interface SettingsPreview {
@@ -442,6 +445,14 @@ export interface SettingsApplyInput {
   disableOnUnavailable: boolean;
   /** @minLength 1 */
   previewToken: string;
+  /** HTTPS webhook URL. Omit to keep the current channel. */
+  notificationWebhookUrl?: string;
+}
+
+export interface NotificationTestResult {
+  success: boolean;
+  message: string;
+  checkedAt: string;
 }
 
 export interface ConnectionState {

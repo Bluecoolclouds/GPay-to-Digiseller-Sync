@@ -35,4 +35,6 @@ export interface SettingsApplyInput {
   disableOnUnavailable: boolean;
   /** @minLength 1 */
   previewToken: string;
+  /** HTTPS webhook URL. Omit to keep the current channel. */
+  notificationWebhookUrl?: string;
 }

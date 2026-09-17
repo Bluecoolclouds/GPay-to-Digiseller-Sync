@@ -13,6 +13,20 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+export const TestNotificationsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "checkedAt": zod.coerce.date()
+})
+
+
+export const DisableNotificationsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "checkedAt": zod.coerce.date()
+})
+
+
 /**
  * @summary Synchronization overview
  */
@@ -331,7 +345,8 @@ export const GetSettingsResponse = zod.object({
   "minimumProfitRub": zod.number(),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
-  "credentialsConfigured": zod.boolean()
+  "credentialsConfigured": zod.boolean(),
+  "notificationConfigured": zod.boolean()
 })
 
 
@@ -363,7 +378,8 @@ export const UpdateSettingsBody = zod.object({
   "minimumProfitRub": zod.number().min(updateSettingsBodyMinimumProfitRubMin),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
-  "previewToken": zod.string().min(1)
+  "previewToken": zod.string().min(1),
+  "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -376,7 +392,8 @@ export const UpdateSettingsResponse = zod.object({
   "minimumProfitRub": zod.number(),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
-  "credentialsConfigured": zod.boolean()
+  "credentialsConfigured": zod.boolean(),
+  "notificationConfigured": zod.boolean()
 })
 
 
@@ -406,7 +423,8 @@ export const PreviewSettingsBody = zod.object({
   "fixedReserveRub": zod.number().min(previewSettingsBodyFixedReserveRubMin),
   "minimumProfitRub": zod.number().min(previewSettingsBodyMinimumProfitRubMin),
   "automationMode": zod.enum(['manual', 'automatic']),
-  "disableOnUnavailable": zod.boolean()
+  "disableOnUnavailable": zod.boolean(),
+  "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })
 
 export const previewSettingsResponseTotalProductsMin = 0;

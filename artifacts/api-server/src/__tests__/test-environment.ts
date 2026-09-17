@@ -10,9 +10,11 @@ const schemaSuffix = randomBytes(8).toString("hex");
 const syncSchema = `sync_product_types_test_${schemaSuffix}`;
 const publicOrdersSchema = `public_orders_test_${schemaSuffix}`;
 const backgroundWorkerSchema = `background_worker_test_${schemaSuffix}`;
+const notificationsSchema = `notifications_test_${schemaSuffix}`;
 assert.match(syncSchema, /^sync_product_types_test_[a-f0-9]+$/);
 assert.match(publicOrdersSchema, /^public_orders_test_[a-f0-9]+$/);
 assert.match(backgroundWorkerSchema, /^background_worker_test_[a-f0-9]+$/);
+assert.match(notificationsSchema, /^notifications_test_[a-f0-9]+$/);
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const schemaSql = await readFile(path.join(compiledDir, "schema.sql"), "utf8");
@@ -25,6 +27,7 @@ const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
 const backgroundWorkerTestFile = path.join(compiledDir, "background-worker.test.mjs");
+const notificationsTestFile = path.join(compiledDir, "notifications.test.mjs");
 
 const authTestFile = path.join(compiledDir, "auth.test.mjs");
 function environmentFor(schema: string) {
@@ -84,6 +87,7 @@ try {
   await createTestSchema(publicOrdersSchema);
   await createTestSchema(backgroundWorkerSchema);
   await createTestSchema(syncSchema);
+  await createTestSchema(notificationsSchema);
   run(
     process.execPath,
     ["--test", "--test-concurrency=1", publicOrdersTestFile],
@@ -94,11 +98,17 @@ try {
     ["--test", "--test-concurrency=1", backgroundWorkerTestFile],
     environmentFor(backgroundWorkerSchema),
   );
+  run(
+    process.execPath,
+    ["--test", "--test-concurrency=1", notificationsTestFile],
+    environmentFor(notificationsSchema),
+  );
   run(process.execPath, ["--test", "--test-concurrency=1", testFile]);
 } finally {
   await pool.query(`drop schema if exists "${publicOrdersSchema}" cascade`);
   await pool.query(`drop schema if exists "${backgroundWorkerSchema}" cascade`);
   await pool.query(`drop schema if exists "${syncSchema}" cascade`);
+  await pool.query(`drop schema if exists "${notificationsSchema}" cascade`);
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });
 }

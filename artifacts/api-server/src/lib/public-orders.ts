@@ -36,6 +36,11 @@ import {
   verifyDigisellerUniqueCode,
 } from "./digiseller";
 import { logger } from "./logger";
+import {
+  notifyFailure,
+  notifyRecovery,
+  sanitizeNotificationText,
+} from "./notifications";
 
 const LINK_LIFETIME_MS = 24 * 60 * 60 * 1_000;
 
@@ -257,7 +262,10 @@ export async function submitPublicOrderCode(token: string, code: string) {
 
 function queueGPayPurchase(orderId: number) {
   void processGPayPurchase(orderId).catch((error) => {
-    logger.error({ err: error, orderId }, "Unhandled GPay purchase processing failure");
+    logger.error(
+      { err: sanitizeNotificationText(error), orderId },
+      "Unhandled GPay purchase processing failure",
+    );
   });
 }
 
@@ -307,6 +315,12 @@ export async function saveGPayPurchaseResult(
     .returning({ id: syncOrdersTable.id });
   if (updated && result.deliveryStatus === "delivered") {
     await processDigisellerDelivery(orderId);
+  } else if (updated && result.deliveryStatus === "failed") {
+    await notifyFailure({
+      key: `gpay-purchase:${orderId}`,
+      title: "Не удалось выполнить покупку GPay",
+      reason: result.errorMessage ?? "GPay сообщил об ошибке покупки",
+    });
   }
   return Boolean(updated);
 }
@@ -352,11 +366,17 @@ export async function processGPayPurchase(orderId: number) {
   if (order.purchaseStatus === "delivered") {
     if (!order.deliveredKey && order.uniqueCode) {
       try {
-        await saveGPayPurchaseResult(
+        const saved = await saveGPayPurchaseResult(
           orderId,
           await fetchGPayKeyPurchaseStatus(order.uniqueCode),
           ["delivered"],
         );
+        if (saved) {
+          await notifyRecovery(
+            `gpay-poll:${orderId}`,
+            "Проверка результата покупки GPay",
+          );
+        }
       } catch (error) {
         const message = purchaseError(error);
         await db
@@ -367,6 +387,11 @@ export async function processGPayPurchase(orderId: number) {
             updatedAt: new Date(),
           })
           .where(eq(syncOrdersTable.id, orderId));
+        await notifyFailure({
+          key: `gpay-poll:${orderId}`,
+          title: "Не удалось проверить результат покупки GPay",
+          reason: message,
+        });
       }
       return;
     }
@@ -395,20 +420,36 @@ export async function processGPayPurchase(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: `gpay-purchase:${orderId}`,
+      title: "Не удалось выполнить покупку GPay",
+      reason: "Не найден связанный товар GPay",
+    });
     return;
   }
   if (order.uniqueCode) {
     try {
-      await saveGPayPurchaseResult(
+      const saved = await saveGPayPurchaseResult(
         orderId,
         await fetchGPayKeyPurchaseStatus(order.uniqueCode),
       );
+      if (saved) {
+        await notifyRecovery(
+          `gpay-poll:${orderId}`,
+          "Проверка результата покупки GPay",
+        );
+      }
     } catch (error) {
       const message = purchaseError(error);
       await db
         .update(syncOrdersTable)
         .set({ gpayPurchaseError: message, publicSubmissionError: message, updatedAt: new Date() })
         .where(eq(syncOrdersTable.id, orderId));
+      await notifyFailure({
+        key: `gpay-poll:${orderId}`,
+        title: "Не удалось проверить результат покупки GPay",
+        reason: message,
+      });
     }
     return;
   }
@@ -427,8 +468,14 @@ export async function processGPayPurchase(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: "supplier-auth:gpay-login",
+      title: "Ошибка авторизации GPay",
+      reason: message,
+    });
     return;
   }
+  await notifyRecovery("supplier-auth:gpay-login", "Авторизация GPay");
   const [claimed] = await db
     .update(syncOrdersTable)
     .set({
@@ -451,6 +498,10 @@ export async function processGPayPurchase(orderId: number) {
       orderId,
       await purchaseGPayKey(order.gpayId, token),
     );
+    await notifyRecovery(
+      "supplier-auth:gpay-purchase",
+      "Авторизация покупки GPay",
+    );
   } catch (error) {
     const message = purchaseError(error);
     if (error instanceof GPayPurchaseUnauthorizedError) {
@@ -464,6 +515,11 @@ export async function processGPayPurchase(orderId: number) {
           updatedAt: new Date(),
         })
         .where(eq(syncOrdersTable.id, orderId));
+      await notifyFailure({
+        key: "supplier-auth:gpay-purchase",
+        title: "Ошибка авторизации GPay",
+        reason: "GPay отклонил авторизацию при создании покупки",
+      });
       return;
     }
     const ambiguous = error instanceof GPayPurchaseAmbiguousError;
@@ -479,12 +535,19 @@ export async function processGPayPurchase(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: `gpay-purchase:${orderId}`,
+      title: ambiguous
+        ? "Неоднозначный результат покупки GPay"
+        : "Не удалось выполнить покупку GPay",
+      reason: message,
+    });
   }
 }
 
 export async function reconcilePendingGPayPurchases() {
   const staleCreatingBefore = new Date(Date.now() - 2 * 60 * 1_000);
-  await db
+  const ambiguousPurchases = await db
     .update(syncOrdersTable)
     .set({
       gpayPurchaseStatus: "unknown",
@@ -500,7 +563,16 @@ export async function reconcilePendingGPayPurchases() {
         isNull(syncOrdersTable.gpayPurchaseUniqueCode),
         lt(syncOrdersTable.gpayPurchaseStartedAt, staleCreatingBefore),
       ),
-    );
+    )
+    .returning({ id: syncOrdersTable.id });
+  for (const purchase of ambiguousPurchases) {
+    await notifyFailure({
+      key: `gpay-purchase:${purchase.id}`,
+      title: "Неоднозначный результат покупки GPay",
+      reason:
+        "Процесс прервался во время создания закупки; автоматический повтор заблокирован",
+    });
+  }
   await db
     .update(syncOrdersTable)
     .set({
@@ -577,6 +649,11 @@ async function processDigisellerDelivery(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: `digiseller-delivery:${orderId}`,
+      title: "Ошибка выдачи ключа Digiseller",
+      reason: "GPay не вернул ключ после подтверждения доставки",
+    });
     return;
   }
   if (!order.submittedCode) {
@@ -588,6 +665,11 @@ async function processDigisellerDelivery(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: `digiseller-delivery:${orderId}`,
+      title: "Ошибка выдачи ключа Digiseller",
+      reason: "Код заказа Digiseller не сохранён",
+    });
     return;
   }
   const [claimed] = await db
@@ -626,6 +708,11 @@ async function processDigisellerDelivery(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyRecovery(
+      `digiseller-delivery:${orderId}`,
+      "Выдача ключа Digiseller",
+    );
+    await notifyRecovery(`gpay-purchase:${orderId}`, "Покупка GPay");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Неизвестная ошибка передачи Digiseller";
@@ -637,5 +724,10 @@ async function processDigisellerDelivery(orderId: number) {
         updatedAt: new Date(),
       })
       .where(eq(syncOrdersTable.id, orderId));
+    await notifyFailure({
+      key: `digiseller-delivery:${orderId}`,
+      title: "Ошибка выдачи ключа Digiseller",
+      reason: message,
+    });
   }
 }

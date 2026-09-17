@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { useQueryClient } from "@tanstack/react-query"
-import { getGetConnectionsQueryKey, getGetSettingsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, usePreviewSettings, SettingsInput } from "@workspace/api-client-react"
+import { getGetConnectionsQueryKey, getGetSettingsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, usePreviewSettings, useTestNotifications, useDisableNotifications, SettingsInput } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { AlertTriangle, Calculator, ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
+import { AlertTriangle, BellRing, Calculator, ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function SettingsPage() {
@@ -18,6 +18,8 @@ export default function SettingsPage() {
   const updateMutation = useUpdateSettings()
   const previewMutation = usePreviewSettings()
   const testConnectionsMutation = useTestConnections()
+  const testNotificationsMutation = useTestNotifications()
+  const disableNotificationsMutation = useDisableNotifications()
   const [previewedValues, setPreviewedValues] = useState("")
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>({
@@ -44,7 +46,11 @@ export default function SettingsPage() {
   }, [settings, reset])
 
   const onSubmit = (data: SettingsInput) => {
-    if (previewedValues !== JSON.stringify(data)) {
+    const update = { ...data }
+    if (!update.notificationWebhookUrl?.trim()) {
+      delete update.notificationWebhookUrl
+    }
+    if (previewedValues !== JSON.stringify(update)) {
       toast.error("Сначала рассчитайте изменения для текущих настроек")
       return
     }
@@ -52,7 +58,7 @@ export default function SettingsPage() {
       toast.error("Предпросмотр устарел. Рассчитайте изменения ещё раз")
       return
     }
-    updateMutation.mutate({ data: { ...data, previewToken: previewMutation.data.previewToken } }, {
+    updateMutation.mutate({ data: { ...update, previewToken: previewMutation.data.previewToken } }, {
       onSuccess: () => {
         toast.success("Настройки успешно сохранены")
         setPreviewedValues("")
@@ -68,10 +74,14 @@ export default function SettingsPage() {
   const exchangeRateMode = watch("exchangeRateMode")
 
   const handlePreview = handleSubmit((data) => {
+    const preview = { ...data }
+    if (!preview.notificationWebhookUrl?.trim()) {
+      delete preview.notificationWebhookUrl
+    }
     previewMutation.mutate(
-      { data },
+      { data: preview },
       {
-        onSuccess: () => setPreviewedValues(JSON.stringify(data)),
+        onSuccess: () => setPreviewedValues(JSON.stringify(preview)),
         onError: () => {
           setPreviewedValues("")
           toast.error("Не удалось рассчитать изменения")
@@ -87,6 +97,23 @@ export default function SettingsPage() {
         toast.success("Подключения проверены")
       },
       onError: () => toast.error("Ошибка проверки подключений")
+    })
+  }
+
+  const handleTestNotifications = () => {
+    testNotificationsMutation.mutate(undefined, {
+      onSuccess: () => toast.success("Тестовое уведомление отправлено"),
+      onError: () => toast.error("Не удалось отправить тестовое уведомление")
+    })
+  }
+
+  const handleDisableNotifications = () => {
+    disableNotificationsMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })
+        toast.success("Канал уведомлений отключён")
+      },
+      onError: () => toast.error("Не удалось отключить канал")
     })
   }
 
@@ -232,6 +259,56 @@ export default function SettingsPage() {
                     checked={watch("disableOnUnavailable")} 
                     onCheckedChange={(c) => setValue("disableOnUnavailable", c)}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BellRing className="w-5 h-5 text-primary" />
+                  Оперативные уведомления
+                </CardTitle>
+                <CardDescription>
+                  HTTPS webhook для критических ошибок и сообщений о восстановлении
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">URL webhook</label>
+                  <Input
+                    type="url"
+                    autoComplete="off"
+                    placeholder={settings?.notificationConfigured ? "Канал настроен — введите URL только для замены" : "https://…"}
+                    {...register("notificationWebhookUrl")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    URL хранится зашифрованно и не отображается после сохранения.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant={settings?.notificationConfigured ? "success" : "secondary"}>
+                    {settings?.notificationConfigured ? "Канал настроен" : "Канал не настроен"}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleTestNotifications}
+                    disabled={!settings?.notificationConfigured || testNotificationsMutation.isPending}
+                  >
+                    <RefreshCw className={cn("w-4 h-4 mr-2", testNotificationsMutation.isPending && "animate-spin")} />
+                    Проверить канал
+                  </Button>
+                  {settings?.notificationConfigured && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={handleDisableNotifications}
+                      disabled={disableNotificationsMutation.isPending}
+                    >
+                      Отключить
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

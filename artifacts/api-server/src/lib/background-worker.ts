@@ -4,6 +4,11 @@ import { logger } from "./logger";
 import { syncDigisellerOrders } from "./orders";
 import { syncKeyPrices } from "./price-sync";
 import { reconcilePendingGPayPurchases } from "./public-orders";
+import {
+  notifyFailure,
+  notifyRecovery,
+  sanitizeNotificationText,
+} from "./notifications";
 
 const TICK_MS = 10_000;
 const HEARTBEAT_MS = 30_000;
@@ -148,6 +153,9 @@ export async function runBackgroundJob<T>(
           updatedAt: finishedAt,
         })
         .where(eq(backgroundJobStateTable.name, name));
+      if (!skipped) {
+        await notifyRecovery(`background:${name}`, `Фоновый процесс ${name}`);
+      }
       return {
         status: skipped ? ("skipped" as const) : ("completed" as const),
         result,
@@ -167,6 +175,12 @@ export async function runBackgroundJob<T>(
           updatedAt: finishedAt,
         })
         .where(eq(backgroundJobStateTable.name, name));
+      await notifyFailure({
+        key: `background:${name}`,
+        title: `Остановлен фоновый процесс ${name}`,
+        reason: error,
+        lastSuccessfulAt: state?.lastSuccessfulAt,
+      });
       throw error;
     }
   } finally {
@@ -191,7 +205,10 @@ export async function runWorkerTick(options: { force?: boolean } = {}) {
         )),
       };
     } catch (error) {
-      logger.error({ err: error, job: job.name }, "Background job failed");
+      logger.error(
+        { err: sanitizeNotificationText(error), job: job.name },
+        "Background job failed",
+      );
       return { name: job.name, status: "failed" as const };
     }
   }));

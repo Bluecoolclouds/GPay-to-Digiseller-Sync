@@ -155,3 +155,14 @@ export const backgroundJobStateTable = pgTable("sync_background_job_state", {
 });
 
 export type BackgroundJobState = typeof backgroundJobStateTable.$inferSelect;
+
+export const notificationStateTable = pgTable("sync_notification_state", {
+  key: text("key").primaryKey(),
+  active: boolean("active").notNull().default(false),
+  fingerprint: text("fingerprint"),
+  lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+  lastRecoveredAt: timestamp("last_recovered_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

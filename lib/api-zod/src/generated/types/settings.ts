@@ -19,4 +19,5 @@ export interface Settings {
   automationMode: SettingsAutomationMode;
   disableOnUnavailable: boolean;
   credentialsConfigured: boolean;
+  notificationConfigured: boolean;
 }

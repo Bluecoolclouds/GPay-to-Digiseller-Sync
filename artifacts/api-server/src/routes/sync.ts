@@ -38,6 +38,7 @@ import {
   UpdateSettingsResponse,
   PreviewSettingsBody,
   PreviewSettingsResponse,
+  TestNotificationsResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import {
@@ -64,6 +65,11 @@ import {
   type PriceSettingsInput,
 } from "../lib/price-sync";
 import { requireOperatorRole } from "../middlewares/auth";
+import {
+  encryptNotificationWebhook,
+  testNotificationChannel,
+  validateNotificationWebhookUrl,
+} from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -1428,7 +1434,11 @@ router.get("/activities", async (req, res): Promise<void> => {
 
 router.get("/settings", async (_req, res): Promise<void> => {
   const settings = await getSettingsRow();
-  res.json(GetSettingsResponse.parse({ ...settings, credentialsConfigured: credentialsConfigured() }));
+  res.json(GetSettingsResponse.parse({
+    ...settings,
+    credentialsConfigured: credentialsConfigured(),
+    notificationConfigured: Boolean(settings.notificationWebhookEncrypted),
+  }));
 });
 
 router.post("/settings/preview", async (req, res): Promise<void> => {
@@ -1437,7 +1447,8 @@ router.post("/settings/preview", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const candidate = parsed.data;
+  const { notificationWebhookUrl: _notificationWebhookUrl, ...candidate } =
+    parsed.data;
   const rate =
     candidate.exchangeRateMode === "manual"
       ? {
@@ -1504,7 +1515,17 @@ router.put("/settings", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { previewToken, ...candidate } = parsed.data;
+  const { previewToken, notificationWebhookUrl, ...candidate } = parsed.data;
+  if (notificationWebhookUrl) {
+    try {
+      await validateNotificationWebhookUrl(notificationWebhookUrl);
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Некорректный URL канала",
+      });
+      return;
+    }
+  }
   let preview: ReturnType<typeof verifySettingsPreview>;
   try {
     preview = verifySettingsPreview(previewToken, candidate);
@@ -1540,12 +1561,53 @@ router.put("/settings", async (req, res): Promise<void> => {
     res.status(409).json({ error: application.reason });
     return;
   }
+  if (notificationWebhookUrl !== undefined) {
+    await db
+      .update(settingsTable)
+      .set({
+        notificationWebhookEncrypted: encryptNotificationWebhook(
+          notificationWebhookUrl,
+        ),
+        updatedAt: new Date(),
+      })
+      .where(eq(settingsTable.id, 1));
+  }
   res.json(
     UpdateSettingsResponse.parse({
       ...application.settings,
       credentialsConfigured: credentialsConfigured(),
+      notificationConfigured:
+        notificationWebhookUrl !== undefined ||
+        Boolean(application.settings.notificationWebhookEncrypted),
     }),
   );
+});
+
+router.post("/notifications/test", async (_req, res): Promise<void> => {
+  try {
+    await testNotificationChannel();
+    res.json(TestNotificationsResponse.parse({
+      success: true,
+      message: "Тестовое уведомление отправлено",
+      checkedAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Ошибка канала уведомлений",
+    });
+  }
+});
+
+router.delete("/notifications", async (_req, res): Promise<void> => {
+  await db
+    .update(settingsTable)
+    .set({ notificationWebhookEncrypted: null, updatedAt: new Date() })
+    .where(eq(settingsTable.id, 1));
+  res.json(TestNotificationsResponse.parse({
+    success: true,
+    message: "Канал уведомлений отключён",
+    checkedAt: new Date().toISOString(),
+  }));
 });
 
 router.get("/connections", async (_req, res): Promise<void> => {

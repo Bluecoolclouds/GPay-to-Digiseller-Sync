@@ -4,6 +4,7 @@ import {
   ensureBackgroundWorkerSchema,
   startBackgroundWorker,
 } from "./lib/background-worker";
+import { ensureNotificationSchema } from "./lib/notifications";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,7 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 await ensureBackgroundWorkerSchema();
+await ensureNotificationSchema();
 
 const server = app.listen(port, (err) => {
   if (err) {

@@ -18,5 +18,6 @@ export const settingsTable = pgTable("sync_settings", {
   minimumProfitRub: doublePrecision("minimum_profit_rub").notNull().default(100),
   automationMode: text("automation_mode").notNull().default("manual"),
   disableOnUnavailable: boolean("disable_on_unavailable").notNull().default(true),
+  notificationWebhookEncrypted: text("notification_webhook_encrypted"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

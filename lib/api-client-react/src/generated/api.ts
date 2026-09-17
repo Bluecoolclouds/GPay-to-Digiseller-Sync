@@ -36,6 +36,7 @@ import type {
   ListActivitiesParams,
   ListOrdersParams,
   ListProductsParams,
+  NotificationTestResult,
   Order,
   OrderPage,
   OrderPublicLink,
@@ -152,6 +153,136 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getTestNotificationsUrl = () => {
+
+
+
+
+  return `/api/notifications/test`
+}
+
+export const testNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<NotificationTestResult> => {
+
+  return customFetch<NotificationTestResult>(getTestNotificationsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestNotificationsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testNotifications>>, TError,void, TContext> => {
+
+const mutationKey = ['testNotifications'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testNotifications>>, void> = () => {
+
+
+          return  testNotifications(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof testNotifications>>>
+
+    export type TestNotificationsMutationError = ErrorType<unknown>
+
+    export const useTestNotifications = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testNotifications>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestNotificationsMutationOptions(options));
+    }
+
+export const getDisableNotificationsUrl = () => {
+
+
+
+
+  return `/api/notifications`
+}
+
+export const disableNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<NotificationTestResult> => {
+
+  return customFetch<NotificationTestResult>(getDisableNotificationsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisableNotificationsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disableNotifications>>, TError,void, TContext> => {
+
+const mutationKey = ['disableNotifications'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disableNotifications>>, void> = () => {
+
+
+          return  disableNotifications(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisableNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof disableNotifications>>>
+
+    export type DisableNotificationsMutationError = ErrorType<unknown>
+
+    export const useDisableNotifications = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disableNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disableNotifications>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDisableNotificationsMutationOptions(options));
+    }
 
 export const getGetDashboardUrl = () => {
 

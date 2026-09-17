@@ -33,4 +33,6 @@ export interface SettingsInput {
   minimumProfitRub: number;
   automationMode: SettingsInputAutomationMode;
   disableOnUnavailable: boolean;
+  /** HTTPS webhook URL. Omit to keep the current channel. */
+  notificationWebhookUrl?: string;
 }

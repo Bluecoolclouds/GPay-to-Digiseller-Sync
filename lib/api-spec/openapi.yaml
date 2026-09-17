@@ -24,6 +24,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /notifications/test:
+    post:
+      operationId: testNotifications
+      tags: [settings]
+      responses:
+        "200":
+          description: Test notification was delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTestResult"
+  /notifications:
+    delete:
+      operationId: disableNotifications
+      tags: [settings]
+      responses:
+        "200":
+          description: Notification channel was disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTestResult"
   /dashboard:
     get:
       operationId: getDashboard
@@ -685,7 +707,7 @@ components:
         createdAt: { type: string, format: date-time }
     Settings:
       type: object
-      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured]
+      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured, notificationConfigured]
       properties:
         defaultMarginPercent: { type: number }
         usdRubRate: { type: number }
@@ -697,6 +719,7 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
         credentialsConfigured: { type: boolean }
+        notificationConfigured: { type: boolean }
     SettingsInput:
       type: object
       required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]
@@ -710,6 +733,10 @@ components:
         minimumProfitRub: { type: number, minimum: 0 }
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
+        notificationWebhookUrl:
+          type: string
+          format: uri
+          description: HTTPS webhook URL. Omit to keep the current channel.
     SettingsPreview:
       type: object
       required: [totalProducts, affectedProducts, publishedPriceChanges, minimumExpectedProfitRub, usdRubRate, rateSource, rateFetchedAt, rateIsFallback, automaticUpdateAllowed, previewToken]
@@ -738,6 +765,17 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
         previewToken: { type: string, minLength: 1 }
+        notificationWebhookUrl:
+          type: string
+          format: uri
+          description: HTTPS webhook URL. Omit to keep the current channel.
+    NotificationTestResult:
+      type: object
+      required: [success, message, checkedAt]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        checkedAt: { type: string, format: date-time }
     ConnectionState:
       type: object
       required: [configured, healthy, label, detail]
