@@ -5,6 +5,10 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+export interface ErrorResponse {
+  error: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -231,6 +235,40 @@ export interface SyncResult {
   productKind?: SyncResultProductKind;
   message: string;
   completedAt: string;
+}
+
+export interface DigisellerProduct {
+  id: number;
+  name: string;
+  priceRub: number;
+  visible: boolean;
+  inStock: boolean;
+  /** @nullable */
+  numInStock: number | null;
+  /** @nullable */
+  linkedProductId: number | null;
+}
+
+export interface DigisellerProductList {
+  items: DigisellerProduct[];
+  total: number;
+}
+
+export type DigisellerProductLinkInputDeliveryType = typeof DigisellerProductLinkInputDeliveryType[keyof typeof DigisellerProductLinkInputDeliveryType];
+
+
+export const DigisellerProductLinkInputDeliveryType = {
+  code: 'code',
+  text: 'text',
+  form: 'form',
+} as const;
+
+export interface DigisellerProductLinkInput {
+  /** @minimum 1 */
+  localProductId: number;
+  /** @minimum 1 */
+  digisellerId: number;
+  deliveryType: DigisellerProductLinkInputDeliveryType;
 }
 
 export type ActivityType = typeof ActivityType[keyof typeof ActivityType];
@@ -586,3 +624,4 @@ export type SubmitPublicOrderCode200 = {
   accepted: boolean;
   alreadySubmitted: boolean;
 };
+

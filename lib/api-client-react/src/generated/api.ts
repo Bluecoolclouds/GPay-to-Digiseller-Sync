@@ -27,6 +27,9 @@ import type {
   Connections,
   CreateOrderPublicLinkInput,
   Dashboard,
+  DigisellerProductLinkInput,
+  DigisellerProductList,
+  ErrorResponse,
   ExchangeRate,
   GPayReconciliationInput,
   HealthStatus,
@@ -703,6 +706,142 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSyncCatalogMutationOptions(options));
+    }
+
+export const getListDigisellerProductsUrl = () => {
+
+
+
+
+  return `/api/sync/digiseller-products`
+}
+
+export const listDigisellerProducts = async ( options?: Parameters<typeof customFetch>[1]): Promise<DigisellerProductList> => {
+
+  return customFetch<DigisellerProductList>(getListDigisellerProductsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDigisellerProductsQueryKey = () => {
+    return [
+    `/api/sync/digiseller-products`
+    ] as const;
+    }
+
+
+export const getListDigisellerProductsQueryOptions = <TData = Awaited<ReturnType<typeof listDigisellerProducts>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDigisellerProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDigisellerProductsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDigisellerProducts>>> = ({ signal }) => listDigisellerProducts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDigisellerProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDigisellerProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listDigisellerProducts>>>
+export type ListDigisellerProductsQueryError = ErrorType<ErrorResponse>
+
+
+
+export function useListDigisellerProducts<TData = Awaited<ReturnType<typeof listDigisellerProducts>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDigisellerProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDigisellerProductsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLinkDigisellerProductUrl = () => {
+
+
+
+
+  return `/api/sync/digiseller-products/link`
+}
+
+export const linkDigisellerProduct = async (digisellerProductLinkInput: DigisellerProductLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<Product> => {
+
+  return customFetch<Product>(getLinkDigisellerProductUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(digisellerProductLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkDigisellerProductMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkDigisellerProduct>>, TError,{data: BodyType<DigisellerProductLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkDigisellerProduct>>, TError,{data: BodyType<DigisellerProductLinkInput>}, TContext> => {
+
+const mutationKey = ['linkDigisellerProduct'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkDigisellerProduct>>, {data: BodyType<DigisellerProductLinkInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  linkDigisellerProduct(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkDigisellerProductMutationResult = NonNullable<Awaited<ReturnType<typeof linkDigisellerProduct>>>
+    export type LinkDigisellerProductMutationBody = BodyType<DigisellerProductLinkInput>
+    export type LinkDigisellerProductMutationError = ErrorType<ErrorResponse>
+
+    export const useLinkDigisellerProduct = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkDigisellerProduct>>, TError,{data: BodyType<DigisellerProductLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkDigisellerProduct>>,
+        TError,
+        {data: BodyType<DigisellerProductLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkDigisellerProductMutationOptions(options));
     }
 
 export const getListActivitiesUrl = (params?: ListActivitiesParams,) => {

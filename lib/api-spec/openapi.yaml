@@ -175,6 +175,74 @@ paths:
                 $ref: "#/components/schemas/SyncResult"
         "502":
           description: GPay API unavailable
+  /sync/digiseller-products:
+    get:
+      operationId: listDigisellerProducts
+      tags: [sync]
+      responses:
+        "200":
+          description: Products from the authenticated Digiseller seller account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigisellerProductList"
+        "401":
+          description: Administrator authentication required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "502":
+          description: Digiseller API unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /sync/digiseller-products/link:
+    post:
+      operationId: linkDigisellerProduct
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DigisellerProductLinkInput"
+      responses:
+        "200":
+          description: Local product linked to an existing Digiseller product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: Invalid link input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Administrator authentication required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Local or Digiseller product not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: Digiseller product is already linked elsewhere
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "502":
+          description: Digiseller API unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /activities:
     get:
       operationId: listActivities
@@ -405,6 +473,11 @@ paths:
                   alreadySubmitted: { type: boolean }
 components:
   schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
     HealthStatus:
       type: object
       required: [status]
@@ -532,6 +605,32 @@ components:
         productKind: { type: string, enum: [all, key, gift] }
         message: { type: string }
         completedAt: { type: string, format: date-time }
+    DigisellerProduct:
+      type: object
+      required: [id, name, priceRub, visible, inStock, numInStock, linkedProductId]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        priceRub: { type: number }
+        visible: { type: boolean }
+        inStock: { type: boolean }
+        numInStock: { type: [integer, "null"] }
+        linkedProductId: { type: [integer, "null"] }
+    DigisellerProductList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DigisellerProduct" }
+        total: { type: integer }
+    DigisellerProductLinkInput:
+      type: object
+      required: [localProductId, digisellerId, deliveryType]
+      properties:
+        localProductId: { type: integer, minimum: 1 }
+        digisellerId: { type: integer, minimum: 1 }
+        deliveryType: { type: string, enum: [code, text, form] }
     Activity:
       type: object
       required: [id, type, title, description, status, createdAt]

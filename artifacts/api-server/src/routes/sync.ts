@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   activitiesTable,
   db,
@@ -19,8 +19,11 @@ import {
   GetDashboardResponse,
   GetExchangeRateResponse,
   GetSettingsResponse,
+  LinkDigisellerProductBody,
+  LinkDigisellerProductResponse,
   ListActivitiesQueryParams,
   ListActivitiesResponse,
+  ListDigisellerProductsResponse,
   ListProductsQueryParams,
   ListProductsResponse,
   PublishProductParams,
@@ -45,6 +48,7 @@ import {
   addDigisellerProductToPlati,
   createDigisellerProduct,
   disableLegacyDigisellerProduct,
+  fetchDigisellerSellerProducts,
   loginDigiseller,
   setDigisellerCodeUnlimitedStock,
   uploadDigisellerProductImage,
@@ -1068,6 +1072,178 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
     res.status(502).json({ error: error instanceof Error ? error.message : "GPay API error" });
   }
 });
+
+router.get("/sync/digiseller-products", async (req, res): Promise<void> => {
+  try {
+    const [sellerProducts, linkedProducts] = await Promise.all([
+      fetchDigisellerSellerProducts(),
+      db
+        .select({
+          id: productsTable.id,
+          digisellerId: productsTable.digisellerId,
+        })
+        .from(productsTable)
+        .where(isNotNull(productsTable.digisellerId)),
+    ]);
+    const linkedByDigisellerId = new Map(
+      linkedProducts
+        .filter(
+          (
+            item,
+          ): item is { id: number; digisellerId: number } =>
+            item.digisellerId !== null,
+        )
+        .map((item) => [item.digisellerId, item.id]),
+    );
+    res.json(
+      ListDigisellerProductsResponse.parse({
+        items: sellerProducts.map((product) => ({
+          ...product,
+          linkedProductId: linkedByDigisellerId.get(product.id) ?? null,
+        })),
+        total: sellerProducts.length,
+      }),
+    );
+  } catch (error) {
+    req.log.error({ err: error }, "Digiseller product list failed");
+    res.status(502).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Digiseller API error",
+    });
+  }
+});
+
+router.post(
+  "/sync/digiseller-products/link",
+  async (req, res): Promise<void> => {
+    const parsed = LinkDigisellerProductBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const { localProductId, digisellerId, deliveryType } = parsed.data;
+    try {
+      const sellerProducts = await fetchDigisellerSellerProducts();
+      const sellerProduct = sellerProducts.find(
+        (product) => product.id === digisellerId,
+      );
+      if (!sellerProduct) {
+        res.status(404).json({
+          error: "Карточка не найдена в аккаунте Digiseller",
+        });
+        return;
+      }
+
+      const result = await withProductPublicationLock(
+        localProductId,
+        async () =>
+          db.transaction(async (transaction) => {
+            const [localProduct] = await transaction
+              .select()
+              .from(productsTable)
+              .where(eq(productsTable.id, localProductId));
+            if (!localProduct) {
+              return { kind: "local-not-found" as const };
+            }
+            if (
+              localProduct.digisellerId !== null &&
+              localProduct.digisellerId !== digisellerId
+            ) {
+              return {
+                kind: "local-already-linked" as const,
+                digisellerId: localProduct.digisellerId,
+              };
+            }
+
+            const [existingLink] = await transaction
+              .select({ id: productsTable.id, name: productsTable.name })
+              .from(productsTable)
+              .where(eq(productsTable.digisellerId, digisellerId))
+              .limit(1);
+            if (existingLink && existingLink.id !== localProductId) {
+              return {
+                kind: "external-already-linked" as const,
+                name: existingLink.name,
+              };
+            }
+
+            await recordDigisellerProductIds(
+              transaction,
+              localProductId,
+              [digisellerId],
+            );
+            const [updated] = await transaction
+              .update(productsTable)
+              .set({
+                digisellerId,
+                digisellerDeliveryType: deliveryType,
+                publicationStatus: "published",
+                publicationError: null,
+                publicationFailureStage: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(productsTable.id, localProductId))
+              .returning();
+            await transaction.insert(activitiesTable).values({
+              type: "sync",
+              title: "Товар Digiseller связан",
+              description: `${updated.name} связан с карточкой ${sellerProduct.name}, ID ${digisellerId}.`,
+              status: "success",
+            });
+            return { kind: "updated" as const, product: updated };
+          }),
+      );
+
+      if (result.kind === "local-not-found") {
+        res.status(404).json({ error: "Локальный товар не найден" });
+        return;
+      }
+      if (result.kind === "local-already-linked") {
+        res.status(409).json({
+          error: `Локальный товар уже связан с карточкой Digiseller ${result.digisellerId}. Сначала требуется отдельная операция перепривязки.`,
+        });
+        return;
+      }
+      if (result.kind === "external-already-linked") {
+        res.status(409).json({
+          error: `Карточка уже связана с товаром «${result.name}»`,
+        });
+        return;
+      }
+      res.json(
+        LinkDigisellerProductResponse.parse(
+          toProductResponse(result.product),
+        ),
+      );
+    } catch (error) {
+      if (
+        (typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "23505") ||
+        (error instanceof Error &&
+          error.message.includes("already mapped to local product"))
+      ) {
+        res.status(409).json({
+          error: "Эта карточка Digiseller уже связана с другим товаром",
+        });
+        return;
+      }
+      req.log.error(
+        { err: error, localProductId, digisellerId },
+        "Digiseller product linking failed",
+      );
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Digiseller API error",
+      });
+    }
+  },
+);
 
 router.get("/activities", async (req, res): Promise<void> => {
   const parsed = ListActivitiesQueryParams.safeParse(req.query);

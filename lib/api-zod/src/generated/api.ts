@@ -18,6 +18,7 @@ export const HealthCheckResponse = zod.object({
  */
 
 
+
 export const GetDashboardResponse = zod.object({
   "totalProducts": zod.number().int(),
   "availableProducts": zod.number().int(),
@@ -37,6 +38,7 @@ export const listProductsQueryPageDefault = 1;
 
 export const listProductsQueryPageSizeDefault = 20;
 export const listProductsQueryPageSizeMax = 100;
+
 
 
 export const ListProductsQueryParams = zod.object({
@@ -84,6 +86,8 @@ export const UpdateProductParams = zod.object({
 
 export const updateProductBodyMarginPercentMin = 0;
 export const updateProductBodyMarginPercentMax = 500;
+
+
 
 
 export const UpdateProductBody = zod.object({
@@ -148,7 +152,9 @@ export const PublishProductResponse = zod.object({
 })
 
 
+
 export const publishProductsBatchBodyProductIdsMax = 50;
+
 
 
 export const PublishProductsBatchBody = zod.object({
@@ -245,8 +251,59 @@ export const SyncCatalogResponse = zod.object({
 })
 
 
+export const ListDigisellerProductsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "priceRub": zod.number(),
+  "visible": zod.boolean(),
+  "inStock": zod.boolean(),
+  "numInStock": zod.number().int().nullable(),
+  "linkedProductId": zod.number().int().nullable()
+})),
+  "total": zod.number().int()
+})
+
+
+
+
+
+
+export const LinkDigisellerProductBody = zod.object({
+  "localProductId": zod.number().int().min(1),
+  "digisellerId": zod.number().int().min(1),
+  "deliveryType": zod.enum(['code', 'text', 'form'])
+})
+
+export const LinkDigisellerProductResponse = zod.object({
+  "id": zod.number().int(),
+  "gpayId": zod.number().int(),
+  "digisellerId": zod.number().int().nullish(),
+  "platiCategoryId": zod.number().int().nullish(),
+  "appId": zod.number().int().nullish(),
+  "subId": zod.number().int().nullish(),
+  "name": zod.string(),
+  "imageUrl": zod.string().nullable(),
+  "digisellerImageUploaded": zod.boolean(),
+  "productType": zod.string(),
+  "productKind": zod.enum(['key', 'gift', 'unknown']),
+  "supplierPriceUsd": zod.number(),
+  "salePriceRub": zod.number(),
+  "marginPercent": zod.number(),
+  "profitRub": zod.number().optional(),
+  "isAvailable": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'publishing', 'published', 'paused', 'error']),
+  "publicationError": zod.string().nullish(),
+  "publicationFailureStage": zod.union([zod.literal('category'),zod.literal('image'),zod.literal('stock'),zod.literal('uncertain'),zod.literal(null)]).nullish(),
+  "region": zod.string(),
+  "warningMessage": zod.string().nullish(),
+  "updatedAt": zod.coerce.date()
+})
+
+
 export const listActivitiesQueryLimitDefault = 20;
 export const listActivitiesQueryLimitMax = 50;
+
 
 
 export const ListActivitiesQueryParams = zod.object({
@@ -292,6 +349,7 @@ export const updateSettingsBodyDigisellerFeePercentMax = 100;
 export const updateSettingsBodyFixedReserveRubMin = 0;
 
 export const updateSettingsBodyMinimumProfitRubMin = 0;
+
 
 
 export const UpdateSettingsBody = zod.object({
@@ -375,6 +433,7 @@ export const listOrdersQueryPageSizeDefault = 20;
 export const listOrdersQueryPageSizeMax = 100;
 
 
+
 export const ListOrdersQueryParams = zod.object({
   "status": zod.enum(['all', 'new', 'processing', 'delivered']).default(listOrdersQueryStatusDefault),
   "search": zod.coerce.string().optional(),
@@ -439,6 +498,7 @@ export const UpdateOrderParams = zod.object({
 })
 
 export const updateOrderBodyNoteMax = 2000;
+
 
 
 export const UpdateOrderBody = zod.object({
@@ -508,6 +568,7 @@ export const reconcileOrderGPayPurchaseBodyReasonMin = 5;
 export const reconcileOrderGPayPurchaseBodyReasonMax = 1000;
 
 
+
 export const ReconcileOrderGPayPurchaseBody = zod.object({
   "uniqueCode": zod.string().min(reconcileOrderGPayPurchaseBodyUniqueCodeMin).max(reconcileOrderGPayPurchaseBodyUniqueCodeMax).optional(),
   "orderId": zod.number().int().min(1).optional(),
@@ -548,6 +609,7 @@ export const getPublicOrderPathTokenMin = 32;
 export const getPublicOrderPathTokenMax = 200;
 
 
+
 export const GetPublicOrderParams = zod.object({
   "token": zod.coerce.string().min(getPublicOrderPathTokenMin).max(getPublicOrderPathTokenMax)
 })
@@ -566,12 +628,14 @@ export const submitPublicOrderCodePathTokenMin = 32;
 export const submitPublicOrderCodePathTokenMax = 200;
 
 
+
 export const SubmitPublicOrderCodeParams = zod.object({
   "token": zod.coerce.string().min(submitPublicOrderCodePathTokenMin).max(submitPublicOrderCodePathTokenMax)
 })
 
 export const submitPublicOrderCodeBodyCodeMin = 16;
 export const submitPublicOrderCodeBodyCodeMax = 16;
+
 
 
 export const SubmitPublicOrderCodeBody = zod.object({
@@ -582,3 +646,5 @@ export const SubmitPublicOrderCodeResponse = zod.object({
   "accepted": zod.boolean(),
   "alreadySubmitted": zod.boolean()
 })
+
+

@@ -55,6 +55,30 @@ type DigisellerErrorResult = {
   errors?: Array<{ message?: string; description?: string }>;
 };
 
+type SellerGoodsResponse = DigisellerErrorResult & {
+  cnt_goods?: number | string;
+  pages?: number | string;
+  rows?: Array<{
+    id_goods?: number | string;
+    name_goods?: string;
+    price_rur?: number | string;
+    price?: number | string;
+    currency?: string;
+    visible?: number | string;
+    in_stock?: number | string;
+    num_in_stock?: number | string | null;
+  }>;
+};
+
+export type DigisellerSellerProduct = {
+  id: number;
+  name: string;
+  priceRub: number;
+  visible: boolean;
+  inStock: boolean;
+  numInStock: number | null;
+};
+
 export class DigisellerCreationRejectedError extends Error {
   readonly creationWasRejected = true;
 }
@@ -126,6 +150,86 @@ export async function loginDigiseller(): Promise<string> {
     throw new Error(json.desc || `Digiseller API returned ${response.status}`);
   }
   return json.token;
+}
+
+export async function fetchDigisellerSellerProducts(
+  providedToken?: string,
+): Promise<DigisellerSellerProduct[]> {
+  const sellerId = Number(process.env.DIGISELLER_SELLER_ID);
+  if (!Number.isInteger(sellerId) || sellerId <= 0) {
+    throw new Error("Digiseller seller ID is not configured");
+  }
+  const token = providedToken ?? (await loginDigiseller());
+  const products = new Map<number, DigisellerSellerProduct>();
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const url = new URL("https://api.digiseller.com/api/seller-goods");
+    url.searchParams.set("token", token);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        id_seller: sellerId,
+        order_col: "name",
+        order_dir: "asc",
+        rows: 1000,
+        page,
+        currency: "RUR",
+        lang: "ru-RU",
+        show_hidden: 1,
+        owner_id: null,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const json = (await response.json()) as SellerGoodsResponse;
+    if (!response.ok || json.retval !== 0) {
+      throw new Error(
+        getDigisellerError(
+          json,
+          `Не удалось получить товары Digiseller (${response.status})`,
+        ),
+      );
+    }
+
+    for (const row of json.rows ?? []) {
+      const id = Number(row.id_goods);
+      if (!Number.isInteger(id) || id <= 0) continue;
+      const rawStock =
+        row.num_in_stock === null || row.num_in_stock === undefined
+          ? null
+          : Number(row.num_in_stock);
+      const directRubPrice =
+        row.price_rur === undefined ? Number.NaN : Number(row.price_rur);
+      const displayedPrice = Number(row.price);
+      products.set(id, {
+        id,
+        name: row.name_goods?.trim() || `Digiseller ${id}`,
+        priceRub: Number.isFinite(directRubPrice)
+          ? directRubPrice
+          : row.currency === "RUR" && Number.isFinite(displayedPrice)
+            ? displayedPrice
+            : 0,
+        visible: Number(row.visible) === 1,
+        inStock: Number(row.in_stock) === 1,
+        numInStock:
+          rawStock !== null && Number.isFinite(rawStock)
+            ? Math.trunc(rawStock)
+            : null,
+      });
+    }
+
+    const parsedPages = Number(json.pages);
+    totalPages =
+      Number.isInteger(parsedPages) && parsedPages > 0 ? parsedPages : 1;
+    page += 1;
+  } while (page <= totalPages && page <= 100);
+
+  return [...products.values()];
 }
 
 export type DigisellerSale = {

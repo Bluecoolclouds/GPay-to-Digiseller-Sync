@@ -9,6 +9,7 @@ import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images, Save } 
 import { useQueryClient } from "@tanstack/react-query"
 import { getListProductsQueryKey } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
+import { DigisellerImportDialog } from "@/components/digiseller-import-dialog"
 
 function getMutationErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) {
@@ -24,6 +25,7 @@ export default function ProductsPage() {
   const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [importProduct, setImportProduct] = useState<Product | null>(null)
   const batchMutation = usePublishProductsBatch()
   const completedTaskRef = useRef<string | null>(null)
   const { data: batchTask } = useGetLatestPublishProductsBatch({
@@ -164,6 +166,18 @@ export default function ProductsPage() {
         </Button>
       </div>
 
+      <DigisellerImportDialog
+        open={importProduct !== null}
+        product={importProduct}
+        onOpenChange={(open) => {
+          if (!open) setImportProduct(null)
+        }}
+        onLinked={(updated) => {
+          updateProductInCache(updated)
+          void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+        }}
+      />
+
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="flex items-center gap-2 w-full sm:w-96">
           <div className="relative w-full">
@@ -297,6 +311,7 @@ export default function ProductsPage() {
                     key={product.id} 
                     product={product} 
                     onUpdate={updateProductInCache}
+                    onImport={() => setImportProduct(product)}
                      batchIsActive={batchIsActive}
                     selected={selectedIds.has(product.id)}
                     onSelectionChange={(selected) =>
@@ -332,12 +347,14 @@ export default function ProductsPage() {
 function ProductRow({
   product,
   onUpdate,
+  onImport,
   batchIsActive,
   selected,
   onSelectionChange,
 }: {
   product: Product
   onUpdate: (p: Product) => void
+  onImport: () => void
   batchIsActive: boolean
   selected: boolean
   onSelectionChange: (selected: boolean) => void
@@ -573,14 +590,28 @@ function ProductRow({
               <Check className="w-3 h-3" /> Опубликовано
             </Badge>
           ) : (
-             <Button 
-               size="sm" 
-               className="h-7 text-xs px-3 gap-1.5"
-               onClick={handlePublish}
-               disabled={batchIsActive || publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
-             >
-               <Play className="w-3 h-3" /> Опубликовать
-             </Button>
+            <>
+              {!product.digisellerId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={onImport}
+                  disabled={batchIsActive || publishMutation.isPending}
+                >
+                  Связать DS
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="h-7 text-xs px-3 gap-1.5"
+                onClick={handlePublish}
+                disabled={batchIsActive || publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
+              >
+                <Play className="w-3 h-3" /> Опубликовать
+              </Button>
+            </>
           )}
           </div>
         </div>
