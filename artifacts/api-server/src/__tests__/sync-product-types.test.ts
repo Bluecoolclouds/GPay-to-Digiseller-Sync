@@ -730,6 +730,105 @@ test("single published margin update keeps previous local values when Digiseller
   }
 });
 
+test("published category change disables the old Digiseller card before saving the new category", async () => {
+  await preparePublishedPriceFixture();
+  const oldCategoryId = 87_655;
+  const newCategoryId = 87_656;
+  await db
+    .update(productsTable)
+    .set({
+      platiCategoryId: oldCategoryId,
+      digisellerDeliveryType: "code",
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  let disabled = false;
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/uniquefixed/1914001001")) {
+      const payload = JSON.parse(String(init?.body)) as {
+        enabled?: boolean;
+        categories?: Array<{ category_id?: number }>;
+      };
+      disabled = payload.enabled === false;
+      assert.deepEqual(payload.categories, [
+        { owner: 0, category_id: oldCategoryId },
+      ]);
+      return Response.json({ retval: 0 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const updated = await request<{
+      platiCategoryId: number;
+      publicationStatus: string;
+    }>(`/api/products/${before.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ platiCategoryId: newCategoryId }),
+    });
+
+    assert.equal(disabled, true);
+    assert.equal(updated.platiCategoryId, newCategoryId);
+    assert.equal(updated.publicationStatus, "draft");
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("published category change keeps local category and status when Digiseller cannot disable the old card", async () => {
+  await preparePublishedPriceFixture();
+  const oldCategoryId = 87_655;
+  await db
+    .update(productsTable)
+    .set({
+      platiCategoryId: oldCategoryId,
+      digisellerDeliveryType: "code",
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/uniquefixed/1914001001")) {
+      return Response.json({
+        retval: 1,
+        retdesc: "Old category card could not be disabled",
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/products/${before.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ platiCategoryId: 87_656 }),
+    });
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, before.id));
+
+    assert.equal(response.status, 502);
+    assert.equal(saved.platiCategoryId, oldCategoryId);
+    assert.equal(saved.publicationStatus, "published");
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 test("automatic price sync stops before changes when the live rate is unavailable", async () => {
   clearOfficialUsdRubRateCache();
   await preparePublishedPriceFixture();

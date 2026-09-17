@@ -57,6 +57,7 @@ import {
   disableLegacyDigisellerProduct,
   fetchDigisellerSellerProducts,
   loginDigiseller,
+  setDigisellerProductEnabled,
   setDigisellerCodeUnlimitedStock,
   uploadDigisellerProductImage,
 } from "../lib/digiseller";
@@ -67,6 +68,7 @@ import { calculateProductPrice } from "../lib/pricing";
 import {
   applyPricingSettings,
   applyProductMargins,
+  withPriceSyncLock,
   type PriceSettingsInput,
 } from "../lib/price-sync";
 import { requireOperatorRole } from "../middlewares/auth";
@@ -363,7 +365,92 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     body.data.platiCategoryId !== current.platiCategoryId;
   const hasNonPricingUpdates = Object.keys(nonPricingUpdates).length > 0;
   let updated = current;
-  if (hasNonPricingUpdates || categoryChanged) {
+  if (
+    categoryChanged &&
+    current.publicationStatus === "published" &&
+    current.digisellerId !== null
+  ) {
+    try {
+      updated = await withProductPublicationLock(current.id, () => withPriceSyncLock(async () => {
+        const [lockedCurrent] = await db
+          .select()
+          .from(productsTable)
+          .where(eq(productsTable.id, current.id));
+        if (!lockedCurrent) throw new Error("Product not found");
+        if (body.data.platiCategoryId === lockedCurrent.platiCategoryId) {
+          return lockedCurrent;
+        }
+        if (
+          lockedCurrent.publicationStatus !== "published" ||
+          lockedCurrent.digisellerId === null
+        ) {
+          const [saved] = await db
+            .update(productsTable)
+            .set({
+              ...nonPricingUpdates,
+              publicationStatus: "draft",
+              publicationError: null,
+              publicationFailureStage: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, lockedCurrent.id))
+            .returning();
+          return saved;
+        }
+
+        const token = await loginDigiseller();
+        const oldProductInput = getDigisellerProductInput(lockedCurrent);
+        await setDigisellerProductEnabled(
+          lockedCurrent.digisellerId,
+          oldProductInput,
+          false,
+          token,
+          lockedCurrent.platiCategoryId,
+          lockedCurrent.digisellerDeliveryType ?? "code",
+        );
+        try {
+          const [saved] = await db
+            .update(productsTable)
+            .set({
+              ...nonPricingUpdates,
+              publicationStatus: "draft",
+              publicationError: null,
+              publicationFailureStage: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, lockedCurrent.id))
+            .returning();
+          return saved;
+        } catch (error) {
+          try {
+            await setDigisellerProductEnabled(
+              lockedCurrent.digisellerId,
+              oldProductInput,
+              true,
+              token,
+              lockedCurrent.platiCategoryId,
+              lockedCurrent.digisellerDeliveryType ?? "code",
+            );
+          } catch {
+            // The old card remains disabled, which is safer than an active stale card.
+          }
+          throw error;
+        }
+      }));
+    } catch (error) {
+      req.log.error(
+        { err: error, productId: current.id },
+        "Published product category update failed",
+      );
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось безопасно изменить категорию",
+      });
+      return;
+    }
+  } else if (hasNonPricingUpdates || categoryChanged) {
     [updated] = await db
       .update(productsTable)
       .set({

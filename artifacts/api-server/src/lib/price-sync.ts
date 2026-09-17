@@ -20,6 +20,19 @@ import { notifyFailure, notifyRecovery } from "./notifications";
 
 const PRICE_SYNC_LOCK_ID = 704_291_163;
 
+export async function withPriceSyncLock<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  await client.query("select pg_advisory_lock($1)", [PRICE_SYNC_LOCK_ID]);
+  try {
+    return await operation();
+  } finally {
+    await client.query("select pg_advisory_unlock($1)", [PRICE_SYNC_LOCK_ID]);
+    client.release();
+  }
+}
+
 export type PriceSyncResult = {
   checked: number;
   changed: number;

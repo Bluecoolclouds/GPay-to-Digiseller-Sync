@@ -567,7 +567,11 @@ function ProductRow({
       {
         onSuccess: (res) => {
           onUpdateRef.current(res)
-          toast.success("Категория сохранена. Повторите публикацию для проверки.")
+          toast.success(
+            product.publicationStatus === ProductPublicationStatus.published
+              ? "Старая карточка отключена. Опубликуйте товар в новой категории."
+              : "Категория сохранена. Повторите публикацию для проверки.",
+          )
         },
         onError: (error) =>
           toast.error(getMutationErrorMessage(error, "Не удалось сохранить категорию")),
