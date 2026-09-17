@@ -9,3 +9,4 @@
 - [Ambiguous Digiseller creation](ambiguous-digiseller-creation.md) — fail closed when creation may have succeeded but its product ID was not persisted.
 - [GPay key purchase idempotency](gpay-key-purchase-idempotency.md) — GPay has no client idempotency key; claim once locally and never repeat an ambiguous create.
 - [Existing Digiseller product linking](digiseller-existing-product-linking.md) — map seller cards explicitly; serialize linking with publishing and commit ownership atomically.
+- [API integration-test isolation](api-integration-test-isolation.md) — use separate schemas per suite and keep local HTTP requests outside outbound fetch mocks.

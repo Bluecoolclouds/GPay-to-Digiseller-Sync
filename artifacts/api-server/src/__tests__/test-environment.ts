@@ -6,11 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool } from "@workspace/db";
 
-const schema = `sync_product_types_test_${randomBytes(8).toString("hex")}`;
-assert.match(schema, /^sync_product_types_test_[a-f0-9]+$/);
-
-const databaseUrl = new URL(process.env.DATABASE_URL ?? "");
-databaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+const schemaSuffix = randomBytes(8).toString("hex");
+const syncSchema = `sync_product_types_test_${schemaSuffix}`;
+const publicOrdersSchema = `public_orders_test_${schemaSuffix}`;
+assert.match(syncSchema, /^sync_product_types_test_[a-f0-9]+$/);
+assert.match(publicOrdersSchema, /^public_orders_test_[a-f0-9]+$/);
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
@@ -18,17 +18,23 @@ const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mj
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
 
 const authTestFile = path.join(compiledDir, "auth.test.mjs");
-const isolatedEnvironment = {
-  ...process.env,
-  DATABASE_URL: databaseUrl.toString(),
-  TEST_DATABASE_SCHEMA: schema,
-  TEST_AUTH_BYPASS: "1",
-};
+function environmentFor(schema: string) {
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? "");
+  databaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+  return {
+    ...process.env,
+    DATABASE_URL: databaseUrl.toString(),
+    TEST_DATABASE_SCHEMA: schema,
+    TEST_AUTH_BYPASS: "1",
+  };
+}
 
-function run(command: string, args: string[]) {
+const isolatedEnvironment = environmentFor(syncSchema);
+
+function run(command: string, args: string[], env = isolatedEnvironment) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
-    env: isolatedEnvironment,
+    env,
     stdio: "inherit",
   });
   if (result.error) throw result.error;
@@ -46,9 +52,9 @@ const authResult = spawnSync(process.execPath, ["--test", authTestFile], {
 if (authResult.error) throw authResult.error;
 if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
 
-run(process.execPath, ["--test", priceTaskTestFile]);
+run(process.execPath, ["--test", "--test-concurrency=1", priceTaskTestFile]);
 
-try {
+async function createTestSchema(schema: string) {
   await pool.query(`create schema "${schema}"`);
   await pool.query(`
     create table "${schema}".sync_settings (
@@ -161,10 +167,20 @@ try {
       updated_at timestamptz not null default now()
     );
   `);
-  run(process.execPath, ["--test", publicOrdersTestFile]);
-  run(process.execPath, ["--test", testFile]);
+}
+
+try {
+  await createTestSchema(publicOrdersSchema);
+  await createTestSchema(syncSchema);
+  run(
+    process.execPath,
+    ["--test", "--test-concurrency=1", publicOrdersTestFile],
+    environmentFor(publicOrdersSchema),
+  );
+  run(process.execPath, ["--test", "--test-concurrency=1", testFile]);
 } finally {
-  await pool.query(`drop schema if exists "${schema}" cascade`);
+  await pool.query(`drop schema if exists "${publicOrdersSchema}" cascade`);
+  await pool.query(`drop schema if exists "${syncSchema}" cascade`);
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });
 }

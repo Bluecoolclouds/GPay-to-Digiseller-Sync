@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 import { eq } from "drizzle-orm";
 import {
   db,
@@ -25,6 +25,11 @@ import app from "../app";
 import { redactSensitiveRequestUrl } from "../lib/request-log";
 
 process.env.SESSION_SECRET ||= "public-order-test-secret";
+
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 let sequence = 0;
 async function createOrder(returned = false) {

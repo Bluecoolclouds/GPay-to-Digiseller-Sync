@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, afterEach, before, test } from "node:test";
 import type { AddressInfo } from "node:net";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -28,6 +28,10 @@ import {
 const fixtureIds = [2_140_001_001, 2_140_001_002, 2_140_001_003];
 const [keyGpayId, giftGpayId, unknownGpayId] = fixtureIds;
 const originalFetch = globalThis.fetch;
+afterEach(() => {
+  fetchOverride = undefined;
+});
+
 let baseUrl = "";
 let server: ReturnType<typeof app.listen>;
 let fetchOverride:
@@ -698,6 +702,7 @@ test("a failed price batch does not prevent later batches from saving", async ()
   const previousSalePrice = 1000;
   const submittedBatches: number[][] = [];
 
+  await cleanup();
   await db.delete(productsTable).where(inArray(productsTable.gpayId, batchGpayIds));
   await db.insert(productsTable).values(
     batchGpayIds.map((gpayId, index) => ({
@@ -817,6 +822,7 @@ test("a failed price batch does not prevent later batches from saving", async ()
     await db
       .delete(productsTable)
       .where(inArray(productsTable.gpayId, batchGpayIds));
+    await seedProducts();
   }
 });
 
@@ -1325,6 +1331,14 @@ async function resetOrderSyncState() {
   await db.delete(syncOrderStateTable);
 }
 
+async function assertOrderSyncRolledBack() {
+  const state = await db.select().from(syncOrderStateTable);
+  assert.equal(state.length, 1);
+  assert.equal(state[0].cursorAt, null);
+  assert.equal(state[0].consecutiveFailures, 1);
+  assert.ok(state[0].lastError);
+}
+
 test("seller-sells pagination imports every sale beyond the first 1000 rows", async () => {
   const gpayId = 2_140_001_051;
   const digisellerId = 1_940_001_051;
@@ -1556,7 +1570,7 @@ test("a refund after payment is persisted without erasing operator state and req
     }
     fetchOverride = undefined;
 
-    const rejectedResponse = await fetch(
+    const rejectedResponse = await originalFetch(
       `${baseUrl}/api/orders/${encodeURIComponent(invoiceId)}`,
       {
         method: "PATCH",
@@ -1568,7 +1582,7 @@ test("a refund after payment is persisted without erasing operator state and req
     assert.deepEqual(await rejectedResponse.json(), {
       error: "Returned order status change requires explicit confirmation",
     });
-    const confirmedResponse = await fetch(
+    const confirmedResponse = await originalFetch(
       `${baseUrl}/api/orders/${encodeURIComponent(invoiceId)}`,
       {
         method: "PATCH",
@@ -1649,8 +1663,7 @@ test("seller-sells page failure rolls back rows and leaves the cursor unchanged"
       .from(syncOrdersTable)
       .where(inArray(syncOrdersTable.invoiceId, invoiceIds));
     assert.equal(rows.length, 0);
-    const state = await db.select().from(syncOrderStateTable);
-    assert.equal(state.length, 0);
+    await assertOrderSyncRolledBack();
   } finally {
     fetchOverride = undefined;
     await db.delete(syncOrdersTable).where(inArray(syncOrdersTable.invoiceId, invoiceIds));
@@ -1775,7 +1788,7 @@ test("a malformed seller-sells row rolls back the import and cursor", async () =
       .from(syncOrdersTable)
       .where(eq(syncOrdersTable.invoiceId, invoiceId));
     assert.equal(orders.length, 0);
-    assert.equal((await db.select().from(syncOrderStateTable)).length, 0);
+    await assertOrderSyncRolledBack();
   } finally {
     fetchOverride = undefined;
     await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
@@ -1833,7 +1846,7 @@ test("page metadata drift rolls back page one and leaves cursor unchanged", asyn
       .from(syncOrdersTable)
       .where(eq(syncOrdersTable.invoiceId, invoiceId));
     assert.equal(orders.length, 0);
-    assert.equal((await db.select().from(syncOrderStateTable)).length, 0);
+    await assertOrderSyncRolledBack();
   } finally {
     fetchOverride = undefined;
     await db.delete(syncOrdersTable).where(eq(syncOrdersTable.invoiceId, invoiceId));
