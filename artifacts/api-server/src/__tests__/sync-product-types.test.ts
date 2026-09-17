@@ -18,7 +18,9 @@ import {
   fetchDigisellerSalesPage,
   selectCataloguerAttributes,
 } from "../lib/digiseller";
-import { syncKeyPrices } from "../lib/price-sync";
+import { applyPricingSettings, syncKeyPrices } from "../lib/price-sync";
+import { fetchGPayProducts } from "../lib/gpay";
+import { clearOfficialUsdRubRateCache } from "../lib/exchange-rate";
 import {
   recordDigisellerProductIds,
   syncDigisellerOrders,
@@ -57,22 +59,6 @@ const catalog = [
     currentPartnerPrice: 31,
     isAvailable: true,
     region: "Global",
-  },
-  {
-    id: keyGpayId,
-    name: "Regression key duplicate should be ignored",
-    productType: 2,
-    currentPartnerPrice: 99,
-    isAvailable: true,
-    region: "Duplicate",
-  },
-  {
-    id: giftGpayId,
-    name: "Regression gift duplicate should be ignored",
-    productType: 1,
-    currentPartnerPrice: 99,
-    isAvailable: true,
-    region: "Duplicate",
   },
   {
     id: unknownGpayId,
@@ -347,7 +333,7 @@ test("dashboard creates a warning after repeated price task timeouts and clears 
   assert.equal(dashboard.priceTimeoutWarning, null);
 });
 
-test("key sync counts repeated key pages once without changing other types", async () => {
+test("key sync changes only keys", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
@@ -362,7 +348,7 @@ test("key sync counts repeated key pages once without changing other types", asy
   assert.equal(names.get(unknownGpayId), "Regression unknown original");
 });
 
-test("gift sync counts repeated gift pages once without changing other types", async () => {
+test("gift sync changes only gifts", async () => {
   await seedProducts();
   const body = await request<{ productKind: string; updated: number }>("/api/sync/catalog", {
     method: "POST",
@@ -392,6 +378,134 @@ test("all sync persists and counts unique key, gift, and unknown products", asyn
   assert.equal(names.get(unknownGpayId), "Regression unknown updated");
 });
 
+test("settings save applies the exact live rate approved by preview", async () => {
+  clearOfficialUsdRubRateCache();
+  await seedProducts();
+  const candidate = {
+    defaultMarginPercent: 15,
+    usdRubRate: 50,
+    exchangeRateMode: "cbr" as const,
+    conversionMarkupPercent: 2,
+    digisellerFeePercent: 5,
+    fixedReserveRub: 30,
+    minimumProfitRub: 100,
+    automationMode: "manual" as const,
+    disableOnUnavailable: true,
+  };
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("bestchange.app")) {
+      return Response.json({
+        rates: {
+          "21-10": [
+            { rate: 95, reserve: 10_000 },
+            { rate: 95, reserve: 10_000 },
+            { rate: 95, reserve: 10_000 },
+          ],
+        },
+      });
+    }
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      return Response.json({
+        status: "success",
+        data: {
+          products: [{
+            id: keyGpayId,
+            name: "Regression key updated",
+            productType: 2,
+            currentPartnerPrice: 21,
+            isAvailable: true,
+          }],
+          totalCount: 1,
+          page: body.page,
+          pageSize: body.pageSize,
+        },
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const preview = await request<{
+      usdRubRate: number;
+      previewToken: string;
+    }>("/api/settings/preview", {
+      method: "POST",
+      body: JSON.stringify(candidate),
+    });
+    assert.equal(preview.usdRubRate, 95);
+    assert.ok(preview.previewToken);
+
+    const saved = await request<{ usdRubRate: number }>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ ...candidate, previewToken: preview.previewToken }),
+    });
+    assert.equal(saved.usdRubRate, preview.usdRubRate);
+
+    const [settings] = await db
+      .select()
+      .from(settingsTable)
+      .where(eq(settingsTable.id, 1));
+    assert.equal(settings.usdRubRate, preview.usdRubRate);
+
+    const rejected = await originalFetch(`${baseUrl}/api/settings`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...candidate,
+        minimumProfitRub: 101,
+        previewToken: preview.previewToken,
+      }),
+    });
+    assert.equal(rejected.status, 409);
+
+    const nextCandidate = {
+      ...candidate,
+      exchangeRateMode: "manual" as const,
+      usdRubRate: 96,
+      minimumProfitRub: 120,
+    };
+    const nextPreview = await request<{ previewToken: string }>(
+      "/api/settings/preview",
+      {
+        method: "POST",
+        body: JSON.stringify(nextCandidate),
+      },
+    );
+    const lockClient = await pool.connect();
+    await lockClient.query("select pg_advisory_lock($1)", [704_291_163]);
+    try {
+      const busy = await originalFetch(`${baseUrl}/api/settings`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...nextCandidate,
+          previewToken: nextPreview.previewToken,
+        }),
+      });
+      assert.equal(busy.status, 409);
+    } finally {
+      await lockClient.query("select pg_advisory_unlock($1)", [704_291_163]);
+      lockClient.release();
+    }
+    const [afterBusy] = await db
+      .select()
+      .from(settingsTable)
+      .where(eq(settingsTable.id, 1));
+    assert.equal(afterBusy.usdRubRate, 95);
+    assert.equal(afterBusy.minimumProfitRub, 100);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 async function preparePublishedPriceFixture() {
   await seedProducts();
   await db
@@ -405,10 +519,10 @@ async function preparePublishedPriceFixture() {
     .where(inArray(productsTable.gpayId, [keyGpayId]));
   await db
     .insert(settingsTable)
-    .values({ id: 1, automationMode: "automatic" })
+    .values({ id: 1, automationMode: "automatic", exchangeRateMode: "manual" })
     .onConflictDoUpdate({
       target: settingsTable.id,
-      set: { automationMode: "automatic" },
+      set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
 }
 
@@ -475,6 +589,124 @@ test("published price is saved locally only after Digiseller confirms success", 
   }
 });
 
+test("automatic price sync stops before changes when the live rate is unavailable", async () => {
+  clearOfficialUsdRubRateCache();
+  await preparePublishedPriceFixture();
+  await db
+    .update(settingsTable)
+    .set({ exchangeRateMode: "cbr" })
+    .where(eq(settingsTable.id, 1));
+  let gpayCalls = 0;
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("bestchange.app")) {
+      return new Response("Unavailable", { status: 503 });
+    }
+    if (url.includes("gpay.market")) gpayCalls++;
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const result = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .where(eq(activitiesTable.type, "price"))
+      .orderBy(desc(activitiesTable.createdAt))
+      .limit(1);
+
+    assert.equal(result.skipped, true);
+    assert.equal(result.failed, 1);
+    assert.equal(gpayCalls, 0);
+    assert.equal(saved.salePriceRub, 1100);
+    assert.equal(activity.status, "warning");
+    assert.match(activity.description, /актуальный курс.*недоступен/i);
+  } finally {
+    fetchOverride = undefined;
+    await db
+      .update(settingsTable)
+      .set({ exchangeRateMode: "manual" })
+      .where(eq(settingsTable.id, 1));
+  }
+});
+
+test("an incomplete GPay catalog snapshot is rejected", async () => {
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          products: [],
+          totalCount: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    await assert.rejects(
+      fetchGPayProducts(100, "key"),
+      /получен не полностью/,
+    );
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("overlapping GPay catalog pages are rejected before availability changes", async () => {
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      const { page, pageSize } = JSON.parse(String(init?.body ?? "{}"));
+      return Response.json({
+        status: "success",
+        data: {
+          products: [{
+            id: keyGpayId,
+            name: `Repeated page ${page}`,
+            productType: 2,
+            currentPartnerPrice: 10,
+            isAvailable: true,
+          }],
+          totalCount: 2,
+          page,
+          pageSize,
+        },
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    await assert.rejects(
+      fetchGPayProducts(1, "key"),
+      /повторяющиеся товары/,
+    );
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 test("per-product Digiseller failure leaves the previous local price unchanged", async () => {
   await preparePublishedPriceFixture();
   usePriceSyncResponses({
@@ -496,6 +728,97 @@ test("per-product Digiseller failure leaves the previous local price unchanged",
     assert.equal(result.failed, 1);
     assert.equal(saved.supplierPriceUsd, 11);
     assert.equal(saved.salePriceRub, 1100);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("failed settings application rolls Digiseller back and keeps active rules unchanged", async () => {
+  await preparePublishedPriceFixture();
+  const [beforeSettings] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  let priceEditCalls = 0;
+  let statusCalls = 0;
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      return Response.json({
+        status: "success",
+        data: {
+          products: [{
+            id: keyGpayId,
+            name: "Regression key original",
+            productType: 2,
+            currentPartnerPrice: 21,
+            isAvailable: true,
+          }],
+          totalCount: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/prices")) {
+      priceEditCalls++;
+      return new Response("12345678-1234-1234-1234-123456789abc");
+    }
+    if (url.includes("/UpdateProductsTaskStatus")) {
+      statusCalls++;
+      return Response.json(
+        statusCalls === 1
+          ? {
+              Status: 2,
+              ErrorCount: 1,
+              ErrorsDescriptions: [{
+                Key: "1914001001",
+                Value: "Rejected candidate price",
+              }],
+            }
+          : { Status: 3, ErrorCount: 0 },
+      );
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const application = await applyPricingSettings(
+      {
+        defaultMarginPercent: beforeSettings.defaultMarginPercent,
+        usdRubRate: beforeSettings.usdRubRate,
+        exchangeRateMode: "manual",
+        conversionMarkupPercent: beforeSettings.conversionMarkupPercent,
+        digisellerFeePercent: beforeSettings.digisellerFeePercent,
+        fixedReserveRub: beforeSettings.fixedReserveRub,
+        minimumProfitRub: beforeSettings.minimumProfitRub + 50,
+        automationMode: "manual",
+        disableOnUnavailable: beforeSettings.disableOnUnavailable,
+      },
+      beforeSettings.usdRubRate,
+    );
+    const [afterSettings] = await db
+      .select()
+      .from(settingsTable)
+      .where(eq(settingsTable.id, 1));
+    const [product] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+
+    assert.equal(application.applied, false);
+    assert.equal(priceEditCalls, 2);
+    assert.equal(afterSettings.minimumProfitRub, beforeSettings.minimumProfitRub);
+    assert.equal(product.salePriceRub, 1100);
   } finally {
     fetchOverride = undefined;
   }
@@ -726,10 +1049,10 @@ test("a failed price batch does not prevent later batches from saving", async ()
   );
   await db
     .insert(settingsTable)
-    .values({ id: 1, automationMode: "automatic" })
+    .values({ id: 1, automationMode: "automatic", exchangeRateMode: "manual" })
     .onConflictDoUpdate({
       target: settingsTable.id,
-      set: { automationMode: "automatic" },
+      set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
 
   fetchOverride = async (input, init) => {
@@ -1178,10 +1501,10 @@ test("hourly sync does not stock legacy Text notices", async () => {
   );
   await db
     .insert(settingsTable)
-    .values({ id: 1, automationMode: "automatic" })
+    .values({ id: 1, automationMode: "automatic", exchangeRateMode: "manual" })
     .onConflictDoUpdate({
       target: settingsTable.id,
-      set: { automationMode: "automatic" },
+      set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
 
   fetchOverride = async (input, init) => {

@@ -344,11 +344,12 @@ export const updateSettingsBodyConversionMarkupPercentMin = 0;
 export const updateSettingsBodyConversionMarkupPercentMax = 20;
 
 export const updateSettingsBodyDigisellerFeePercentMin = 0;
-export const updateSettingsBodyDigisellerFeePercentMax = 100;
+export const updateSettingsBodyDigisellerFeePercentExclusiveMax = 100;
 
 export const updateSettingsBodyFixedReserveRubMin = 0;
 
 export const updateSettingsBodyMinimumProfitRubMin = 0;
+
 
 
 
@@ -357,11 +358,12 @@ export const UpdateSettingsBody = zod.object({
   "usdRubRate": zod.number().gt(updateSettingsBodyUsdRubRateExclusiveMin),
   "exchangeRateMode": zod.enum(['cbr', 'manual']),
   "conversionMarkupPercent": zod.number().min(updateSettingsBodyConversionMarkupPercentMin).max(updateSettingsBodyConversionMarkupPercentMax),
-  "digisellerFeePercent": zod.number().min(updateSettingsBodyDigisellerFeePercentMin).max(updateSettingsBodyDigisellerFeePercentMax),
+  "digisellerFeePercent": zod.number().min(updateSettingsBodyDigisellerFeePercentMin).lt(updateSettingsBodyDigisellerFeePercentExclusiveMax),
   "fixedReserveRub": zod.number().min(updateSettingsBodyFixedReserveRubMin),
   "minimumProfitRub": zod.number().min(updateSettingsBodyMinimumProfitRubMin),
   "automationMode": zod.enum(['manual', 'automatic']),
-  "disableOnUnavailable": zod.boolean()
+  "disableOnUnavailable": zod.boolean(),
+  "previewToken": zod.string().min(1)
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -375,6 +377,58 @@ export const UpdateSettingsResponse = zod.object({
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
   "credentialsConfigured": zod.boolean()
+})
+
+
+export const previewSettingsBodyDefaultMarginPercentMin = 0;
+export const previewSettingsBodyDefaultMarginPercentMax = 500;
+
+export const previewSettingsBodyUsdRubRateExclusiveMin = 0;
+
+export const previewSettingsBodyConversionMarkupPercentMin = 0;
+export const previewSettingsBodyConversionMarkupPercentMax = 20;
+
+export const previewSettingsBodyDigisellerFeePercentMin = 0;
+export const previewSettingsBodyDigisellerFeePercentExclusiveMax = 100;
+
+export const previewSettingsBodyFixedReserveRubMin = 0;
+
+export const previewSettingsBodyMinimumProfitRubMin = 0;
+
+
+
+export const PreviewSettingsBody = zod.object({
+  "defaultMarginPercent": zod.number().min(previewSettingsBodyDefaultMarginPercentMin).max(previewSettingsBodyDefaultMarginPercentMax),
+  "usdRubRate": zod.number().gt(previewSettingsBodyUsdRubRateExclusiveMin),
+  "exchangeRateMode": zod.enum(['cbr', 'manual']),
+  "conversionMarkupPercent": zod.number().min(previewSettingsBodyConversionMarkupPercentMin).max(previewSettingsBodyConversionMarkupPercentMax),
+  "digisellerFeePercent": zod.number().min(previewSettingsBodyDigisellerFeePercentMin).lt(previewSettingsBodyDigisellerFeePercentExclusiveMax),
+  "fixedReserveRub": zod.number().min(previewSettingsBodyFixedReserveRubMin),
+  "minimumProfitRub": zod.number().min(previewSettingsBodyMinimumProfitRubMin),
+  "automationMode": zod.enum(['manual', 'automatic']),
+  "disableOnUnavailable": zod.boolean()
+})
+
+export const previewSettingsResponseTotalProductsMin = 0;
+
+export const previewSettingsResponseAffectedProductsMin = 0;
+
+export const previewSettingsResponsePublishedPriceChangesMin = 0;
+
+
+
+
+export const PreviewSettingsResponse = zod.object({
+  "totalProducts": zod.number().int().min(previewSettingsResponseTotalProductsMin),
+  "affectedProducts": zod.number().int().min(previewSettingsResponseAffectedProductsMin),
+  "publishedPriceChanges": zod.number().int().min(previewSettingsResponsePublishedPriceChangesMin),
+  "minimumExpectedProfitRub": zod.number().nullable(),
+  "usdRubRate": zod.number(),
+  "rateSource": zod.string(),
+  "rateFetchedAt": zod.coerce.date(),
+  "rateIsFallback": zod.boolean(),
+  "automaticUpdateAllowed": zod.boolean(),
+  "previewToken": zod.string().min(1)
 })
 
 

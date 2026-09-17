@@ -10,6 +10,10 @@ type RateSnapshot = {
 
 let cache: { expiresAt: number; value: RateSnapshot } | null = null;
 
+export function clearOfficialUsdRubRateCache() {
+  cache = null;
+}
+
 type BestChangeRate = {
   rate?: string | number;
   reserve?: string | number;

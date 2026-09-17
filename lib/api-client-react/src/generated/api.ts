@@ -48,7 +48,9 @@ import type {
   PublicOrderAccessInput,
   PublicOrderCodeInput,
   Settings,
+  SettingsApplyInput,
   SettingsInput,
+  SettingsPreview,
   SubmitPublicOrderCode200,
   SyncResult
 } from './api.schemas';
@@ -1002,14 +1004,14 @@ export const getUpdateSettingsUrl = () => {
   return `/api/settings`
 }
 
-export const updateSettings = async (settingsInput: SettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<Settings> => {
+export const updateSettings = async (settingsApplyInput: SettingsApplyInput, options?: Parameters<typeof customFetch>[1]): Promise<Settings> => {
 
   return customFetch<Settings>(getUpdateSettingsUrl(),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(settingsInput)
+    body: JSON.stringify(settingsApplyInput)
   }
 );}
 
@@ -1018,8 +1020,8 @@ export const updateSettings = async (settingsInput: SettingsInput, options?: Par
 
 
 export const getUpdateSettingsMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsApplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsApplyInput>}, TContext> => {
 
 const mutationKey = ['updateSettings'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1031,7 +1033,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSettings>>, {data: BodyType<SettingsInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSettings>>, {data: BodyType<SettingsApplyInput>}> = (props) => {
           const {data} = props ?? {};
 
           return  updateSettings(data,requestOptions)
@@ -1045,18 +1047,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSettings>>>
-    export type UpdateSettingsMutationBody = BodyType<SettingsInput>
+    export type UpdateSettingsMutationBody = BodyType<SettingsApplyInput>
     export type UpdateSettingsMutationError = ErrorType<unknown>
 
     export const useUpdateSettings = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsApplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateSettings>>,
+        TError,
+        {data: BodyType<SettingsApplyInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSettingsMutationOptions(options));
+    }
+
+export const getPreviewSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/preview`
+}
+
+export const previewSettings = async (settingsInput: SettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<SettingsPreview> => {
+
+  return customFetch<SettingsPreview>(getPreviewSettingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(settingsInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewSettings>>, TError,{data: BodyType<SettingsInput>}, TContext> => {
+
+const mutationKey = ['previewSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewSettings>>, {data: BodyType<SettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof previewSettings>>>
+    export type PreviewSettingsMutationBody = BodyType<SettingsInput>
+    export type PreviewSettingsMutationError = ErrorType<unknown>
+
+    export const usePreviewSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewSettings>>,
         TError,
         {data: BodyType<SettingsInput>},
         TContext
       > => {
-      return useMutation(getUpdateSettingsMutationOptions(options));
+      return useMutation(getPreviewSettingsMutationOptions(options));
     }
 
 export const getGetConnectionsUrl = () => {

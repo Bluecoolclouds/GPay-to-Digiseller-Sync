@@ -1,14 +1,14 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { useQueryClient } from "@tanstack/react-query"
-import { getGetConnectionsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, SettingsInput } from "@workspace/api-client-react"
+import { getGetConnectionsQueryKey, getGetSettingsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, usePreviewSettings, SettingsInput } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
+import { AlertTriangle, Calculator, ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function SettingsPage() {
@@ -16,7 +16,9 @@ export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useGetSettings()
   const { data: connections, isLoading: connectionsLoading } = useGetConnections()
   const updateMutation = useUpdateSettings()
+  const previewMutation = usePreviewSettings()
   const testConnectionsMutation = useTestConnections()
+  const [previewedValues, setPreviewedValues] = useState("")
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>({
     defaultValues: {
@@ -42,15 +44,41 @@ export default function SettingsPage() {
   }, [settings, reset])
 
   const onSubmit = (data: SettingsInput) => {
-    updateMutation.mutate({ data }, {
+    if (previewedValues !== JSON.stringify(data)) {
+      toast.error("Сначала рассчитайте изменения для текущих настроек")
+      return
+    }
+    if (!previewMutation.data?.previewToken) {
+      toast.error("Предпросмотр устарел. Рассчитайте изменения ещё раз")
+      return
+    }
+    updateMutation.mutate({ data: { ...data, previewToken: previewMutation.data.previewToken } }, {
       onSuccess: () => {
         toast.success("Настройки успешно сохранены")
+        setPreviewedValues("")
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })
       },
-      onError: () => toast.error("Не удалось сохранить настройки")
+      onError: () => {
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })
+        toast.error("Не удалось полностью применить настройки. Проверьте сообщение сервера и повторите предпросмотр.")
+      }
     })
   }
 
   const exchangeRateMode = watch("exchangeRateMode")
+
+  const handlePreview = handleSubmit((data) => {
+    previewMutation.mutate(
+      { data },
+      {
+        onSuccess: () => setPreviewedValues(JSON.stringify(data)),
+        onError: () => {
+          setPreviewedValues("")
+          toast.error("Не удалось рассчитать изменения")
+        },
+      },
+    )
+  })
 
   const handleTestConnections = () => {
     testConnectionsMutation.mutate(undefined, {
@@ -128,6 +156,53 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
+            {previewMutation.data && previewedValues && (
+              <Card className={cn(
+                "mt-6",
+                previewMutation.data.automaticUpdateAllowed
+                  ? "border-emerald-500/30"
+                  : "border-amber-500/50",
+              )}>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {previewMutation.data.automaticUpdateAllowed
+                      ? <Calculator className="w-5 h-5 text-emerald-600" />
+                      : <AlertTriangle className="w-5 h-5 text-amber-600" />}
+                    Предпросмотр изменений
+                  </CardTitle>
+                  <CardDescription>
+                    Курс {previewMutation.data.usdRubRate.toFixed(2)} ₽ · {previewMutation.data.rateSource}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <div className="text-muted-foreground text-xs">Изменится товаров</div>
+                      <div className="text-xl font-semibold">{previewMutation.data.affectedProducts}</div>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <div className="text-muted-foreground text-xs">Опубликованных цен</div>
+                      <div className="text-xl font-semibold">{previewMutation.data.publishedPriceChanges}</div>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <div className="text-muted-foreground text-xs">Мин. чистая прибыль</div>
+                      <div className="text-xl font-semibold">
+                        {previewMutation.data.minimumExpectedProfitRub === null
+                          ? "—"
+                          : `${previewMutation.data.minimumExpectedProfitRub.toFixed(2)} ₽`}
+                      </div>
+                    </div>
+                  </div>
+                  {!previewMutation.data.automaticUpdateAllowed && (
+                    <p className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      Актуальный курс недоступен. Автоматическое обновление цен будет остановлено до восстановления источника.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle>Автоматизация и безопасность</CardTitle>
@@ -161,8 +236,11 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
             
-            <div className="mt-6 flex justify-end">
-              <Button type="submit" disabled={updateMutation.isPending} className="w-full sm:w-auto">
+            <div className="mt-6 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <Button type="button" variant="outline" onClick={handlePreview} disabled={previewMutation.isPending} className="w-full sm:w-auto">
+                {previewMutation.isPending ? "Расчёт..." : "Рассчитать изменения"}
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending || !previewedValues} className="w-full sm:w-auto">
                 {updateMutation.isPending ? "Сохранение..." : "Сохранить настройки"}
               </Button>
             </div>

@@ -380,6 +380,14 @@ export async function fetchGPayProducts(
     };
 
     const firstPage = await fetchPage(1);
+      if (
+        firstPage.page !== 1 ||
+        firstPage.pageSize !== pageSize ||
+        !Number.isInteger(firstPage.totalCount) ||
+        firstPage.totalCount < 0
+      ) {
+        throw new Error("GPay вернул некорректную пагинацию каталога");
+      }
     const catalogProducts = [...(firstPage.products ?? [])];
     const totalPages = Math.ceil(firstPage.totalCount / pageSize);
     const concurrency = 5;
@@ -390,9 +398,30 @@ export async function fetchGPayProducts(
         (_, index) => start + index,
       );
       const results = await Promise.all(pages.map(fetchPage));
-      for (const result of results) {
+      for (const [index, result] of results.entries()) {
+        const expectedPage = pages[index];
+        if (
+          result.page !== expectedPage ||
+          result.pageSize !== pageSize ||
+          result.totalCount !== firstPage.totalCount
+        ) {
+          throw new Error("Каталог GPay изменился или был получен не полностью");
+        }
         catalogProducts.push(...(result.products ?? []));
       }
+    }
+    if (catalogProducts.length !== firstPage.totalCount) {
+      throw new Error("Каталог GPay получен не полностью");
+    }
+    const identities = new Set(
+      catalogProducts.map(
+        (product) => `${String(product.productType).trim()}:${product.id}`,
+      ),
+    );
+    if (identities.size !== firstPage.totalCount) {
+      throw new Error(
+        "Каталог GPay содержит повторяющиеся товары и не является полным снимком",
+      );
     }
     return { firstPage, products: catalogProducts };
   };

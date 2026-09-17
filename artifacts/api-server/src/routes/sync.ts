@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   activitiesTable,
@@ -36,6 +36,8 @@ import {
   UpdateProductResponse,
   UpdateSettingsBody,
   UpdateSettingsResponse,
+  PreviewSettingsBody,
+  PreviewSettingsResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import {
@@ -56,6 +58,11 @@ import {
 import { getOfficialUsdRubRate } from "../lib/exchange-rate";
 import { getRepeatedPriceTimeoutWarning } from "../lib/price-timeout-warning";
 import { recordDigisellerProductIds } from "../lib/orders";
+import { calculateProductPrice } from "../lib/pricing";
+import {
+  applyPricingSettings,
+  type PriceSettingsInput,
+} from "../lib/price-sync";
 import { requireOperatorRole } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -83,40 +90,93 @@ async function getSettingsRow() {
   return settings;
 }
 
-function calculatePrice(
-  supplierPriceUsd: number,
-  settings: Awaited<ReturnType<typeof getSettingsRow>>,
-  marginPercent = settings.defaultMarginPercent,
-) {
-  const purchaseRate = settings.usdRubRate * (1 + settings.conversionMarkupPercent / 100);
-  const baseRub = supplierPriceUsd * purchaseRate;
-  const price = Math.ceil(
-    baseRub * (1 + settings.digisellerFeePercent / 100) * (1 + marginPercent / 100) +
-      settings.fixedReserveRub,
-  );
-  return {
-    salePriceRub: Math.max(price, Math.ceil(baseRub + settings.minimumProfitRub)),
-    profitRub: Math.max(price, Math.ceil(baseRub + settings.minimumProfitRub)) - baseRub,
-  };
+function pricingSettingsFingerprint(settings: PriceSettingsInput) {
+  return JSON.stringify([
+    settings.defaultMarginPercent,
+    settings.usdRubRate,
+    settings.exchangeRateMode,
+    settings.conversionMarkupPercent,
+    settings.digisellerFeePercent,
+    settings.fixedReserveRub,
+    settings.minimumProfitRub,
+    settings.automationMode,
+    settings.disableOnUnavailable,
+  ]);
 }
 
-async function recalculateAllProductPrices(
-  settings: Awaited<ReturnType<typeof getSettingsRow>>,
+function previewSigningSecret() {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET is not configured");
+  return secret;
+}
+
+function signSettingsPreview(input: {
+  settings: PriceSettingsInput;
+  effectiveUsdRubRate: number;
+  rateIsFallback: boolean;
+}) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      fingerprint: pricingSettingsFingerprint(input.settings),
+      effectiveUsdRubRate: input.effectiveUsdRubRate,
+      rateIsFallback: input.rateIsFallback,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    }),
+  ).toString("base64url");
+  const signature = createHmac("sha256", previewSigningSecret())
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifySettingsPreview(
+  token: string,
+  settings: PriceSettingsInput,
 ) {
-  const purchaseRate =
-    settings.usdRubRate * (1 + settings.conversionMarkupPercent / 100);
-  const baseRub = sql`${productsTable.supplierPriceUsd} * ${purchaseRate}`;
-  const calculatedPrice = sql`greatest(
-    ceil(${baseRub} * (1 + ${settings.digisellerFeePercent} / 100.0) * (1 + ${productsTable.marginPercent} / 100.0) + ${settings.fixedReserveRub}),
-    ceil(${baseRub} + ${settings.minimumProfitRub})
-  )`;
-  await db
-    .update(productsTable)
-    .set({
-      salePriceRub: calculatedPrice,
-      profitRub: sql`${calculatedPrice} - ${baseRub}`,
-      updatedAt: new Date(),
-    });
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra) {
+    throw new Error("Предпросмотр настроек недействителен");
+  }
+  const expected = createHmac("sha256", previewSigningSecret())
+    .update(payload)
+    .digest();
+  let actual: Buffer;
+  try {
+    actual = Buffer.from(signature, "base64url");
+  } catch {
+    throw new Error("Предпросмотр настроек недействителен");
+  }
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    throw new Error("Предпросмотр настроек недействителен");
+  }
+  let decoded: {
+    fingerprint?: unknown;
+    effectiveUsdRubRate?: unknown;
+    rateIsFallback?: unknown;
+    expiresAt?: unknown;
+  };
+  try {
+    decoded = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as typeof decoded;
+  } catch {
+    throw new Error("Предпросмотр настроек недействителен");
+  }
+  if (
+    decoded.fingerprint !== pricingSettingsFingerprint(settings) ||
+    typeof decoded.effectiveUsdRubRate !== "number" ||
+    !Number.isFinite(decoded.effectiveUsdRubRate) ||
+    decoded.effectiveUsdRubRate <= 0 ||
+    typeof decoded.rateIsFallback !== "boolean" ||
+    typeof decoded.expiresAt !== "number" ||
+    decoded.expiresAt < Date.now()
+  ) {
+    throw new Error("Предпросмотр настроек устарел или не соответствует форме");
+  }
+  return {
+    effectiveUsdRubRate: decoded.effectiveUsdRubRate,
+    rateIsFallback: decoded.rateIsFallback,
+  };
 }
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
@@ -217,7 +277,7 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     return;
   }
   const marginPercent = body.data.marginPercent ?? current.marginPercent;
-  const calculated = calculatePrice(current.supplierPriceUsd, settings, marginPercent);
+  const calculated = calculateProductPrice(current.supplierPriceUsd, settings, marginPercent);
   const categoryChanged =
     body.data.platiCategoryId !== undefined &&
     body.data.platiCategoryId !== current.platiCategoryId;
@@ -1119,7 +1179,7 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
           ),
         );
       const marginPercent = existing?.marginPercent ?? settings.defaultMarginPercent;
-      const calculated = calculatePrice(product.currentPartnerPrice, settings, marginPercent);
+      const calculated = calculateProductPrice(product.currentPartnerPrice, settings, marginPercent);
       const values = {
         gpayId: product.id,
         appId: product.appId ?? null,
@@ -1371,19 +1431,121 @@ router.get("/settings", async (_req, res): Promise<void> => {
   res.json(GetSettingsResponse.parse({ ...settings, credentialsConfigured: credentialsConfigured() }));
 });
 
+router.post("/settings/preview", async (req, res): Promise<void> => {
+  const parsed = PreviewSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const candidate = parsed.data;
+  const rate =
+    candidate.exchangeRateMode === "manual"
+      ? {
+          usdRub: candidate.usdRubRate,
+          source: "Ручной курс",
+          fetchedAt: new Date().toISOString(),
+          isFallback: false,
+        }
+      : await getOfficialUsdRubRate(candidate.usdRubRate);
+  const effectiveSettings = { ...candidate, usdRubRate: rate.usdRub };
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.productType, "2"));
+  let affectedProducts = 0;
+  let publishedPriceChanges = 0;
+  let minimumExpectedProfitRub: number | null = null;
+  for (const product of products) {
+    const calculated = calculateProductPrice(
+      product.supplierPriceUsd,
+      effectiveSettings,
+      product.marginPercent,
+    );
+    if (calculated.salePriceRub !== product.salePriceRub) {
+      affectedProducts++;
+      if (
+        product.publicationStatus === "published" &&
+        product.digisellerId !== null
+      ) {
+        publishedPriceChanges++;
+      }
+    }
+    if (product.isAvailable && product.publicationStatus === "published") {
+      minimumExpectedProfitRub =
+        minimumExpectedProfitRub === null
+          ? calculated.profitRub
+          : Math.min(minimumExpectedProfitRub, calculated.profitRub);
+    }
+  }
+  res.json(
+    PreviewSettingsResponse.parse({
+      totalProducts: products.length,
+      affectedProducts,
+      publishedPriceChanges,
+      minimumExpectedProfitRub,
+      usdRubRate: rate.usdRub,
+      rateSource: rate.source,
+      rateFetchedAt: rate.fetchedAt,
+      rateIsFallback: rate.isFallback,
+      automaticUpdateAllowed:
+        candidate.exchangeRateMode === "manual" || !rate.isFallback,
+      previewToken: signSettingsPreview({
+        settings: candidate,
+        effectiveUsdRubRate: rate.usdRub,
+        rateIsFallback: rate.isFallback,
+      }),
+    }),
+  );
+});
+
 router.put("/settings", async (req, res): Promise<void> => {
   const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [settings] = await db
-    .insert(settingsTable)
-    .values({ id: 1, ...parsed.data })
-    .onConflictDoUpdate({ target: settingsTable.id, set: { ...parsed.data, updatedAt: new Date() } })
-    .returning();
-  await recalculateAllProductPrices(settings);
-  res.json(UpdateSettingsResponse.parse({ ...settings, credentialsConfigured: credentialsConfigured() }));
+  const { previewToken, ...candidate } = parsed.data;
+  let preview: ReturnType<typeof verifySettingsPreview>;
+  try {
+    preview = verifySettingsPreview(previewToken, candidate);
+  } catch (error) {
+    res.status(409).json({
+      error: error instanceof Error ? error.message : "Предпросмотр недействителен",
+    });
+    return;
+  }
+  if (candidate.exchangeRateMode !== "manual" && preview.rateIsFallback) {
+    res.status(409).json({
+      error:
+        "Нельзя применить автоматические цены без актуального курса. Рассчитайте изменения после восстановления источника.",
+    });
+    return;
+  }
+  let application: Awaited<ReturnType<typeof applyPricingSettings>>;
+  try {
+    application = await applyPricingSettings(
+      candidate,
+      preview.effectiveUsdRubRate,
+    );
+  } catch (error) {
+    res.status(502).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Не удалось безопасно применить настройки цен",
+    });
+    return;
+  }
+  if (!application.applied) {
+    res.status(409).json({ error: application.reason });
+    return;
+  }
+  res.json(
+    UpdateSettingsResponse.parse({
+      ...application.settings,
+      credentialsConfigured: credentialsConfigured(),
+    }),
+  );
 });
 
 router.get("/connections", async (_req, res): Promise<void> => {
@@ -1426,14 +1588,6 @@ router.get("/exchange-rate", async (_req, res): Promise<void> => {
     return;
   }
   const rate = await getOfficialUsdRubRate(settings.usdRubRate);
-  if (!rate.isFallback && rate.usdRub !== settings.usdRubRate) {
-    const [updatedSettings] = await db
-      .update(settingsTable)
-      .set({ usdRubRate: rate.usdRub, updatedAt: new Date() })
-      .where(eq(settingsTable.id, 1))
-      .returning();
-    await recalculateAllProductPrices(updatedSettings);
-  }
   res.json(
     GetExchangeRateResponse.parse({
       ...rate,

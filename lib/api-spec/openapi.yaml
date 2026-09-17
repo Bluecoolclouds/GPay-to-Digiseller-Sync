@@ -279,7 +279,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SettingsInput"
+              $ref: "#/components/schemas/SettingsApplyInput"
       responses:
         "200":
           description: Updated settings
@@ -287,6 +287,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Settings"
+  /settings/preview:
+    post:
+      operationId: previewSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Impact preview for pricing settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsPreview"
   /connections:
     get:
       operationId: getConnections
@@ -688,11 +705,39 @@ components:
         usdRubRate: { type: number, exclusiveMinimum: 0 }
         exchangeRateMode: { type: string, enum: [cbr, manual] }
         conversionMarkupPercent: { type: number, minimum: 0, maximum: 20 }
-        digisellerFeePercent: { type: number, minimum: 0, maximum: 100 }
+        digisellerFeePercent: { type: number, minimum: 0, exclusiveMaximum: 100 }
         fixedReserveRub: { type: number, minimum: 0 }
         minimumProfitRub: { type: number, minimum: 0 }
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
+    SettingsPreview:
+      type: object
+      required: [totalProducts, affectedProducts, publishedPriceChanges, minimumExpectedProfitRub, usdRubRate, rateSource, rateFetchedAt, rateIsFallback, automaticUpdateAllowed, previewToken]
+      properties:
+        totalProducts: { type: integer, minimum: 0 }
+        affectedProducts: { type: integer, minimum: 0 }
+        publishedPriceChanges: { type: integer, minimum: 0 }
+        minimumExpectedProfitRub: { type: [number, "null"] }
+        usdRubRate: { type: number }
+        rateSource: { type: string }
+        rateFetchedAt: { type: string, format: date-time }
+        rateIsFallback: { type: boolean }
+        automaticUpdateAllowed: { type: boolean }
+        previewToken: { type: string, minLength: 1 }
+    SettingsApplyInput:
+      type: object
+      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, previewToken]
+      properties:
+        defaultMarginPercent: { type: number, minimum: 0, maximum: 500 }
+        usdRubRate: { type: number, exclusiveMinimum: 0 }
+        exchangeRateMode: { type: string, enum: [cbr, manual] }
+        conversionMarkupPercent: { type: number, minimum: 0, maximum: 20 }
+        digisellerFeePercent: { type: number, minimum: 0, exclusiveMaximum: 100 }
+        fixedReserveRub: { type: number, minimum: 0 }
+        minimumProfitRub: { type: number, minimum: 0 }
+        automationMode: { type: string, enum: [manual, automatic] }
+        disableOnUnavailable: { type: boolean }
+        previewToken: { type: string, minLength: 1 }
     ConnectionState:
       type: object
       required: [configured, healthy, label, detail]

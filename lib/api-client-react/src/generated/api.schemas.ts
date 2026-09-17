@@ -370,7 +370,7 @@ export interface SettingsInput {
   conversionMarkupPercent: number;
   /**
      * @minimum 0
-     * @maximum 100
+     * @exclusiveMaximum 100
      */
   digisellerFeePercent: number;
   /** @minimum 0 */
@@ -379,6 +379,69 @@ export interface SettingsInput {
   minimumProfitRub: number;
   automationMode: SettingsInputAutomationMode;
   disableOnUnavailable: boolean;
+}
+
+export interface SettingsPreview {
+  /** @minimum 0 */
+  totalProducts: number;
+  /** @minimum 0 */
+  affectedProducts: number;
+  /** @minimum 0 */
+  publishedPriceChanges: number;
+  /** @nullable */
+  minimumExpectedProfitRub: number | null;
+  usdRubRate: number;
+  rateSource: string;
+  rateFetchedAt: string;
+  rateIsFallback: boolean;
+  automaticUpdateAllowed: boolean;
+  /** @minLength 1 */
+  previewToken: string;
+}
+
+export type SettingsApplyInputExchangeRateMode = typeof SettingsApplyInputExchangeRateMode[keyof typeof SettingsApplyInputExchangeRateMode];
+
+
+export const SettingsApplyInputExchangeRateMode = {
+  cbr: 'cbr',
+  manual: 'manual',
+} as const;
+
+export type SettingsApplyInputAutomationMode = typeof SettingsApplyInputAutomationMode[keyof typeof SettingsApplyInputAutomationMode];
+
+
+export const SettingsApplyInputAutomationMode = {
+  manual: 'manual',
+  automatic: 'automatic',
+} as const;
+
+export interface SettingsApplyInput {
+  /**
+     * @minimum 0
+     * @maximum 500
+     */
+  defaultMarginPercent: number;
+  /** @exclusiveMinimum 0 */
+  usdRubRate: number;
+  exchangeRateMode: SettingsApplyInputExchangeRateMode;
+  /**
+     * @minimum 0
+     * @maximum 20
+     */
+  conversionMarkupPercent: number;
+  /**
+     * @minimum 0
+     * @exclusiveMaximum 100
+     */
+  digisellerFeePercent: number;
+  /** @minimum 0 */
+  fixedReserveRub: number;
+  /** @minimum 0 */
+  minimumProfitRub: number;
+  automationMode: SettingsApplyInputAutomationMode;
+  disableOnUnavailable: boolean;
+  /** @minLength 1 */
+  previewToken: string;
 }
 
 export interface ConnectionState {

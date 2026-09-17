@@ -5,10 +5,10 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
-import type { SettingsInputAutomationMode } from './settingsInputAutomationMode';
-import type { SettingsInputExchangeRateMode } from './settingsInputExchangeRateMode';
+import type { SettingsApplyInputAutomationMode } from './settingsApplyInputAutomationMode';
+import type { SettingsApplyInputExchangeRateMode } from './settingsApplyInputExchangeRateMode';
 
-export interface SettingsInput {
+export interface SettingsApplyInput {
   /**
      * @minimum 0
      * @maximum 500
@@ -16,7 +16,7 @@ export interface SettingsInput {
   defaultMarginPercent: number;
   /** @exclusiveMinimum 0 */
   usdRubRate: number;
-  exchangeRateMode: SettingsInputExchangeRateMode;
+  exchangeRateMode: SettingsApplyInputExchangeRateMode;
   /**
      * @minimum 0
      * @maximum 20
@@ -31,6 +31,8 @@ export interface SettingsInput {
   fixedReserveRub: number;
   /** @minimum 0 */
   minimumProfitRub: number;
-  automationMode: SettingsInputAutomationMode;
+  automationMode: SettingsApplyInputAutomationMode;
   disableOnUnavailable: boolean;
+  /** @minLength 1 */
+  previewToken: string;
 }
