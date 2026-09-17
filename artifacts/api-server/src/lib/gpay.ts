@@ -398,10 +398,11 @@ export async function fetchGPayProducts(
   };
 
   const catalogs = await Promise.all(requestedTypes.map(fetchCatalog));
-  const productsById = new Map<number, GPayProduct>();
+  const productsById = new Map<string, GPayProduct>();
   for (const catalog of catalogs) {
     for (const product of catalog.products) {
-      if (!productsById.has(product.id)) productsById.set(product.id, product);
+      const identity = `${String(product.productType).trim()}:${product.id}`;
+      if (!productsById.has(identity)) productsById.set(identity, product);
     }
   }
   const firstPage = catalogs[0].firstPage;

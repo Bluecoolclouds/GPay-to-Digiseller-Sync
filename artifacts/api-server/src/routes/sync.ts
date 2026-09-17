@@ -1016,7 +1016,16 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
       ) {
         continue;
       }
-      const [existing] = await db.select().from(productsTable).where(eq(productsTable.gpayId, product.id));
+      const normalizedProductType = String(product.productType);
+      const [existing] = await db
+        .select()
+        .from(productsTable)
+        .where(
+          and(
+            eq(productsTable.gpayId, product.id),
+            eq(productsTable.productType, normalizedProductType),
+          ),
+        );
       const marginPercent = existing?.marginPercent ?? settings.defaultMarginPercent;
       const calculated = calculatePrice(product.currentPartnerPrice, settings, marginPercent);
       const values = {
@@ -1025,7 +1034,7 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         subId: product.subId ?? null,
         name: product.name,
         imageUrl: product.imageUrl ?? null,
-        productType: String(product.productType),
+        productType: normalizedProductType,
         supplierPriceUsd: product.currentPartnerPrice,
         marginPercent,
         ...calculated,

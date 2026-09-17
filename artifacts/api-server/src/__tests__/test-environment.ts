@@ -66,7 +66,7 @@ try {
     );
     create table "${schema}".sync_products (
       id serial primary key,
-      gpay_id integer not null unique,
+      gpay_id integer not null,
       digiseller_id integer,
       previous_digiseller_id integer,
       digiseller_delivery_type text,
@@ -88,7 +88,8 @@ try {
       publication_failure_stage text,
       region text not null default 'Не указан',
       warning_message text,
-      updated_at timestamptz not null default now()
+      updated_at timestamptz not null default now(),
+      unique (gpay_id, product_type)
     );
     create table "${schema}".sync_activities (
       id serial primary key,
