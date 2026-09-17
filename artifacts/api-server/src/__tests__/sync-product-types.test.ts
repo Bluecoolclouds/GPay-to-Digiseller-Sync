@@ -244,6 +244,12 @@ before(async () => {
         },
       });
     }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/seller-goods")) {
+      return Response.json({ retval: 0, rows: [], pages: 1 });
+    }
     throw new Error(`Unexpected outbound request: ${url}`);
   };
   await seedProducts();

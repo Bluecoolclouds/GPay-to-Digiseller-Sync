@@ -3,11 +3,11 @@ name: Isolated PostgreSQL API tests
 description: How to keep API integration tests from mutating the operator database when using Drizzle and PostgreSQL schemas.
 ---
 
-Create a uniquely named PostgreSQL schema for each API test run, set the child process `search_path` to it, and create the required test tables explicitly in that schema.
+Create a uniquely named PostgreSQL schema for each API test run, set the child process `search_path` to it, and build it from SQL exported from the canonical Drizzle schema.
 
-**Why:** Drizzle Kit schema push reported no changes after connecting with a schema-specific `search_path` because it inspected the existing public schema. Tests then connected to an empty isolated schema.
+**Why:** A handwritten test DDL copy drifted from application constraints. Drizzle Kit schema push cannot safely target the test namespace because it may inspect public, while schema export is database-independent.
 
-**How to apply:** For integration tests that use the real database layer, fail closed unless `current_schema()` matches the generated test schema. Drop that exact schema after the test process exits.
+**How to apply:** Export the schema during the test build and execute it transactionally after setting a local `search_path`. Drizzle qualifies default PostgreSQL enums as public, so remove only that generated qualifier and reject any remaining public target. Fail closed unless `current_schema()` matches the generated test schema, then drop that exact schema after tests.
 
 Database advisory locks are cluster-wide and are not isolated by PostgreSQL schema.
 

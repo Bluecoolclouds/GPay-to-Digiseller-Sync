@@ -1,4 +1,6 @@
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -9,6 +11,7 @@ globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 const outdir = path.resolve(artifactDir, "dist-tests");
+const dbDir = path.resolve(artifactDir, "../../lib/db");
 
 await rm(outdir, { recursive: true, force: true });
 await build({
@@ -35,3 +38,14 @@ globalThis.__filename = __url.fileURLToPath(import.meta.url);
 globalThis.__dirname = __path.dirname(globalThis.__filename);`,
   },
 });
+
+const schemaSql = execFileSync(
+  "pnpm",
+  ["exec", "drizzle-kit", "export", "--config", "./drizzle.config.ts"],
+  {
+    cwd: dbDir,
+    encoding: "utf8",
+  },
+).replace(/^CREATE TYPE "public"\./gm, "CREATE TYPE ");
+
+await writeFile(path.join(outdir, "schema.sql"), schemaSql);

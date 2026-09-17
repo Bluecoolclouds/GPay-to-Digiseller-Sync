@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,12 @@ assert.match(syncSchema, /^sync_product_types_test_[a-f0-9]+$/);
 assert.match(publicOrdersSchema, /^public_orders_test_[a-f0-9]+$/);
 
 const compiledDir = path.dirname(fileURLToPath(import.meta.url));
+const schemaSql = await readFile(path.join(compiledDir, "schema.sql"), "utf8");
+assert.doesNotMatch(
+  schemaSql,
+  /"public"\./,
+  "Generated test schema SQL must not target the public schema",
+);
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
@@ -55,118 +61,20 @@ if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
 run(process.execPath, ["--test", "--test-concurrency=1", priceTaskTestFile]);
 
 async function createTestSchema(schema: string) {
-  await pool.query(`create schema "${schema}"`);
-  await pool.query(`
-    create table "${schema}".sync_settings (
-      id integer primary key default 1,
-      default_margin_percent double precision not null default 15,
-      usd_rub_rate double precision not null default 92,
-      exchange_rate_mode text not null default 'cbr',
-      conversion_markup_percent double precision not null default 2,
-      digiseller_fee_percent double precision not null default 5,
-      fixed_reserve_rub double precision not null default 30,
-      minimum_profit_rub double precision not null default 100,
-      automation_mode text not null default 'manual',
-      disable_on_unavailable boolean not null default true,
-      updated_at timestamptz not null default now()
-    );
-    create table "${schema}".sync_products (
-      id serial primary key,
-      gpay_id integer not null,
-      digiseller_id integer,
-      previous_digiseller_id integer,
-      digiseller_delivery_type text,
-      digiseller_text_stocked boolean not null default false,
-      plati_category_id integer,
-      app_id integer,
-      sub_id integer,
-      name text not null,
-      image_url text,
-      digiseller_image_uploaded boolean not null default false,
-      product_type text not null,
-      supplier_price_usd double precision not null,
-      sale_price_rub double precision not null,
-      margin_percent double precision not null,
-      profit_rub double precision not null,
-      is_available boolean not null default false,
-      publication_status text not null default 'draft',
-      publication_error text,
-      publication_failure_stage text,
-      region text not null default 'Не указан',
-      warning_message text,
-      updated_at timestamptz not null default now(),
-      unique (gpay_id, product_type)
-    );
-    create table "${schema}".sync_activities (
-      id serial primary key,
-      type text not null,
-      title text not null,
-      description text not null,
-      status text not null,
-      created_at timestamptz not null default now()
-    );
-    create table "${schema}".sync_publication_jobs (
-      id uuid primary key,
-      status text not null default 'queued',
-      product_ids integer[] not null,
-      items jsonb not null default '[]'::jsonb,
-      requested integer not null,
-      succeeded integer not null default 0,
-      failed integer not null default 0,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      completed_at timestamptz
-    );
-    create table "${schema}".sync_orders (
-      id serial primary key,
-      invoice_id text not null unique,
-      digiseller_product_id integer not null,
-      product_name text not null,
-      paid_amount_rub double precision,
-      sale_timestamp timestamptz not null,
-      status text not null default 'new',
-      is_returned boolean not null default false,
-      operator_note text,
-      public_token_hash text unique,
-      public_link_expires_at timestamptz,
-      public_code_encrypted text,
-      public_opened_at timestamptz,
-      public_submitted_at timestamptz,
-      public_submitted_code_hash text,
-      public_submitted_code_encrypted text,
-      public_submission_error text,
-      gpay_purchase_status text,
-      gpay_purchase_unique_code text unique,
-      gpay_purchase_order_id integer unique,
-      gpay_purchase_expected_amount_usd double precision,
-      gpay_purchase_started_at timestamptz,
-      gpay_purchase_completed_at timestamptz,
-      gpay_purchase_error text,
-      gpay_delivered_key_encrypted text,
-      digiseller_delivery_status text,
-      digiseller_delivery_started_at timestamptz,
-      digiseller_delivery_completed_at timestamptz,
-      digiseller_delivery_error text,
-      synced_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    );
-    create table "${schema}".sync_product_digiseller_ids (
-      id serial primary key,
-      local_product_id integer not null,
-      digiseller_product_id integer not null unique,
-      first_seen_at timestamptz not null default now(),
-      last_seen_at timestamptz not null default now(),
-      unique (local_product_id, digiseller_product_id)
-    );
-    create table "${schema}".sync_order_state (
-      id integer primary key default 1,
-      cursor_at timestamptz,
-      last_attempt_at timestamptz,
-      consecutive_failures integer not null default 0,
-      last_error text,
-      updated_at timestamptz not null default now()
-    );
-  `);
+  assert.match(schema, /^[a-z0-9_]+$/);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(`create schema "${schema}"`);
+    await client.query(`set local search_path to "${schema}"`);
+    await client.query(schemaSql);
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 try {
