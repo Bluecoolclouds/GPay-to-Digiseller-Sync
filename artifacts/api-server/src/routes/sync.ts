@@ -293,6 +293,98 @@ function toProductResponse(current: ProductRecord) {
   };
 }
 
+async function autoLinkExactDigisellerProducts(
+  sellerProducts: Awaited<ReturnType<typeof fetchDigisellerSellerProducts>>,
+) {
+  const localProducts = await db
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      digisellerId: productsTable.digisellerId,
+    })
+    .from(productsTable);
+  const localByName = new Map<string, typeof localProducts>();
+  for (const product of localProducts) {
+    const name = product.name.trim();
+    localByName.set(name, [...(localByName.get(name) ?? []), product]);
+  }
+  const sellerByName = new Map<string, typeof sellerProducts>();
+  for (const product of sellerProducts) {
+    const name = product.name.trim();
+    sellerByName.set(name, [...(sellerByName.get(name) ?? []), product]);
+  }
+
+  let linked = 0;
+  let ambiguous = 0;
+  for (const [name, matchingLocalProducts] of localByName) {
+    const matchingSellerProducts = sellerByName.get(name) ?? [];
+    if (matchingSellerProducts.length === 0) continue;
+    if (
+      matchingLocalProducts.length !== 1 ||
+      matchingSellerProducts.length !== 1
+    ) {
+      ambiguous += 1;
+      continue;
+    }
+    const localProduct = matchingLocalProducts[0];
+    const sellerProduct = matchingSellerProducts[0];
+    if (localProduct.digisellerId !== null) continue;
+
+    try {
+      const wasLinked = await withProductPublicationLock(
+        localProduct.id,
+        async () =>
+          db.transaction(async (transaction) => {
+            const [latestLocal] = await transaction
+              .select({
+                digisellerId: productsTable.digisellerId,
+              })
+              .from(productsTable)
+              .where(eq(productsTable.id, localProduct.id));
+            if (!latestLocal || latestLocal.digisellerId !== null) {
+              return false;
+            }
+            const [existingOwner] = await transaction
+              .select({ id: productsTable.id })
+              .from(productsTable)
+              .where(eq(productsTable.digisellerId, sellerProduct.id))
+              .limit(1);
+            if (existingOwner) return false;
+
+            await recordDigisellerProductIds(
+              transaction,
+              localProduct.id,
+              [sellerProduct.id],
+            );
+            await transaction
+              .update(productsTable)
+              .set({
+                digisellerId: sellerProduct.id,
+                digisellerDeliveryType: "code",
+                publicationStatus: "published",
+                publicationError: null,
+                publicationFailureStage: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(productsTable.id, localProduct.id));
+            return true;
+          }),
+      );
+      if (wasLinked) linked += 1;
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          localProductId: localProduct.id,
+          digisellerId: sellerProduct.id,
+        },
+        "Exact-name Digiseller auto-link skipped",
+      );
+    }
+  }
+  return { linked, ambiguous };
+}
+
 async function publishProductRecord(current: ProductRecord) {
   if (!current.isAvailable) {
     throw new Error("Можно публиковать только доступные товары");
@@ -1001,10 +1093,10 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
       key: "ключи",
       gift: "гифты",
     }[requestedProductKind];
-    const data = await fetchGPayProducts(
-      parsed.data.pageSize,
-      requestedProductKind,
-    );
+    const [data, sellerProducts] = await Promise.all([
+      fetchGPayProducts(parsed.data.pageSize, requestedProductKind),
+      fetchDigisellerSellerProducts(),
+    ]);
     let imported = 0;
     let updated = 0;
     for (const product of data.products ?? []) {
@@ -1059,10 +1151,12 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         imported++;
       }
     }
+    const autoLinkResult =
+      await autoLinkExactDigisellerProducts(sellerProducts);
     await db.insert(activitiesTable).values({
       type: "sync",
       title: "Каталог GPay синхронизирован",
-      description: `Тип: ${productKindLabel}. Добавлено ${imported}, обновлено ${updated} товаров.`,
+      description: `Тип: ${productKindLabel}. Добавлено ${imported}, обновлено ${updated} товаров. Автоматически связано с Digiseller: ${autoLinkResult.linked}.`,
       status: "success",
     });
     res.json(
@@ -1072,7 +1166,7 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
         updated,
         disabled: 0,
         productKind: requestedProductKind,
-        message: `Синхронизация завершена: ${productKindLabel}. Получено ${data.products?.length ?? 0} из ${data.totalCount} товаров`,
+        message: `Синхронизация завершена: ${productKindLabel}. Получено ${data.products?.length ?? 0} из ${data.totalCount} товаров. Автоматически связано с Digiseller: ${autoLinkResult.linked}${autoLinkResult.ambiguous ? `, неоднозначных названий: ${autoLinkResult.ambiguous}` : ""}`,
         completedAt: new Date().toISOString(),
       }),
     );
