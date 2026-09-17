@@ -136,6 +136,32 @@ export const UpdateProductResponse = zod.object({
 })
 
 
+
+export const updateProductsMarginBodyProductIdsMax = 100;
+
+export const updateProductsMarginBodyMarginPercentMin = 0;
+export const updateProductsMarginBodyMarginPercentMax = 500;
+
+
+
+export const UpdateProductsMarginBody = zod.object({
+  "productIds": zod.array(zod.number().int().min(1)).min(1).max(updateProductsMarginBodyProductIdsMax),
+  "marginPercent": zod.number().min(updateProductsMarginBodyMarginPercentMin).max(updateProductsMarginBodyMarginPercentMax)
+})
+
+export const updateProductsMarginResponseUpdatedMin = 0;
+
+export const updateProductsMarginResponsePublishedUpdatedMin = 0;
+
+
+
+export const UpdateProductsMarginResponse = zod.object({
+  "updated": zod.number().int().min(updateProductsMarginResponseUpdatedMin),
+  "publishedUpdated": zod.number().int().min(updateProductsMarginResponsePublishedUpdatedMin),
+  "marginPercent": zod.number()
+})
+
+
 export const PublishProductParams = zod.object({
   "id": zod.coerce.number().int()
 })

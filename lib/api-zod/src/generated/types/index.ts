@@ -55,6 +55,8 @@ export * from './productPage';
 export * from './productProductKind';
 export * from './productPublicationFailureStage';
 export * from './productPublicationStatus';
+export * from './productsMarginUpdate';
+export * from './productsMarginUpdateResult';
 export * from './productUpdate';
 export * from './productUpdatePublicationStatus';
 export * from './publicOrder';

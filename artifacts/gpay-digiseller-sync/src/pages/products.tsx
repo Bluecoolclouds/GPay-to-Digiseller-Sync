@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { useListProducts, useUpdateProduct, usePublishProduct, usePublishProductsBatch, useGetLatestPublishProductsBatch, getGetLatestPublishProductsBatchQueryKey, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
+import { useListProducts, useUpdateProduct, useUpdateProductsMargin, usePublishProduct, usePublishProductsBatch, useGetLatestPublishProductsBatch, getGetLatestPublishProductsBatchQueryKey, Product, ListProductsStatus, ListProductsProductKind, ProductPublicationStatus, ProductProductKind } from "@workspace/api-client-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,8 +25,10 @@ export default function ProductsPage() {
   const [productKind, setProductKind] = useState<ListProductsProductKind>("all")
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkMargin, setBulkMargin] = useState("15")
   const [importProduct, setImportProduct] = useState<Product | null>(null)
   const batchMutation = usePublishProductsBatch()
+  const marginMutation = useUpdateProductsMargin()
   const completedTaskRef = useRef<string | null>(null)
   const { data: batchTask } = useGetLatestPublishProductsBatch({
     query: {
@@ -79,30 +81,33 @@ export default function ProductsPage() {
     }
   }, [batchTask, queryClient])
 
-  const eligibleItems = (data?.items ?? []).filter(
+  const visibleItems = data?.items ?? []
+  const eligibleItems = visibleItems.filter(
     (product) =>
       product.isAvailable &&
       product.publicationStatus !== ProductPublicationStatus.published &&
       product.productKind !== ProductProductKind.unknown,
   )
   const allEligibleSelected =
-    eligibleItems.length > 0 &&
-    eligibleItems.every((product) => selectedIds.has(product.id))
+    visibleItems.length > 0 &&
+    visibleItems.every((product) => selectedIds.has(product.id))
 
   const toggleAllEligible = () => {
     setSelectedIds((current) => {
       const next = new Set(current)
       if (allEligibleSelected) {
-        eligibleItems.forEach((product) => next.delete(product.id))
+        visibleItems.forEach((product) => next.delete(product.id))
       } else {
-        eligibleItems.forEach((product) => next.add(product.id))
+        visibleItems.forEach((product) => next.add(product.id))
       }
       return next
     })
   }
 
   const handleBatchPublish = () => {
-    const productIds = Array.from(selectedIds)
+    const productIds = eligibleItems
+      .filter((product) => selectedIds.has(product.id))
+      .map((product) => product.id)
     if (
       !window.confirm(
         `Создать или обновить ${productIds.length} карточек в Digiseller? Это изменит внешний каталог. Изображения GPay будут загружены автоматически.`,
@@ -123,6 +128,41 @@ export default function ProductsPage() {
         onError: (error) =>
           toast.error(
             getMutationErrorMessage(error, "Пакетная публикация не выполнена"),
+          ),
+      },
+    )
+  }
+
+  const handleBulkMargin = () => {
+    const marginPercent = Number(bulkMargin)
+    if (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 500) {
+      toast.error("Введите маржу от 0 до 500%")
+      return
+    }
+    const productIds = Array.from(selectedIds)
+    const publishedCount = visibleItems.filter(
+      (product) =>
+        selectedIds.has(product.id) &&
+        product.publicationStatus === ProductPublicationStatus.published,
+    ).length
+    if (
+      !window.confirm(
+        `Установить маржу ${marginPercent}% для ${productIds.length} товаров?${publishedCount ? ` Цены ${publishedCount} опубликованных карточек будут обновлены в Digiseller.` : ""}`,
+      )
+    ) return
+    marginMutation.mutate(
+      { data: { productIds, marginPercent } },
+      {
+        onSuccess: (result) => {
+          setSelectedIds(new Set())
+          void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })
+          toast.success(
+            `Маржа ${result.marginPercent}% применена к ${result.updated} товарам`,
+          )
+        },
+        onError: (error) =>
+          toast.error(
+            getMutationErrorMessage(error, "Не удалось массово изменить маржу"),
           ),
       },
     )
@@ -156,15 +196,53 @@ export default function ProductsPage() {
         </div>
         <Button
           onClick={handleBatchPublish}
-          disabled={selectedIds.size === 0 || batchMutation.isPending || batchIsActive}
+          disabled={eligibleItems.every((product) => !selectedIds.has(product.id)) || batchMutation.isPending || batchIsActive}
           className="gap-2"
         >
           <Play className="h-4 w-4" />
           {batchMutation.isPending || batchIsActive
             ? "Публикация выполняется…"
-            : `Опубликовать выбранные (${selectedIds.size})`}
+            : `Опубликовать выбранные (${eligibleItems.filter((product) => selectedIds.has(product.id)).length})`}
         </Button>
       </div>
+
+      {selectedIds.size > 0 && (
+        <Card className="flex flex-col gap-3 border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="font-medium">Выбрано товаров: {selectedIds.size}</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Для опубликованных карточек цена сначала обновится в Digiseller, затем локально.
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium" htmlFor="bulk-margin">
+                Новая маржа, %
+              </label>
+              <Input
+                id="bulk-margin"
+                type="number"
+                min="0"
+                max="500"
+                step="0.1"
+                className="w-32 bg-background"
+                value={bulkMargin}
+                onChange={(event) => setBulkMargin(event.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleBulkMargin}
+              disabled={marginMutation.isPending}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {marginMutation.isPending ? "Применение…" : "Применить маржу"}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <DigisellerImportDialog
         open={importProduct !== null}
@@ -286,10 +364,10 @@ export default function ProductsPage() {
                 <th className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
-                    aria-label="Выбрать доступные товары на странице"
+                    aria-label="Выбрать товары на странице"
                     checked={allEligibleSelected}
                     onChange={toggleAllEligible}
-                    disabled={eligibleItems.length === 0}
+                    disabled={visibleItems.length === 0}
                     className="h-4 w-4 rounded border-input"
                   />
                 </th>
@@ -441,11 +519,6 @@ function ProductRow({
   }
 
   const isPublished = product.publicationStatus === ProductPublicationStatus.published
-  const canSelect =
-    product.isAvailable &&
-    !isPublished &&
-    product.productKind !== ProductProductKind.unknown
-
   return (
     <tr className="hover:bg-muted/30 transition-colors group">
       <td className="px-4 py-3">
@@ -454,7 +527,6 @@ function ProductRow({
           aria-label={`Выбрать ${product.name}`}
           checked={selected}
           onChange={(event) => onSelectionChange(event.target.checked)}
-          disabled={!canSelect}
           className="h-4 w-4 rounded border-input"
         />
       </td>

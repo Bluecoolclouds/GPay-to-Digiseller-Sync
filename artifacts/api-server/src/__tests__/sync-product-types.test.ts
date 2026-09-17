@@ -281,6 +281,36 @@ test("list endpoint filters key, gift, all, and unknown product types", async ()
   }
 });
 
+test("bulk margin update recalculates every selected draft atomically", async () => {
+  await seedProducts();
+  const selectedIds = await db
+    .select({ id: productsTable.id, gpayId: productsTable.gpayId })
+    .from(productsTable)
+    .where(inArray(productsTable.gpayId, [keyGpayId, giftGpayId]));
+  const result = await request<{
+    updated: number;
+    publishedUpdated: number;
+    marginPercent: number;
+  }>("/api/products/bulk-margin", {
+    method: "POST",
+    body: JSON.stringify({
+      productIds: selectedIds.map((product) => product.id),
+      marginPercent: 27.5,
+    }),
+  });
+  const updated = await db
+    .select()
+    .from(productsTable)
+    .where(inArray(productsTable.gpayId, [keyGpayId, giftGpayId]));
+
+  assert.equal(result.updated, 2);
+  assert.equal(result.publishedUpdated, 0);
+  assert.equal(result.marginPercent, 27.5);
+  assert.ok(updated.every((product) => product.marginPercent === 27.5));
+  assert.ok(updated.every((product) => product.profitRub >= 100));
+  assert.ok(updated.every((product) => product.salePriceRub > 0));
+});
+
 test("dashboard creates a warning after repeated price task timeouts and clears it after success", async () => {
   await db.delete(activitiesTable).where(eq(activitiesTable.type, "price"));
   const timeoutDescription = (count: number, error: string) =>

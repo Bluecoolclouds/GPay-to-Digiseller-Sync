@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   activitiesTable,
   db,
@@ -262,6 +262,147 @@ export async function applyPricingSettings(
       settings: savedSettings,
       changed: changes.length,
       publishedChanged: published.length,
+    };
+  } finally {
+    await lockClient.query("select pg_advisory_unlock($1)", [PRICE_SYNC_LOCK_ID]);
+    lockClient.release();
+  }
+}
+
+export async function applyProductMargins(
+  productIds: number[],
+  marginPercent: number,
+) {
+  const lockClient = await pool.connect();
+  const lock = await lockClient.query<{ locked: boolean }>(
+    "select pg_try_advisory_lock($1) as locked",
+    [PRICE_SYNC_LOCK_ID],
+  );
+  if (!lock.rows[0]?.locked) {
+    lockClient.release();
+    return {
+      applied: false as const,
+      reason:
+        "Изменение цен занято другой задачей. Повторите операцию после её завершения.",
+    };
+  }
+
+  try {
+    await db.insert(settingsTable).values({ id: 1 }).onConflictDoNothing();
+    const [[settings], products] = await Promise.all([
+      db.select().from(settingsTable).where(eq(settingsTable.id, 1)),
+      db
+        .select()
+        .from(productsTable)
+        .where(inArray(productsTable.id, productIds)),
+    ]);
+    if (products.length !== productIds.length) {
+      return {
+        applied: false as const,
+        reason: "Один или несколько выбранных товаров не найдены",
+      };
+    }
+    const changes = products.map((product) => ({
+      product,
+      calculated: calculateProductPrice(
+        product.supplierPriceUsd,
+        settings,
+        marginPercent,
+      ),
+    }));
+    const published = changes.filter(
+      ({ product }) =>
+        product.publicationStatus === "published" &&
+        product.digisellerId !== null,
+    );
+    let token: string | undefined;
+    if (published.length > 0) {
+      try {
+        token = await loginDigiseller();
+      } catch (error) {
+        return {
+          applied: false as const,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Не удалось войти в Digiseller",
+        };
+      }
+      let failures: Map<number, string>;
+      try {
+        failures = await updateDigisellerProductPrices(
+          published.map(({ product, calculated }) => ({
+            productId: product.digisellerId!,
+            priceRub: calculated.salePriceRub,
+          })),
+          token,
+        );
+      } catch (error) {
+        const rollbackFailures = await rollbackPublishedPrices(published, token);
+        await disableProductsWithUncertainPrices(
+          published,
+          rollbackFailures,
+          token,
+        );
+        return {
+          applied: false as const,
+          reason:
+            error instanceof Error
+              ? `Digiseller не подтвердил изменение цен: ${error.message}`
+              : "Digiseller не подтвердил изменение цен",
+        };
+      }
+      if (failures.size > 0) {
+        const rollbackFailures = await rollbackPublishedPrices(published, token);
+        await disableProductsWithUncertainPrices(
+          published,
+          rollbackFailures,
+          token,
+        );
+        return {
+          applied: false as const,
+          reason: `Digiseller отклонил ${failures.size} цен. Изменения маржи не сохранены.`,
+        };
+      }
+    }
+
+    try {
+      await db.transaction(async (transaction) => {
+        for (const { product, calculated } of changes) {
+          await transaction
+            .update(productsTable)
+            .set({
+              marginPercent,
+              salePriceRub: calculated.salePriceRub,
+              profitRub: calculated.profitRub,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, product.id));
+        }
+      });
+    } catch (error) {
+      if (token && published.length > 0) {
+        const rollbackFailures = await rollbackPublishedPrices(published, token);
+        await disableProductsWithUncertainPrices(
+          published,
+          rollbackFailures,
+          token,
+        );
+      }
+      throw error;
+    }
+
+    await db.insert(activitiesTable).values({
+      type: "price",
+      title: "Маржа товаров изменена",
+      description: `Маржа ${marginPercent}% применена к ${changes.length} товарам, включая ${published.length} опубликованных.`,
+      status: "success",
+    });
+    return {
+      applied: true as const,
+      updated: changes.length,
+      publishedUpdated: published.length,
+      marginPercent,
     };
   } finally {
     await lockClient.query("select pg_advisory_unlock($1)", [PRICE_SYNC_LOCK_ID]);

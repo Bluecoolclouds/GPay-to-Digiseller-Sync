@@ -9,6 +9,28 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface ProductsMarginUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 100
+     * @items.minimum 1
+     */
+  productIds: number[];
+  /**
+     * @minimum 0
+     * @maximum 500
+     */
+  marginPercent: number;
+}
+
+export interface ProductsMarginUpdateResult {
+  /** @minimum 0 */
+  updated: number;
+  /** @minimum 0 */
+  publishedUpdated: number;
+  marginPercent: number;
+}
+
 export interface PublicOrderAccessInput {
   /**
      * @minLength 1

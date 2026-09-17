@@ -39,6 +39,8 @@ import {
   PreviewSettingsBody,
   PreviewSettingsResponse,
   TestNotificationsResponse,
+  UpdateProductsMarginBody,
+  UpdateProductsMarginResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import {
@@ -62,6 +64,7 @@ import { recordDigisellerProductIds } from "../lib/orders";
 import { calculateProductPrice } from "../lib/pricing";
 import {
   applyPricingSettings,
+  applyProductMargins,
   type PriceSettingsInput,
 } from "../lib/price-sync";
 import { requireOperatorRole } from "../middlewares/auth";
@@ -311,6 +314,33 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
       updatedAt: updated.updatedAt.toISOString(),
     }),
   );
+});
+
+router.post("/products/bulk-margin", async (req, res): Promise<void> => {
+  const body = UpdateProductsMarginBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  try {
+    const result = await applyProductMargins(
+      body.data.productIds,
+      body.data.marginPercent,
+    );
+    if (!result.applied) {
+      res.status(409).json({ error: result.reason });
+      return;
+    }
+    res.json(UpdateProductsMarginResponse.parse(result));
+  } catch (error) {
+    req.log.error({ err: error }, "Bulk product margin update failed");
+    res.status(502).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Не удалось массово изменить маржу",
+    });
+  }
 });
 
 type ProductRecord = typeof productsTable.$inferSelect;

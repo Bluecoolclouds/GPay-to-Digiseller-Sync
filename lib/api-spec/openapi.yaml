@@ -113,6 +113,23 @@ paths:
                 $ref: "#/components/schemas/Product"
         "404":
           description: Product not found
+  /products/bulk-margin:
+    post:
+      operationId: updateProductsMargin
+      tags: [products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductsMarginUpdate"
+      responses:
+        "200":
+          description: Margin and calculated prices updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductsMarginUpdateResult"
   /products/{id}/publish:
     post:
       operationId: publishProduct
@@ -536,6 +553,24 @@ components:
       required: [error]
       properties:
         error: { type: string }
+    ProductsMarginUpdate:
+      type: object
+      required: [productIds, marginPercent]
+      properties:
+        productIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        marginPercent: { type: number, minimum: 0, maximum: 500 }
+    ProductsMarginUpdateResult:
+      type: object
+      required: [updated, publishedUpdated, marginPercent]
+      properties:
+        updated: { type: integer, minimum: 0 }
+        publishedUpdated: { type: integer, minimum: 0 }
+        marginPercent: { type: number }
     PublicOrderAccessInput:
       type: object
       required: [invoiceId, code]

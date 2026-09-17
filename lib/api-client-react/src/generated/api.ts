@@ -45,6 +45,8 @@ import type {
   Product,
   ProductPage,
   ProductUpdate,
+  ProductsMarginUpdate,
+  ProductsMarginUpdateResult,
   PublicOrder,
   PublicOrderAccessInput,
   PublicOrderCodeInput,
@@ -503,6 +505,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateProductMutationOptions(options));
+    }
+
+export const getUpdateProductsMarginUrl = () => {
+
+
+
+
+  return `/api/products/bulk-margin`
+}
+
+export const updateProductsMargin = async (productsMarginUpdate: ProductsMarginUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ProductsMarginUpdateResult> => {
+
+  return customFetch<ProductsMarginUpdateResult>(getUpdateProductsMarginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(productsMarginUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateProductsMarginMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProductsMargin>>, TError,{data: BodyType<ProductsMarginUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProductsMargin>>, TError,{data: BodyType<ProductsMarginUpdate>}, TContext> => {
+
+const mutationKey = ['updateProductsMargin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProductsMargin>>, {data: BodyType<ProductsMarginUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateProductsMargin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProductsMarginMutationResult = NonNullable<Awaited<ReturnType<typeof updateProductsMargin>>>
+    export type UpdateProductsMarginMutationBody = BodyType<ProductsMarginUpdate>
+    export type UpdateProductsMarginMutationError = ErrorType<unknown>
+
+    export const useUpdateProductsMargin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProductsMargin>>, TError,{data: BodyType<ProductsMarginUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProductsMargin>>,
+        TError,
+        {data: BodyType<ProductsMarginUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateProductsMarginMutationOptions(options));
     }
 
 export const getPublishProductUrl = (id: number,) => {
