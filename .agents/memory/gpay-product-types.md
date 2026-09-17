@@ -7,4 +7,4 @@ GPay Partner API `ProductType` uses numeric value 1 for Steam Gift and 2 for Key
 
 **Why:** The unfiltered first catalog page contained only gifts, so filtering after fetching one page produced zero keys. The official Partner API Swagger confirms the enum and supports a server-side `productType` request field.
 
-**How to apply:** Pass the selected type to GPay when syncing, paginate until the selected catalog is complete, and retain an explicit unknown state for unexpected future values.
+**How to apply:** Always pass a type to GPay. For “all,” fetch and paginate types 1 and 2 separately, then deduplicate and merge them. Retain an explicit unknown state for unexpected future values.

@@ -360,45 +360,56 @@ export async function fetchGPayProducts(
   productKind: "all" | "key" | "gift" = "all",
 ): Promise<ProductData> {
   const token = await loginGPay();
-  const productType =
-    productKind === "key" ? 2 : productKind === "gift" ? 1 : undefined;
+  const requestedTypes =
+    productKind === "all"
+      ? [1, 2]
+      : [productKind === "key" ? 2 : 1];
 
-  const fetchPage = async (page: number) => {
-    const response = await fetch(`${baseUrl}/partner-api/products/list`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ page, pageSize, productType }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    return parseResponse<ProductData>(response);
+  const fetchCatalog = async (productType: number) => {
+    const fetchPage = async (page: number) => {
+      const response = await fetch(`${baseUrl}/partner-api/products/list`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ page, pageSize, productType }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      return parseResponse<ProductData>(response);
+    };
+
+    const firstPage = await fetchPage(1);
+    const catalogProducts = [...(firstPage.products ?? [])];
+    const totalPages = Math.ceil(firstPage.totalCount / pageSize);
+    const concurrency = 5;
+
+    for (let start = 2; start <= totalPages; start += concurrency) {
+      const pages = Array.from(
+        { length: Math.min(concurrency, totalPages - start + 1) },
+        (_, index) => start + index,
+      );
+      const results = await Promise.all(pages.map(fetchPage));
+      for (const result of results) {
+        catalogProducts.push(...(result.products ?? []));
+      }
+    }
+    return { firstPage, products: catalogProducts };
   };
 
-  const firstPage = await fetchPage(1);
-  const totalPages = Math.ceil(firstPage.totalCount / pageSize);
+  const catalogs = await Promise.all(requestedTypes.map(fetchCatalog));
   const productsById = new Map<number, GPayProduct>();
-  const addProducts = (products: GPayProduct[] | null | undefined) => {
-    for (const product of products ?? []) {
+  for (const catalog of catalogs) {
+    for (const product of catalog.products) {
       if (!productsById.has(product.id)) productsById.set(product.id, product);
     }
-  };
-  addProducts(firstPage.products);
-  const concurrency = 5;
-
-  for (let start = 2; start <= totalPages; start += concurrency) {
-    const pages = Array.from(
-      { length: Math.min(concurrency, totalPages - start + 1) },
-      (_, index) => start + index,
-    );
-    const results = await Promise.all(pages.map(fetchPage));
-    for (const result of results) addProducts(result.products);
   }
+  const firstPage = catalogs[0].firstPage;
 
   return {
     ...firstPage,
     products: [...productsById.values()],
+    totalCount: productsById.size,
     page: 1,
     pageSize,
   };
