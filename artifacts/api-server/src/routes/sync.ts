@@ -276,8 +276,7 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error });
     return;
   }
-  const settings = await getSettingsRow();
-  const [current] = await db
+  let [current] = await db
     .select()
     .from(productsTable)
     .where(eq(productsTable.id, params.data.id));
@@ -285,28 +284,60 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Product not found" });
     return;
   }
-  const marginPercent = body.data.marginPercent ?? current.marginPercent;
-  const calculated = calculateProductPrice(current.supplierPriceUsd, settings, marginPercent);
+  if (
+    body.data.marginPercent !== undefined &&
+    body.data.marginPercent !== current.marginPercent
+  ) {
+    try {
+      const marginResult = await applyProductMargins(
+        [current.id],
+        body.data.marginPercent,
+      );
+      if (!marginResult.applied) {
+        res.status(409).json({ error: marginResult.reason });
+        return;
+      }
+      [current] = await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.id, params.data.id));
+    } catch (error) {
+      req.log.error(
+        { err: error, productId: current.id },
+        "Single product margin update failed",
+      );
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось безопасно изменить маржу",
+      });
+      return;
+    }
+  }
+  const { marginPercent: _marginPercent, ...nonPricingUpdates } = body.data;
   const categoryChanged =
     body.data.platiCategoryId !== undefined &&
     body.data.platiCategoryId !== current.platiCategoryId;
-  const [updated] = await db
-    .update(productsTable)
-    .set({
-      ...body.data,
-      marginPercent,
-      ...calculated,
-      ...(categoryChanged
-        ? {
-            publicationStatus: "draft",
-            publicationError: null,
-            publicationFailureStage: null,
-          }
-        : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(productsTable.id, params.data.id))
-    .returning();
+  const hasNonPricingUpdates = Object.keys(nonPricingUpdates).length > 0;
+  let updated = current;
+  if (hasNonPricingUpdates || categoryChanged) {
+    [updated] = await db
+      .update(productsTable)
+      .set({
+        ...nonPricingUpdates,
+        ...(categoryChanged
+          ? {
+              publicationStatus: "draft",
+              publicationError: null,
+              publicationFailureStage: null,
+            }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(productsTable.id, params.data.id))
+      .returning();
+  }
   res.json(
     UpdateProductResponse.parse({
       ...updated,

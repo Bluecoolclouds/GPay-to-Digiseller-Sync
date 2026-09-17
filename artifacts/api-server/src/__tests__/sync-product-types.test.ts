@@ -619,6 +619,70 @@ test("published price is saved locally only after Digiseller confirms success", 
   }
 });
 
+test("single published margin update reaches Digiseller before local save", async () => {
+  await preparePublishedPriceFixture();
+  usePriceSyncResponses({ Status: 3, ErrorCount: 0 });
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const updated = await request<{
+      marginPercent: number;
+      salePriceRub: number;
+    }>(`/api/products/${before.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ marginPercent: 33 }),
+    });
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, before.id));
+
+    assert.equal(updated.marginPercent, 33);
+    assert.equal(saved.marginPercent, 33);
+    assert.notEqual(saved.salePriceRub, before.salePriceRub);
+    assert.equal(updated.salePriceRub, saved.salePriceRub);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("single published margin update keeps previous local values when Digiseller rejects it", async () => {
+  await preparePublishedPriceFixture();
+  usePriceSyncResponses({
+    Status: 2,
+    ErrorCount: 1,
+    ErrorsDescriptions: [
+      { Key: "1914001001", Value: "Digiseller rejected margin price" },
+    ],
+  });
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/products/${before.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ marginPercent: 44 }),
+    });
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, before.id));
+
+    assert.equal(response.status, 409);
+    assert.equal(saved.marginPercent, before.marginPercent);
+    assert.equal(saved.salePriceRub, before.salePriceRub);
+    assert.equal(saved.profitRub, before.profitRub);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 test("automatic price sync stops before changes when the live rate is unavailable", async () => {
   clearOfficialUsdRubRateCache();
   await preparePublishedPriceFixture();
