@@ -607,6 +607,81 @@ test("all sync persists and counts unique key, gift, and unknown products", asyn
   assert.equal(names.get(unknownGpayId), "Regression unknown updated");
 });
 
+test("catalog sync keeps equal GPay IDs separate across product types", async () => {
+  const sharedGpayId = 2_140_001_090;
+  await db
+    .delete(productsTable)
+    .where(eq(productsTable.gpayId, sharedGpayId));
+  fetchOverride = async (input, init) => {
+    const url = String(input);
+    if (url.includes("cbr.ru")) return new Response("", { status: 503 });
+    if (url.endsWith("/partner-api/auth/login")) {
+      return Response.json({
+        status: "success",
+        data: { token: "test-token", expiresAt: new Date().toISOString() },
+      });
+    }
+    if (url.endsWith("/partner-api/products/list")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        page: number;
+        pageSize: number;
+        productType: number;
+      };
+      return Response.json({
+        status: "success",
+        data: {
+          products: [
+            {
+              id: sharedGpayId,
+              name:
+                body.productType === 1
+                  ? "Shared ID Steam Gift"
+                  : "Shared ID Steam Key",
+              productType: body.productType,
+              currentPartnerPrice: 10,
+              isAvailable: true,
+            },
+          ],
+          totalCount: 1,
+          page: body.page,
+          pageSize: body.pageSize,
+        },
+      });
+    }
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/seller-goods")) {
+      return Response.json({ retval: 0, rows: [], pages: 1 });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+
+  try {
+    const body = await request<{ imported: number }>("/api/sync/catalog", {
+      method: "POST",
+      body: JSON.stringify({ productKind: "all", pageSize: 100 }),
+    });
+    assert.equal(body.imported, 2);
+    const rows = await db
+      .select({
+        gpayId: productsTable.gpayId,
+        productType: productsTable.productType,
+      })
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, sharedGpayId));
+    assert.deepEqual(
+      rows.map((row) => row.productType).sort(),
+      ["1", "2"],
+    );
+  } finally {
+    fetchOverride = undefined;
+    await db
+      .delete(productsTable)
+      .where(eq(productsTable.gpayId, sharedGpayId));
+  }
+});
+
 test("settings save applies the exact live rate approved by preview", async () => {
   clearOfficialUsdRubRateCache();
   await seedProducts();

@@ -1532,60 +1532,71 @@ router.post("/sync/catalog", async (req, res): Promise<void> => {
       fetchGPayProducts(parsed.data.pageSize, requestedProductKind),
       fetchDigisellerSellerProducts(),
     ]);
-    let imported = 0;
-    let updated = 0;
-    for (const product of data.products ?? []) {
-      if (parsed.data.availableOnly && product.isAvailable !== true) continue;
-      const productKind = classifyGPayProductType(product.productType);
-      if (
-        requestedProductKind !== "all" &&
-        productKind !== requestedProductKind
-      ) {
-        continue;
-      }
-      const normalizedProductType = String(product.productType);
-      const [existing] = await db
-        .select()
-        .from(productsTable)
-        .where(
-          and(
-            eq(productsTable.gpayId, product.id),
-            eq(productsTable.productType, normalizedProductType),
-          ),
+    const { imported, updated } = await db.transaction(async (tx) => {
+      let imported = 0;
+      let updated = 0;
+      for (const product of data.products ?? []) {
+        if (parsed.data.availableOnly && product.isAvailable !== true) continue;
+        const productKind = classifyGPayProductType(product.productType);
+        if (
+          requestedProductKind !== "all" &&
+          productKind !== requestedProductKind
+        ) {
+          continue;
+        }
+        const normalizedProductType = String(product.productType);
+        const [existing] = await tx
+          .select()
+          .from(productsTable)
+          .where(
+            and(
+              eq(productsTable.gpayId, product.id),
+              eq(productsTable.productType, normalizedProductType),
+            ),
+          );
+        const marginPercent =
+          existing?.marginPercent ?? settings.defaultMarginPercent;
+        const calculated = calculateProductPrice(
+          product.currentPartnerPrice,
+          settings,
+          marginPercent,
         );
-      const marginPercent = existing?.marginPercent ?? settings.defaultMarginPercent;
-      const calculated = calculateProductPrice(product.currentPartnerPrice, settings, marginPercent);
-      const values = {
-        gpayId: product.id,
-        appId: product.appId ?? null,
-        subId: product.subId ?? null,
-        name: product.name,
-        imageUrl: product.imageUrl ?? null,
-        productType: normalizedProductType,
-        supplierPriceUsd: product.currentPartnerPrice,
-        marginPercent,
-        ...calculated,
-        isAvailable: product.isAvailable === true,
-        region: product.region || "Не указан",
-        warningMessage:
-          productKind === "unknown"
-            ? [
-                product.warningMessage,
-                `Неизвестный тип товара GPay: ${String(product.productType)}`,
-              ]
-                .filter(Boolean)
-                .join(". ")
-            : (product.warningMessage ?? null),
-        updatedAt: new Date(),
-      };
-      if (existing) {
-        await db.update(productsTable).set(values).where(eq(productsTable.id, existing.id));
-        updated++;
-      } else {
-        await db.insert(productsTable).values(values);
-        imported++;
+        const values = {
+          gpayId: product.id,
+          appId: product.appId ?? null,
+          subId: product.subId ?? null,
+          name: product.name,
+          imageUrl: product.imageUrl ?? null,
+          productType: normalizedProductType,
+          supplierPriceUsd: product.currentPartnerPrice,
+          marginPercent,
+          ...calculated,
+          isAvailable: product.isAvailable === true,
+          region: product.region || "Не указан",
+          warningMessage:
+            productKind === "unknown"
+              ? [
+                  product.warningMessage,
+                  `Неизвестный тип товара GPay: ${String(product.productType)}`,
+                ]
+                  .filter(Boolean)
+                  .join(". ")
+              : (product.warningMessage ?? null),
+          updatedAt: new Date(),
+        };
+        if (existing) {
+          await tx
+            .update(productsTable)
+            .set(values)
+            .where(eq(productsTable.id, existing.id));
+          updated++;
+        } else {
+          await tx.insert(productsTable).values(values);
+          imported++;
+        }
       }
-    }
+      return { imported, updated };
+    });
     const autoLinkResult =
       await autoLinkExactDigisellerProducts(sellerProducts);
     await db.insert(activitiesTable).values({
