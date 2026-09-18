@@ -12,3 +12,4 @@
 - [API integration-test isolation](api-integration-test-isolation.md) — use separate schemas per suite and keep local HTTP requests outside outbound fetch mocks.
 - [Fulfillment crash recovery](fulfillment-crash-recovery.md) — recover every durable delivery state between supplier purchase and marketplace confirmation.
 - [Atomic pricing settings](atomic-pricing-settings.md) — activate pricing rules only after serialized Digiseller price application succeeds or is safely rolled back.
+- [Digiseller state-change reconciliation](digiseller-state-change-reconciliation.md) — confirm seller-visible state after ambiguous external mutations before local commit.

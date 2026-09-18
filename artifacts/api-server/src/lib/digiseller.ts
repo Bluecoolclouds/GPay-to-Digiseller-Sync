@@ -83,6 +83,21 @@ export class DigisellerCreationRejectedError extends Error {
   readonly creationWasRejected = true;
 }
 
+export class DigisellerOperationUncertainError extends Error {
+  readonly operationWasUncertain = true;
+}
+
+export function isDigisellerOperationUncertain(
+  error: unknown,
+): error is DigisellerOperationUncertainError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "operationWasUncertain" in error &&
+    error.operationWasUncertain === true
+  );
+}
+
 export function isDigisellerCreationRejected(
   error: unknown,
 ): error is DigisellerCreationRejectedError {
@@ -230,6 +245,14 @@ export async function fetchDigisellerSellerProducts(
   } while (page <= totalPages && page <= 100);
 
   return [...products.values()];
+}
+
+export async function getDigisellerProductEnabledState(
+  productId: number,
+  providedToken?: string,
+): Promise<boolean | null> {
+  const products = await fetchDigisellerSellerProducts(providedToken);
+  return products.find((product) => product.id === productId)?.visible ?? null;
 }
 
 export type DigisellerSale = {
@@ -1281,16 +1304,32 @@ export async function setDigisellerProductEnabled(
       ? "uniquefixed"
       : "arbitrary";
   const payload = buildProductPayload(input, categories, enabled, deliveryType);
-  const response = await fetch(
-    `https://api.digiseller.com/api/product/edit/${productKind}/${productId}?token=${encodeURIComponent(token)}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(20_000),
-    },
-  );
-  const json = (await response.json()) as CreateProductResult;
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.digiseller.com/api/product/edit/${productKind}/${productId}?token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
+  } catch (error) {
+    throw new DigisellerOperationUncertainError(
+      `Не удалось получить подтверждение ${enabled ? "включения" : "отключения"} товара Digiseller`,
+      { cause: error },
+    );
+  }
+  let json: CreateProductResult;
+  try {
+    json = (await response.json()) as CreateProductResult;
+  } catch (error) {
+    throw new DigisellerOperationUncertainError(
+      `Digiseller не вернул подтверждение ${enabled ? "включения" : "отключения"} товара`,
+      { cause: error },
+    );
+  }
   if (!response.ok || json.retval !== 0) {
     throw new Error(
       getDigisellerError(

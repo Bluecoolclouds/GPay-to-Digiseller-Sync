@@ -56,6 +56,8 @@ import {
   createDigisellerProduct,
   disableLegacyDigisellerProduct,
   fetchDigisellerSellerProducts,
+  getDigisellerProductEnabledState,
+  isDigisellerOperationUncertain,
   loginDigiseller,
   setDigisellerProductEnabled,
   setDigisellerCodeUnlimitedStock,
@@ -410,14 +412,30 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
         const token = await loginDigiseller();
         categoryChangeFailureStage = "disable";
         const oldProductInput = getDigisellerProductInput(lockedCurrent);
-        await setDigisellerProductEnabled(
-          lockedCurrent.digisellerId,
-          oldProductInput,
-          false,
-          token,
-          lockedCurrent.platiCategoryId,
-          lockedCurrent.digisellerDeliveryType ?? "code",
-        );
+        try {
+          await setDigisellerProductEnabled(
+            lockedCurrent.digisellerId,
+            oldProductInput,
+            false,
+            token,
+            lockedCurrent.platiCategoryId,
+            lockedCurrent.digisellerDeliveryType ?? "code",
+          );
+        } catch (error) {
+          if (!isDigisellerOperationUncertain(error)) throw error;
+          const enabledState = await getDigisellerProductEnabledState(
+            lockedCurrent.digisellerId,
+            token,
+          );
+          if (enabledState !== false) {
+            throw new Error(
+              enabledState === true
+                ? `Старая карточка Digiseller #${lockedCurrent.digisellerId} остаётся активной`
+                : `Не удалось подтвердить состояние старой карточки Digiseller #${lockedCurrent.digisellerId}`,
+              { cause: error },
+            );
+          }
+        }
         categoryChangeFailureStage = "save";
         try {
           const [saved] = await db

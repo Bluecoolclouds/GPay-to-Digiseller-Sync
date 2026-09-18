@@ -848,6 +848,108 @@ test("published category change keeps local category and status when Digiseller 
   }
 });
 
+test("published category change completes after a timed-out disable is confirmed externally", async () => {
+  await preparePublishedPriceFixture();
+  const oldCategoryId = 87_655;
+  const newCategoryId = 87_656;
+  await db
+    .update(productsTable)
+    .set({
+      platiCategoryId: oldCategoryId,
+      digisellerDeliveryType: "code",
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/uniquefixed/1914001001")) {
+      throw new DOMException("The operation timed out", "TimeoutError");
+    }
+    if (url.includes("/api/seller-goods")) {
+      return Response.json({
+        retval: 0,
+        pages: 1,
+        rows: [{ id_goods: 1_914_001_001, visible: 0 }],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const updated = await request<{
+      platiCategoryId: number;
+      publicationStatus: string;
+    }>(`/api/products/${before.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ platiCategoryId: newCategoryId }),
+    });
+
+    assert.equal(updated.platiCategoryId, newCategoryId);
+    assert.equal(updated.publicationStatus, "draft");
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("published category change stays unchanged when the old card remains active after timeout", async () => {
+  await preparePublishedPriceFixture();
+  const oldCategoryId = 87_655;
+  await db
+    .update(productsTable)
+    .set({
+      platiCategoryId: oldCategoryId,
+      digisellerDeliveryType: "code",
+    })
+    .where(eq(productsTable.gpayId, keyGpayId));
+  fetchOverride = async (input) => {
+    const url = String(input);
+    if (url.includes("/api/apilogin")) {
+      return Response.json({ token: "digiseller-test-token" });
+    }
+    if (url.includes("/api/product/edit/uniquefixed/1914001001")) {
+      throw new DOMException("The operation timed out", "TimeoutError");
+    }
+    if (url.includes("/api/seller-goods")) {
+      return Response.json({
+        retval: 0,
+        pages: 1,
+        rows: [{ id_goods: 1_914_001_001, visible: 1 }],
+      });
+    }
+    throw new Error(`Unexpected outbound request: ${url}`);
+  };
+  const [before] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/products/${before.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ platiCategoryId: 87_656 }),
+    });
+    const responseBody = (await response.json()) as { error?: string };
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, before.id));
+
+    assert.equal(response.status, 502);
+    assert.match(responseBody.error ?? "", /остаётся активной/);
+    assert.equal(saved.platiCategoryId, oldCategoryId);
+    assert.equal(saved.publicationStatus, "published");
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
 test("automatic price sync stops before changes when the live rate is unavailable", async () => {
   clearOfficialUsdRubRateCache();
   await preparePublishedPriceFixture();
