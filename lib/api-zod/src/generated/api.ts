@@ -398,7 +398,7 @@ export const GetSettingsResponse = zod.object({
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
   "digisellerChatCodeEnabled": zod.boolean(),
-  "digisellerThankYouPromoEnabled": zod.boolean(),
+  "digisellerThankYouPromoEnabled": zod.boolean().describe('Enable Digiseller\'s native 5% gift certificate after a positive review.'),
   "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
   "notificationConfigured": zod.boolean(),
@@ -438,7 +438,7 @@ export const UpdateSettingsBody = zod.object({
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
   "digisellerChatCodeEnabled": zod.boolean().optional(),
-  "digisellerThankYouPromoEnabled": zod.boolean().optional(),
+  "digisellerThankYouPromoEnabled": zod.boolean().optional().describe('Enable Digiseller\'s native 5% gift certificate after a positive review.'),
   "customerSiteUrl": zod.string().url().nullish(),
   "previewToken": zod.string().min(1),
   "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
@@ -458,7 +458,7 @@ export const UpdateSettingsResponse = zod.object({
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
   "digisellerChatCodeEnabled": zod.boolean(),
-  "digisellerThankYouPromoEnabled": zod.boolean(),
+  "digisellerThankYouPromoEnabled": zod.boolean().describe('Enable Digiseller\'s native 5% gift certificate after a positive review.'),
   "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
   "notificationConfigured": zod.boolean(),
@@ -497,7 +497,7 @@ export const PreviewSettingsBody = zod.object({
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
   "digisellerChatCodeEnabled": zod.boolean().optional(),
-  "digisellerThankYouPromoEnabled": zod.boolean().optional(),
+  "digisellerThankYouPromoEnabled": zod.boolean().optional().describe('Enable Digiseller\'s native 5% gift certificate after a positive review.'),
   "customerSiteUrl": zod.string().url().nullish(),
   "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })

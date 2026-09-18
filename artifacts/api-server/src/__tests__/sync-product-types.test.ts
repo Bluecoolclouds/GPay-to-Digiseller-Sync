@@ -1915,6 +1915,10 @@ test("published legacy Text key migrates safely to unlimited Code", async () => 
   const verifiedCategoryId = 87_655;
   const calls: string[] = [];
 
+  await db
+    .update(settingsTable)
+    .set({ digisellerThankYouPromoEnabled: true })
+    .where(eq(settingsTable.id, 1));
   await db.delete(productsTable).where(eq(productsTable.gpayId, migrationGpayId));
   const [fixture] = await db
     .insert(productsTable)
@@ -1946,9 +1950,11 @@ test("published legacy Text key migrates safely to unlimited Code", async () => 
       const payload = JSON.parse(String(init?.body)) as {
         content_type?: string;
         enabled?: boolean;
+        bonus?: { enabled?: boolean; percent?: number };
       };
       assert.equal(payload.content_type, "digisellercode");
       assert.equal(payload.enabled, true);
+      assert.deepEqual(payload.bonus, { enabled: true, percent: 5 });
       return Response.json({
         retval: 0,
         content: { product_id: newDigisellerId },

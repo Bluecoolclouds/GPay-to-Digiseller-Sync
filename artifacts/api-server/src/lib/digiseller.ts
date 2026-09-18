@@ -115,6 +115,7 @@ type ProductInput = {
   descriptionEn: string;
   priceRub: number;
   productType: string;
+  nativeBonusEnabled?: boolean;
 };
 
 const cataloguerCategoryCache = new Map<string, number>();
@@ -1343,6 +1344,14 @@ function buildProductPayload(
       { locale: "en-US", value: additionalInfoEn },
     ],
     price: { price: Math.ceil(input.priceRub), currency: "RUB" },
+    ...(input.nativeBonusEnabled === undefined
+      ? {}
+      : {
+          bonus: {
+            enabled: input.nativeBonusEnabled,
+            percent: 5,
+          },
+        }),
     enabled,
     address_required: false,
     online_checkout_name: input.name.slice(0, 128),

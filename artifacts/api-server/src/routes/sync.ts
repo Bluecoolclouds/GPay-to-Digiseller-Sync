@@ -663,6 +663,66 @@ function toProductResponse(current: ProductRecord) {
   };
 }
 
+async function syncPublishedDigisellerBonus(
+  previousEnabled: boolean,
+  nextEnabled: boolean,
+) {
+  if (previousEnabled === nextEnabled) return;
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(
+      and(
+        eq(productsTable.publicationStatus, "published"),
+        isNotNull(productsTable.digisellerId),
+      ),
+    );
+  if (products.length === 0) return;
+
+  const token = await loginDigiseller();
+  const updated: ProductRecord[] = [];
+  try {
+    for (const product of products) {
+      await addDigisellerProductToPlati(
+        product.digisellerId!,
+        {
+          ...getDigisellerProductInput(product),
+          nativeBonusEnabled: nextEnabled,
+        },
+        token,
+        product.platiCategoryId,
+        product.digisellerDeliveryType === "text" ? "text" : "code",
+      );
+      updated.push(product);
+    }
+  } catch (error) {
+    const rollbackFailures: number[] = [];
+    for (const product of updated.reverse()) {
+      try {
+        await addDigisellerProductToPlati(
+          product.digisellerId!,
+          {
+            ...getDigisellerProductInput(product),
+            nativeBonusEnabled: previousEnabled,
+          },
+          token,
+          product.platiCategoryId,
+          product.digisellerDeliveryType === "text" ? "text" : "code",
+        );
+      } catch {
+        rollbackFailures.push(product.digisellerId!);
+      }
+    }
+    const reason =
+      error instanceof Error ? error.message : "Digiseller отклонил настройку бонуса";
+    throw new Error(
+      rollbackFailures.length > 0
+        ? `${reason}. Не удалось откатить бонус у карточек DS: ${rollbackFailures.join(", ")}`
+        : `${reason}. Изменения бонуса в Digiseller отменены.`,
+    );
+  }
+}
+
 async function autoLinkExactDigisellerProducts(
   sellerProducts: Awaited<ReturnType<typeof fetchDigisellerSellerProducts>>,
 ) {
@@ -796,7 +856,12 @@ async function publishProductRecord(current: ProductRecord) {
   };
 
   const token = await loginDigiseller();
-  const input = getDigisellerProductInput(current);
+  const publicationSettings = await getSettingsRow();
+  const input = {
+    ...getDigisellerProductInput(current),
+    nativeBonusEnabled:
+      publicationSettings.digisellerThankYouPromoEnabled,
+  };
   let digisellerId = current.digisellerId;
   let previousDigisellerId = current.previousDigisellerId;
   let deliveryType = current.digisellerDeliveryType;
@@ -2003,6 +2068,33 @@ router.put("/settings", async (req, res): Promise<void> => {
   if (!application.applied) {
     res.status(409).json({ error: application.reason });
     return;
+  }
+  if (
+    currentSettings.digisellerThankYouPromoEnabled !==
+    candidate.digisellerThankYouPromoEnabled
+  ) {
+    try {
+      await syncPublishedDigisellerBonus(
+        currentSettings.digisellerThankYouPromoEnabled,
+        candidate.digisellerThankYouPromoEnabled ?? false,
+      );
+    } catch (error) {
+      await db
+        .update(settingsTable)
+        .set({
+          digisellerThankYouPromoEnabled:
+            currentSettings.digisellerThankYouPromoEnabled,
+          updatedAt: new Date(),
+        })
+        .where(eq(settingsTable.id, 1));
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось применить бонус Digiseller ко всем карточкам",
+      });
+      return;
+    }
   }
   if (notificationWebhookUrl !== undefined) {
     await db

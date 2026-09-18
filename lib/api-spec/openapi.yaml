@@ -852,7 +852,9 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
         digisellerChatCodeEnabled: { type: boolean }
-        digisellerThankYouPromoEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled:
+          type: boolean
+          description: Enable Digiseller's native 5% gift certificate after a positive review.
         customerSiteUrl: { type: [string, "null"], format: uri }
         credentialsConfigured: { type: boolean }
         notificationConfigured: { type: boolean }
@@ -876,7 +878,9 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
         digisellerChatCodeEnabled: { type: boolean }
-        digisellerThankYouPromoEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled:
+          type: boolean
+          description: Enable Digiseller's native 5% gift certificate after a positive review.
         customerSiteUrl: { type: [string, "null"], format: uri }
         notificationWebhookUrl:
           type: string
@@ -910,7 +914,9 @@ components:
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
         digisellerChatCodeEnabled: { type: boolean }
-        digisellerThankYouPromoEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled:
+          type: boolean
+          description: Enable Digiseller's native 5% gift certificate after a positive review.
         customerSiteUrl: { type: [string, "null"], format: uri }
         previewToken: { type: string, minLength: 1 }
         notificationWebhookUrl:

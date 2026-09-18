@@ -34,6 +34,7 @@ export interface SettingsApplyInput {
   automationMode: SettingsApplyInputAutomationMode;
   disableOnUnavailable: boolean;
   digisellerChatCodeEnabled?: boolean;
+  /** Enable Digiseller's native 5% gift certificate after a positive review. */
   digisellerThankYouPromoEnabled?: boolean;
   /** @nullable */
   customerSiteUrl?: string | null;

@@ -493,11 +493,10 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <label className="text-sm font-medium">Отправлять промокод после выдачи ключа</label>
+                    <label className="text-sm font-medium">Бонус Digiseller за положительный отзыв</label>
                     <p className="max-w-md text-xs text-muted-foreground">
-                      Одноразовый код на 5% действует 30 дней. В официальном API Digiseller нет
-                      безопасного способа применить такой код к неоплаченному заказу, поэтому
-                      оператор подтверждает новую цену вручную до оплаты.
+                      Digiseller сам выдаёт покупателю подарочный сертификат на 5% после
+                      положительного отзыва и применяет его по своим правилам.
                     </p>
                   </div>
                   <Switch checked={watch("digisellerThankYouPromoEnabled")} onCheckedChange={(value) => setValue("digisellerThankYouPromoEnabled", value)} />

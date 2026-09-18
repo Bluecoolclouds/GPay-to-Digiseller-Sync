@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, settingsTable, syncOrdersTable } from "@workspace/db";
 import {
   fetchDigisellerChatMessages,
@@ -12,8 +12,6 @@ import {
 import { createPublicOrderLink } from "./public-orders";
 
 const ORDER_CODE_PATTERN = /^\d{16}$/;
-const PROMO_CODE_PATTERN = /^GP-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
-const PROMO_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 
 function secretKey() {
   const secret = process.env.SESSION_SECRET;
@@ -36,57 +34,9 @@ function decrypt(value: string | null) {
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(data, "base64url")), decipher.final()]).toString("utf8");
 }
-function newPromo() {
-  const bytes = randomBytes(8).toString("hex").toUpperCase();
-  return `GP-${bytes.slice(0, 4)}-${bytes.slice(4, 8)}`;
-}
-
-export async function redeemDigisellerPromo(code: string, invoiceId: string) {
-  const normalized = code.trim();
-  const [existing] = await db.select({ redeemedAt: syncOrdersTable.promoCodeRedeemedAt, expiresAt: syncOrdersTable.promoCodeExpiresAt })
-    .from(syncOrdersTable).where(eq(syncOrdersTable.promoCodeHash, hash(normalized)));
-  if (!existing) return { status: "unknown" as const };
-  if (existing.expiresAt && existing.expiresAt <= new Date()) return { status: "expired" as const };
-  if (existing.redeemedAt) return { status: "already-used" as const };
-  const [order] = await db
-    .update(syncOrdersTable)
-    .set({ promoCodeRedeemedAt: new Date(), promoCodeRedeemedInvoiceId: invoiceId, updatedAt: new Date() })
-    .where(and(
-      eq(syncOrdersTable.promoCodeHash, hash(normalized)),
-      isNull(syncOrdersTable.promoCodeRedeemedAt),
-      or(isNull(syncOrdersTable.promoCodeExpiresAt), gt(syncOrdersTable.promoCodeExpiresAt, new Date())),
-    ))
-    .returning({ expiresAt: syncOrdersTable.promoCodeExpiresAt });
-  if (!order) return { status: "already-used" as const };
-  return { status: "redeemed" as const };
-}
-
-export async function sendDigisellerThankYou(orderId: number) {
-  const [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-  if (!settings?.digisellerThankYouPromoEnabled || !orderId) return false;
-  const [order] = await db.select().from(syncOrdersTable).where(eq(syncOrdersTable.id, orderId));
-  const chatId = order?.digisellerChatId ?? Number(order?.invoiceId);
-  if (!order || !Number.isInteger(chatId) || order.digisellerChatThankYouSentAt) return false;
-  const token = await loginDigiseller();
-  const promo = order.promoCodeEncrypted ? decrypt(order.promoCodeEncrypted) : newPromo();
-  const expiry = order.promoCodeExpiresAt ?? new Date(Date.now() + PROMO_LIFETIME_MS);
-  if (!order.promoCodeEncrypted) {
-    await db.update(syncOrdersTable).set({
-      promoCodeEncrypted: encrypt(promo),
-      promoCodeHash: hash(promo),
-      promoCodeExpiresAt: expiry,
-      updatedAt: new Date(),
-    }).where(eq(syncOrdersTable.id, orderId));
-  }
-  await sendDigisellerChatMessage(token, chatId,
-    `Спасибо за покупку! Ваш ключ уже доступен на странице заказа. Ваш персональный промокод ${promo} даёт скидку 5% при ручном применении к следующей покупке и действует до ${expiry.toLocaleDateString("ru-RU")}. Код одноразовый: отправьте его в чат Digiseller до оплаты следующей покупки и дождитесь подтверждения новой цены от оператора. К уже оплаченному заказу скидка не применяется.`);
-  await db.update(syncOrdersTable).set({ digisellerChatThankYouSentAt: new Date(), digisellerChatError: null, updatedAt: new Date() }).where(eq(syncOrdersTable.id, orderId));
-  return true;
-}
-
 export async function syncDigisellerBuyerChats() {
   const [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-  if (!settings?.digisellerChatCodeEnabled && !settings?.digisellerThankYouPromoEnabled) {
+  if (!settings?.digisellerChatCodeEnabled) {
     return { skipped: true, reason: "disabled" };
   }
   const token = await loginDigiseller();
@@ -111,24 +61,7 @@ export async function syncDigisellerBuyerChats() {
       }
 
       const text = message.text.trim();
-      if (
-        settings.digisellerThankYouPromoEnabled &&
-        PROMO_CODE_PATTERN.test(text)
-      ) {
-        const redeem = await redeemDigisellerPromo(text.toUpperCase(), String(chat.id));
-        const reply =
-          redeem.status === "redeemed"
-            ? "Промокод зарегистрирован один раз. Digiseller не предоставляет API для автоматического применения такого кода: оператор подтвердит цену следующей покупки вручную. Не оплачивайте новый заказ до подтверждения — к уже оплаченному заказу скидка не применяется."
-            : redeem.status === "expired"
-              ? "Срок действия промокода истёк."
-              : redeem.status === "already-used"
-                ? "Этот промокод уже использован."
-                : "Промокод не найден.";
-        await sendDigisellerChatMessage(token, chat.id, reply);
-      } else if (
-        settings.digisellerChatCodeEnabled &&
-        ORDER_CODE_PATTERN.test(text)
-      ) {
+      if (ORDER_CODE_PATTERN.test(text)) {
         let verified;
         try {
           verified = await verifyDigisellerUniqueCode(text, token);

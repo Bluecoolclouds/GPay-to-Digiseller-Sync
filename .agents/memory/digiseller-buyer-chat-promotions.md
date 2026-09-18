@@ -1,10 +1,10 @@
 ---
-name: Digiseller buyer chat promotions
-description: Operational rule for the one-time promo codes sent through Digiseller buyer chats.
+name: Digiseller native review bonus
+description: Official Digiseller gift-certificate rule used instead of custom buyer-chat promo codes.
 ---
 
-One-time promo codes sent after delivery are valid for 30 days and are redeemed atomically when the buyer sends the code in a later Digiseller order chat. The system confirms registration, but the 5% discount is applied manually by an operator before the buyer pays.
+Use Digiseller's native product bonus with a 5% value. Digiseller issues the gift certificate after a positive buyer review and applies it according to its own platform rules. Do not generate or redeem custom GP codes in buyer chat.
 
-**Why:** The official Digiseller API documents cart/payment transitions, price calculation, quantity discounts, and regular-buyer discounts calculated from email, but no endpoint for creating or applying a seller-defined one-time coupon to a specific unpaid order. Product-level price edits are not a safe substitute because they affect shared catalog state and cannot bind an uncertain mutation to one buyer. Claiming automatic application would be misleading and could create a double discount after an ambiguous response.
+**Why:** The user explicitly chose the official Digiseller mechanism after confirming its rules. It avoids an unsupported custom checkout-discount workflow and manual operator application.
 
-**How to apply:** Keep customer-facing copy explicit that the code registers one request, the operator must confirm the new price before payment, and paid orders cannot receive the discount. Do not change this to automatic checkout discounting without first confirming and testing an official buyer/order-scoped Digiseller mechanism.
+**How to apply:** Product create/edit payloads should include the native bonus setting and 5% value. Customer-facing copy must say that issuance follows a positive review and Digiseller rules.
