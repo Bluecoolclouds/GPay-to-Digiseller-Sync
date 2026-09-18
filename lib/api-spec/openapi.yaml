@@ -778,7 +778,7 @@ components:
       required: [id, type, title, description, status, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [sync, price, publish, connection] }
+        type: { type: string, enum: [sync, price, publish, connection, category] }
         title: { type: string }
         description: { type: string }
         status: { type: string, enum: [success, warning, error] }

@@ -773,10 +773,20 @@ test("published category change disables the old Digiseller card before saving t
       method: "PATCH",
       body: JSON.stringify({ platiCategoryId: newCategoryId }),
     });
+    const activities = await request<Array<{
+      type: string;
+      status: string;
+      description: string;
+    }>>("/api/activities?limit=1");
+    const [activity] = activities;
 
     assert.equal(disabled, true);
     assert.equal(updated.platiCategoryId, newCategoryId);
     assert.equal(updated.publicationStatus, "draft");
+    assert.equal(activity.type, "category");
+    assert.equal(activity.status, "success");
+    assert.match(activity.description, /1914001001/);
+    assert.match(activity.description, /87655.*87656/);
   } finally {
     fetchOverride = undefined;
   }
@@ -820,10 +830,19 @@ test("published category change keeps local category and status when Digiseller 
       .select()
       .from(productsTable)
       .where(eq(productsTable.id, before.id));
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .orderBy(desc(activitiesTable.createdAt), desc(activitiesTable.id))
+      .limit(1);
 
     assert.equal(response.status, 502);
     assert.equal(saved.platiCategoryId, oldCategoryId);
     assert.equal(saved.publicationStatus, "published");
+    assert.equal(activity.type, "category");
+    assert.equal(activity.status, "error");
+    assert.match(activity.description, /1914001001/);
+    assert.match(activity.description, /Old category card could not be disabled/);
   } finally {
     fetchOverride = undefined;
   }

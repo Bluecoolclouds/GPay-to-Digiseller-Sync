@@ -365,6 +365,11 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     body.data.platiCategoryId !== current.platiCategoryId;
   const hasNonPricingUpdates = Object.keys(nonPricingUpdates).length > 0;
   let updated = current;
+  let categoryChangeApplied = false;
+  let categoryChangePreviousId = current.platiCategoryId;
+  let disabledOldCardId: number | null = null;
+  let categoryChangeFailureStage: "login" | "disable" | "save" = "login";
+  let oldCardRestored: boolean | null = null;
   if (
     categoryChanged &&
     current.publicationStatus === "published" &&
@@ -384,6 +389,7 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
           lockedCurrent.publicationStatus !== "published" ||
           lockedCurrent.digisellerId === null
         ) {
+          categoryChangePreviousId = lockedCurrent.platiCategoryId;
           const [saved] = await db
             .update(productsTable)
             .set({
@@ -395,10 +401,14 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
             })
             .where(eq(productsTable.id, lockedCurrent.id))
             .returning();
+          categoryChangeApplied = true;
           return saved;
         }
 
+        categoryChangePreviousId = lockedCurrent.platiCategoryId;
+        disabledOldCardId = lockedCurrent.digisellerId;
         const token = await loginDigiseller();
+        categoryChangeFailureStage = "disable";
         const oldProductInput = getDigisellerProductInput(lockedCurrent);
         await setDigisellerProductEnabled(
           lockedCurrent.digisellerId,
@@ -408,6 +418,7 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
           lockedCurrent.platiCategoryId,
           lockedCurrent.digisellerDeliveryType ?? "code",
         );
+        categoryChangeFailureStage = "save";
         try {
           const [saved] = await db
             .update(productsTable)
@@ -420,6 +431,7 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
             })
             .where(eq(productsTable.id, lockedCurrent.id))
             .returning();
+          categoryChangeApplied = true;
           return saved;
         } catch (error) {
           try {
@@ -431,22 +443,46 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
               lockedCurrent.platiCategoryId,
               lockedCurrent.digisellerDeliveryType ?? "code",
             );
+            oldCardRestored = true;
           } catch {
+            oldCardRestored = false;
             // The old card remains disabled, which is safer than an active stale card.
           }
           throw error;
         }
       }));
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Не удалось безопасно изменить категорию";
+      try {
+        const failureContext =
+          categoryChangeFailureStage === "login"
+            ? "не удалось авторизоваться в Digiseller"
+            : categoryChangeFailureStage === "disable"
+              ? `не удалось подтвердить отключение старой карточки Digiseller${disabledOldCardId === null ? "" : ` #${disabledOldCardId}`}`
+              : oldCardRestored
+                ? `старая карточка Digiseller #${disabledOldCardId} была отключена, но локальное сохранение не завершилось; карточка повторно включена`
+                : `старая карточка Digiseller #${disabledOldCardId} была отключена, но локальное сохранение не завершилось; восстановить карточку не удалось`;
+        await db.insert(activitiesTable).values({
+          type: "category",
+          title: "Не удалось изменить категорию товара",
+          description: `${current.name}: ${failureContext} при смене категории ${categoryChangePreviousId ?? "не задана"} → ${body.data.platiCategoryId}. ${message}`,
+          status: "error",
+        });
+      } catch (activityError) {
+        req.log.error(
+          { err: activityError, productId: current.id },
+          "Failed to record category update activity",
+        );
+      }
       req.log.error(
         { err: error, productId: current.id },
         "Published product category update failed",
       );
       res.status(502).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не удалось безопасно изменить категорию",
+        error: message,
       });
       return;
     }
@@ -466,6 +502,26 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
       })
       .where(eq(productsTable.id, params.data.id))
       .returning();
+    categoryChangeApplied = categoryChanged;
+  }
+  if (categoryChangeApplied) {
+    try {
+      await db.insert(activitiesTable).values({
+        type: "category",
+        title: "Категория товара изменена",
+        description:
+          `${updated.name}: категория Plati ${categoryChangePreviousId ?? "не задана"} → ${updated.platiCategoryId}. ` +
+          (disabledOldCardId === null
+            ? "Товар переведён в черновик."
+            : `Старая карточка Digiseller #${disabledOldCardId} отключена, товар переведён в черновик.`),
+        status: "success",
+      });
+    } catch (error) {
+      req.log.error(
+        { err: error, productId: current.id },
+        "Failed to record category update activity",
+      );
+    }
   }
   res.json(
     UpdateProductResponse.parse({

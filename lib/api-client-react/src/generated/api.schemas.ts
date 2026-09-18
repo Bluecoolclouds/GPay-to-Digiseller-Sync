@@ -346,6 +346,7 @@ export const ActivityType = {
   price: 'price',
   publish: 'publish',
   connection: 'connection',
+  category: 'category',
 } as const;
 
 export type ActivityStatus = typeof ActivityStatus[keyof typeof ActivityStatus];

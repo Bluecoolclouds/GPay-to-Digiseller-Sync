@@ -375,7 +375,7 @@ export const ListActivitiesQueryParams = zod.object({
 
 export const ListActivitiesResponseItem = zod.object({
   "id": zod.number().int(),
-  "type": zod.enum(['sync', 'price', 'publish', 'connection']),
+  "type": zod.enum(['sync', 'price', 'publish', 'connection', 'category']),
   "title": zod.string(),
   "description": zod.string(),
   "status": zod.enum(['success', 'warning', 'error']),
