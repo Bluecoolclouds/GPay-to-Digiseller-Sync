@@ -18,6 +18,11 @@ export const settingsTable = pgTable("sync_settings", {
   minimumProfitRub: doublePrecision("minimum_profit_rub").notNull().default(100),
   automationMode: text("automation_mode").notNull().default("manual"),
   disableOnUnavailable: boolean("disable_on_unavailable").notNull().default(true),
+  autonomousPaused: boolean("autonomous_paused").notNull().default(false),
+  autonomousAllowlist: text("autonomous_allowlist").notNull().default("[]"),
+  launchPreflightAt: timestamp("launch_preflight_at", { withTimezone: true }),
+  launchOrderConfirmedAt: timestamp("launch_order_confirmed_at", { withTimezone: true }),
+  launchOrderConfirmationNote: text("launch_order_confirmation_note"),
   notificationWebhookEncrypted: text("notification_webhook_encrypted"),
   digisellerChatCodeEnabled: boolean("digiseller_chat_code_enabled")
     .notNull()

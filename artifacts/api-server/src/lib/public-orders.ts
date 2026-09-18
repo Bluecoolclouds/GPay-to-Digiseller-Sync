@@ -21,6 +21,7 @@ import {
   productsTable,
   syncOrdersTable,
   syncProductDigisellerIdsTable,
+  settingsTable,
 } from "@workspace/db";
 import {
   classifyGPayProductType,
@@ -356,6 +357,7 @@ export async function processGPayPurchase(orderId: number) {
       gpayId: productsTable.gpayId,
       productType: productsTable.productType,
       supplierPriceUsd: productsTable.supplierPriceUsd,
+      localProductId: productsTable.id,
     })
     .from(syncOrdersTable)
     .leftJoin(
@@ -416,6 +418,30 @@ export async function processGPayPurchase(orderId: number) {
       })
       .where(eq(syncOrdersTable.id, orderId));
     return;
+  }
+  const [launchSettings] = await db.select({
+    autonomousPaused: settingsTable.autonomousPaused,
+    autonomousAllowlist: settingsTable.autonomousAllowlist,
+  }).from(settingsTable).where(eq(settingsTable.id, 1));
+  if (!order.startedAt && launchSettings?.autonomousPaused) {
+    await db.update(syncOrdersTable).set({
+      gpayPurchaseStatus: "queued",
+      gpayPurchaseError: "Автономные покупки временно приостановлены оператором",
+      updatedAt: new Date(),
+    }).where(eq(syncOrdersTable.id, orderId));
+    return;
+  }
+  if (!order.startedAt) {
+    let allowedIds: number[] = [];
+    try { allowedIds = JSON.parse(launchSettings?.autonomousAllowlist ?? "[]"); } catch { /* invalid means deny */ }
+    if (!order.localProductId || !allowedIds.includes(order.localProductId)) {
+      await db.update(syncOrdersTable).set({
+        gpayPurchaseStatus: "manual",
+        gpayPurchaseError: "Товар не входит в разрешённый автономный набор",
+        updatedAt: new Date(),
+      }).where(eq(syncOrdersTable.id, orderId));
+      return;
+    }
   }
   if (!order.gpayId || !order.productType) {
     await db

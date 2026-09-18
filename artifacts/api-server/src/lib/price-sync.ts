@@ -17,6 +17,7 @@ import { createPriceTimeoutSummary } from "./price-timeout-warning";
 import { buildProductDescriptions } from "./product-description";
 import { calculateProductPrice } from "./pricing";
 import { notifyFailure, notifyRecovery } from "./notifications";
+import { parseAutonomousAllowlist } from "./autonomous-launch";
 
 const PRICE_SYNC_LOCK_ID = 704_291_163;
 
@@ -55,6 +56,8 @@ export type PriceSettingsInput = {
   minimumProfitRub: number;
   automationMode: "manual" | "automatic";
   disableOnUnavailable: boolean;
+  autonomousPaused?: boolean;
+  autonomousAllowlist?: string;
 };
 
 type ProductRecord = typeof productsTable.$inferSelect;
@@ -135,6 +138,12 @@ export async function applyPricingSettings(
   }
 
   try {
+    const [launchState] = await db.select({
+      autonomousPaused: settingsTable.autonomousPaused,
+    }).from(settingsTable).where(eq(settingsTable.id, 1));
+    if (launchState?.autonomousPaused) {
+      return { applied: false as const, reason: "Массовые изменения приостановлены оператором." };
+    }
     const settings = { ...candidate, usdRubRate: effectiveUsdRubRate };
     const [catalog, localProducts] = await Promise.all([
       fetchGPayProducts(100, "key"),
@@ -309,6 +318,12 @@ export async function applyProductMargins(
         .from(productsTable)
         .where(inArray(productsTable.id, productIds)),
     ]);
+    if (settings.autonomousPaused) {
+      return {
+        applied: false as const,
+        reason: "Массовые изменения приостановлены оператором.",
+      };
+    }
     if (products.length !== productIds.length) {
       return {
         applied: false as const,
@@ -478,6 +493,7 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
       .select()
       .from(settingsTable)
       .where(eq(settingsTable.id, 1));
+    const autonomousAllowlist = parseAutonomousAllowlist(settings.autonomousAllowlist);
     if (settings.automationMode !== "automatic") {
       return {
         checked: 0,
@@ -488,6 +504,14 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
         stockReplenished: 0,
         stockFailed: 0,
         skipped: true,
+      };
+    }
+    if (settings.autonomousPaused) {
+      return {
+        checked: 0, changed: 0, digisellerUpdated: 0, failed: 0,
+        stockChecked: 0, stockReplenished: 0, stockFailed: 0,
+        skipped: true,
+        errors: ["Автономные изменения цен приостановлены оператором"],
       };
     }
 
@@ -580,14 +604,16 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
     const publishedPriceChanges = changes.filter(
       ({ product, priceChanged }) =>
         priceChanged &&
-        product.publicationStatus === "published" && product.digisellerId,
+        product.publicationStatus === "published" && product.digisellerId &&
+        autonomousAllowlist.includes(product.id),
     );
     const publishedAvailabilityChanges = changes.filter(
       ({ product, isAvailable, availabilityChanged }) =>
         availabilityChanged &&
         (isAvailable || settings.disableOnUnavailable) &&
         product.publicationStatus === "published" &&
-        product.digisellerId,
+        product.digisellerId &&
+        autonomousAllowlist.includes(product.id),
     );
     const publishedProductIds = new Set(
       [...publishedPriceChanges, ...publishedAvailabilityChanges].map(
@@ -670,10 +696,18 @@ export async function syncKeyPrices(): Promise<PriceSyncResult> {
 
     let updated = 0;
     for (const { product, supplier, calculated, isAvailable } of changes) {
+      const isPublishedInDigiseller =
+        product.digisellerId !== null &&
+        product.publicationStatus === "published";
       if (
-        product.digisellerId &&
-        product.publicationStatus === "published" &&
-        digisellerFailures.has(product.digisellerId)
+        isPublishedInDigiseller &&
+        !autonomousAllowlist.includes(product.id)
+      ) {
+        continue;
+      }
+      if (
+        isPublishedInDigiseller &&
+        digisellerFailures.has(product.digisellerId!)
       ) {
         continue;
       }

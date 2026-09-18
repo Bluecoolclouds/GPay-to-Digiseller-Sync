@@ -399,6 +399,13 @@ export interface Settings {
   customerSiteUrl: string | null;
   credentialsConfigured: boolean;
   notificationConfigured: boolean;
+  autonomousPaused: boolean;
+  /** @items.minimum 1 */
+  autonomousAllowlist: number[];
+  /** @nullable */
+  launchPreflightAt: string | null;
+  /** @nullable */
+  launchOrderConfirmedAt: string | null;
 }
 
 export type SettingsInputExchangeRateMode = typeof SettingsInputExchangeRateMode[keyof typeof SettingsInputExchangeRateMode];
@@ -519,6 +526,56 @@ export interface SettingsApplyInput {
   notificationWebhookUrl?: string;
 }
 
+export type AutonomousPreflightChecks = {
+  gpay: boolean;
+  digiseller: boolean;
+  rate: boolean;
+  workers: boolean;
+  allowlist: boolean;
+};
+
+export interface AutonomousPreflight {
+  passed: boolean;
+  checks: AutonomousPreflightChecks;
+  allowlistedProductCount: number;
+  checkedAt: string;
+}
+
+export interface AutonomousAllowlistInput {
+  /**
+     * @minItems 5
+     * @maxItems 10
+     * @items.minimum 1
+     */
+  productIds: number[];
+}
+
+export interface AutonomousAllowlist {
+  productIds: number[];
+}
+
+export interface AutonomousPauseInput {
+  paused: boolean;
+}
+
+export interface AutonomousPause {
+  paused: boolean;
+}
+
+export interface AutonomousOrderConfirmationInput {
+  /** @minLength 1 */
+  invoiceId: string;
+  /**
+     * @minLength 5
+     * @maxLength 1000
+     */
+  note: string;
+}
+
+export interface AutonomousOrderConfirmation {
+  confirmed: boolean;
+}
+
 export interface NotificationTestResult {
   success: boolean;
   message: string;
@@ -621,7 +678,6 @@ export const BackgroundJobHealthName = {
   'order-sync': 'order-sync',
   'price-sync': 'price-sync',
   'purchase-reconciliation': 'purchase-reconciliation',
-  'digiseller-chat': 'digiseller-chat',
 } as const;
 
 export interface BackgroundJobHealth {

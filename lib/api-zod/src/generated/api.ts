@@ -384,6 +384,9 @@ export const ListActivitiesResponseItem = zod.object({
 export const ListActivitiesResponse = zod.array(ListActivitiesResponseItem)
 
 
+
+
+
 export const GetSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
@@ -398,7 +401,11 @@ export const GetSettingsResponse = zod.object({
   "digisellerThankYouPromoEnabled": zod.boolean(),
   "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
-  "notificationConfigured": zod.boolean()
+  "notificationConfigured": zod.boolean(),
+  "autonomousPaused": zod.boolean(),
+  "autonomousAllowlist": zod.array(zod.number().int().min(1)),
+  "launchPreflightAt": zod.coerce.date().nullable(),
+  "launchOrderConfirmedAt": zod.coerce.date().nullable()
 })
 
 
@@ -437,6 +444,9 @@ export const UpdateSettingsBody = zod.object({
   "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })
 
+
+
+
 export const UpdateSettingsResponse = zod.object({
   "defaultMarginPercent": zod.number(),
   "usdRubRate": zod.number(),
@@ -451,7 +461,11 @@ export const UpdateSettingsResponse = zod.object({
   "digisellerThankYouPromoEnabled": zod.boolean(),
   "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
-  "notificationConfigured": zod.boolean()
+  "notificationConfigured": zod.boolean(),
+  "autonomousPaused": zod.boolean(),
+  "autonomousAllowlist": zod.array(zod.number().int().min(1)),
+  "launchPreflightAt": zod.coerce.date().nullable(),
+  "launchOrderConfirmedAt": zod.coerce.date().nullable()
 })
 
 
@@ -508,6 +522,60 @@ export const PreviewSettingsResponse = zod.object({
   "rateIsFallback": zod.boolean(),
   "automaticUpdateAllowed": zod.boolean(),
   "previewToken": zod.string().min(1)
+})
+
+
+export const GetAutonomousPreflightResponse = zod.object({
+  "passed": zod.boolean(),
+  "checks": zod.object({
+  "gpay": zod.boolean(),
+  "digiseller": zod.boolean(),
+  "rate": zod.boolean(),
+  "workers": zod.boolean(),
+  "allowlist": zod.boolean()
+}),
+  "allowlistedProductCount": zod.number().int(),
+  "checkedAt": zod.coerce.date()
+})
+
+
+
+export const updateAutonomousAllowlistBodyProductIdsMin = 5;
+export const updateAutonomousAllowlistBodyProductIdsMax = 10;
+
+
+
+export const UpdateAutonomousAllowlistBody = zod.object({
+  "productIds": zod.array(zod.number().int().min(1)).min(updateAutonomousAllowlistBodyProductIdsMin).max(updateAutonomousAllowlistBodyProductIdsMax)
+})
+
+export const UpdateAutonomousAllowlistResponse = zod.object({
+  "productIds": zod.array(zod.number().int())
+})
+
+
+export const SetAutonomousPauseBody = zod.object({
+  "paused": zod.boolean()
+})
+
+export const SetAutonomousPauseResponse = zod.object({
+  "paused": zod.boolean()
+})
+
+
+
+export const confirmAutonomousOrderBodyNoteMin = 5;
+export const confirmAutonomousOrderBodyNoteMax = 1000;
+
+
+
+export const ConfirmAutonomousOrderBody = zod.object({
+  "invoiceId": zod.string().min(1),
+  "note": zod.string().min(confirmAutonomousOrderBodyNoteMin).max(confirmAutonomousOrderBodyNoteMax)
+})
+
+export const ConfirmAutonomousOrderResponse = zod.object({
+  "confirmed": zod.boolean()
 })
 
 
@@ -614,7 +682,7 @@ export const ListOrdersResponse = zod.object({
   "isStale": zod.boolean()
 }),
   "workers": zod.array(zod.object({
-  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation', 'digiseller-chat']),
+  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation']),
   "intervalSeconds": zod.number().int(),
   "lastHeartbeatAt": zod.coerce.date().nullable(),
   "lastStartedAt": zod.coerce.date().nullable(),

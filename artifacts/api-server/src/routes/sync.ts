@@ -9,6 +9,8 @@ import {
   publicationJobsTable,
   type PublicationJobItem,
   settingsTable,
+  syncOrdersTable,
+  syncProductDigisellerIdsTable,
 } from "@workspace/db";
 import {
   PublishProductsBatchBody,
@@ -43,6 +45,10 @@ import {
   TestNotificationsResponse,
   UpdateProductsMarginBody,
   UpdateProductsMarginResponse,
+  GetAutonomousPreflightResponse,
+  UpdateAutonomousAllowlistBody,
+  SetAutonomousPauseBody,
+  ConfirmAutonomousOrderBody,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import {
@@ -79,6 +85,13 @@ import {
   testNotificationChannel,
   validateNotificationWebhookUrl,
 } from "../lib/notifications";
+import {
+  AUTONOMOUS_ALLOWLIST_MAX,
+  AUTONOMOUS_ALLOWLIST_MIN,
+  AUTONOMOUS_PREFLIGHT_MAX_AGE_MS,
+  parseAutonomousAllowlist,
+  runAutonomousPreflight,
+} from "../lib/autonomous-launch";
 
 const router: IRouter = Router();
 
@@ -1727,9 +1740,98 @@ router.get("/settings", async (_req, res): Promise<void> => {
   const settings = await getSettingsRow();
   res.json(GetSettingsResponse.parse({
     ...settings,
+    autonomousAllowlist: (() => { try { return JSON.parse(settings.autonomousAllowlist); } catch { return []; } })(),
     credentialsConfigured: credentialsConfigured(),
     notificationConfigured: Boolean(settings.notificationWebhookEncrypted),
   }));
+});
+
+router.get("/autonomous/preflight", async (_req, res): Promise<void> => {
+  try {
+    res.json(GetAutonomousPreflightResponse.parse(await runAutonomousPreflight()));
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Предпусковая проверка не выполнена" });
+  }
+});
+
+router.put("/autonomous/allowlist", async (req, res): Promise<void> => {
+  await getSettingsRow();
+  const parsed = UpdateAutonomousAllowlistBody.safeParse(req.body);
+  const uniqueProductIds = parsed.success
+    ? [...new Set(parsed.data.productIds)]
+    : [];
+  if (!parsed.success || uniqueProductIds.length < AUTONOMOUS_ALLOWLIST_MIN ||
+      uniqueProductIds.length > AUTONOMOUS_ALLOWLIST_MAX) {
+    res.status(400).json({ error: `Разрешённый набор должен содержать от ${AUTONOMOUS_ALLOWLIST_MIN} до ${AUTONOMOUS_ALLOWLIST_MAX} товаров` });
+    return;
+  }
+  const products = await db.select({ id: productsTable.id, productType: productsTable.productType,
+    publicationStatus: productsTable.publicationStatus, isAvailable: productsTable.isAvailable })
+    .from(productsTable).where(inArray(productsTable.id, uniqueProductIds));
+  if (products.length !== uniqueProductIds.length ||
+      products.some((p) => p.productType !== "2" || p.publicationStatus !== "published" || !p.isAvailable)) {
+    res.status(409).json({ error: "В allowlist допускаются только опубликованные доступные товары-ключи" });
+    return;
+  }
+  await db.update(settingsTable).set({
+    autonomousAllowlist: JSON.stringify(uniqueProductIds),
+    launchPreflightAt: null, updatedAt: new Date(),
+  }).where(eq(settingsTable.id, 1));
+  res.json({ productIds: uniqueProductIds });
+});
+
+router.post("/autonomous/pause", async (req, res): Promise<void> => {
+  await getSettingsRow();
+  const parsed = SetAutonomousPauseBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [settings] = await db.update(settingsTable).set({
+    autonomousPaused: parsed.data.paused, updatedAt: new Date(),
+  }).where(eq(settingsTable.id, 1)).returning();
+  res.json({ paused: settings.autonomousPaused });
+});
+
+router.post("/autonomous/order-confirmation", async (req, res): Promise<void> => {
+  await getSettingsRow();
+  const parsed = ConfirmAutonomousOrderBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [order] = await db.select({
+    status: syncOrdersTable.status,
+    gpay: syncOrdersTable.gpayPurchaseStatus,
+    delivery: syncOrdersTable.digisellerDeliveryStatus,
+    paidAmountRub: syncOrdersTable.paidAmountRub,
+    localProductId: syncProductDigisellerIdsTable.localProductId,
+  })
+    .from(syncOrdersTable)
+    .leftJoin(
+      syncProductDigisellerIdsTable,
+      eq(
+        syncProductDigisellerIdsTable.digisellerProductId,
+        syncOrdersTable.digisellerProductId,
+      ),
+    )
+    .where(eq(syncOrdersTable.invoiceId, parsed.data.invoiceId));
+  const [launchSettings] = await db
+    .select({ allowlist: settingsTable.autonomousAllowlist })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  const allowlist = parseAutonomousAllowlist(launchSettings?.allowlist);
+  if (
+    !order ||
+    order.status !== "delivered" ||
+    order.gpay !== "delivered" ||
+    order.delivery !== "delivered" ||
+    !order.paidAmountRub ||
+    !order.localProductId ||
+    !allowlist.includes(order.localProductId)
+  ) {
+    res.status(409).json({ error: "Подтверждать можно только полностью выданный production-заказ" });
+    return;
+  }
+  await db.update(settingsTable).set({
+    launchOrderConfirmedAt: new Date(), launchOrderConfirmationNote: parsed.data.note,
+    updatedAt: new Date(),
+  }).where(eq(settingsTable.id, 1));
+  res.json({ confirmed: true });
 });
 
 router.post("/settings/preview", async (req, res): Promise<void> => {
@@ -1863,6 +1965,26 @@ router.put("/settings", async (req, res): Promise<void> => {
     });
     return;
   }
+  const currentSettings = await getSettingsRow();
+  if (candidate.automationMode === "automatic") {
+    if (currentSettings.autonomousPaused) {
+      res.status(409).json({ error: "Сначала снимите аварийную паузу автономного режима" });
+      return;
+    }
+    if (
+      !currentSettings.launchPreflightAt ||
+      Date.now() - currentSettings.launchPreflightAt.getTime() >
+        AUTONOMOUS_PREFLIGHT_MAX_AGE_MS ||
+      !currentSettings.launchOrderConfirmedAt
+    ) {
+      res.status(409).json({ error: "Для включения автоматического режима нужны свежая предпусковая проверка (не старше 15 минут) и подтверждённый production-заказ" });
+      return;
+    }
+  }
+  if (currentSettings.autonomousPaused) {
+    res.status(409).json({ error: "Массовые изменения приостановлены оператором" });
+    return;
+  }
   let application: Awaited<ReturnType<typeof applyPricingSettings>>;
   try {
     application = await applyPricingSettings(
@@ -1896,6 +2018,7 @@ router.put("/settings", async (req, res): Promise<void> => {
   res.json(
     UpdateSettingsResponse.parse({
       ...application.settings,
+      autonomousAllowlist: (() => { try { return JSON.parse(application.settings.autonomousAllowlist); } catch { return []; } })(),
       credentialsConfigured: credentialsConfigured(),
       notificationConfigured:
         notificationWebhookUrl !== undefined ||

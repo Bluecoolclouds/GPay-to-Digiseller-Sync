@@ -5,6 +5,7 @@ import {
   db,
   activitiesTable,
   productsTable,
+  settingsTable,
   syncOrdersTable,
   syncProductDigisellerIdsTable,
 } from "@workspace/db";
@@ -255,6 +256,26 @@ async function createMappedOrder(productType: "1" | "2") {
       profitRub: 100,
     })
     .returning({ id: productsTable.id });
+  await db.insert(settingsTable).values({ id: 1 }).onConflictDoNothing();
+  const [settings] = await db
+    .select({ allowlist: settingsTable.autonomousAllowlist })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  const allowlist = (() => {
+    try {
+      const parsed = JSON.parse(settings?.allowlist ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter(Number.isInteger) : [];
+    } catch {
+      return [];
+    }
+  })();
+  await db
+    .update(settingsTable)
+    .set({
+      autonomousPaused: false,
+      autonomousAllowlist: JSON.stringify([...new Set([...allowlist, product.id])]),
+    })
+    .where(eq(settingsTable.id, 1));
   await db.insert(syncProductDigisellerIdsTable).values({
     localProductId: product.id,
     digisellerProductId,
@@ -278,6 +299,21 @@ async function removeMappedOrder(fixture: {
     .delete(syncProductDigisellerIdsTable)
     .where(eq(syncProductDigisellerIdsTable.localProductId, fixture.productId));
   await db.delete(productsTable).where(eq(productsTable.id, fixture.productId));
+  const [settings] = await db
+    .select({ allowlist: settingsTable.autonomousAllowlist })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  let allowlist: number[] = [];
+  try {
+    const parsed = JSON.parse(settings?.allowlist ?? "[]");
+    if (Array.isArray(parsed)) allowlist = parsed.filter(Number.isInteger);
+  } catch {
+    // Invalid test state is reset below.
+  }
+  await db
+    .update(settingsTable)
+    .set({ autonomousAllowlist: JSON.stringify(allowlist.filter((id) => id !== fixture.productId)) })
+    .where(eq(settingsTable.id, 1));
 }
 
 test("public order link is replaced and code is submitted once", async () => {

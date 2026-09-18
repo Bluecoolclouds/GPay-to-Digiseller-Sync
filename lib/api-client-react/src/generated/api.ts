@@ -21,6 +21,13 @@ import type {
 
 import type {
   Activity,
+  AutonomousAllowlist,
+  AutonomousAllowlistInput,
+  AutonomousOrderConfirmation,
+  AutonomousOrderConfirmationInput,
+  AutonomousPause,
+  AutonomousPauseInput,
+  AutonomousPreflight,
   BatchPublishInput,
   BatchPublishTask,
   CatalogSyncInput,
@@ -1402,6 +1409,272 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getPreviewSettingsMutationOptions(options));
+    }
+
+export const getGetAutonomousPreflightUrl = () => {
+
+
+
+
+  return `/api/autonomous/preflight`
+}
+
+export const getAutonomousPreflight = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutonomousPreflight> => {
+
+  return customFetch<AutonomousPreflight>(getGetAutonomousPreflightUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAutonomousPreflightQueryKey = () => {
+    return [
+    `/api/autonomous/preflight`
+    ] as const;
+    }
+
+
+export const getGetAutonomousPreflightQueryOptions = <TData = Awaited<ReturnType<typeof getAutonomousPreflight>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutonomousPreflight>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAutonomousPreflightQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAutonomousPreflight>>> = ({ signal }) => getAutonomousPreflight({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAutonomousPreflight>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAutonomousPreflightQueryResult = NonNullable<Awaited<ReturnType<typeof getAutonomousPreflight>>>
+export type GetAutonomousPreflightQueryError = ErrorType<unknown>
+
+
+
+export function useGetAutonomousPreflight<TData = Awaited<ReturnType<typeof getAutonomousPreflight>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutonomousPreflight>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAutonomousPreflightQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAutonomousAllowlistUrl = () => {
+
+
+
+
+  return `/api/autonomous/allowlist`
+}
+
+export const updateAutonomousAllowlist = async (autonomousAllowlistInput: AutonomousAllowlistInput, options?: Parameters<typeof customFetch>[1]): Promise<AutonomousAllowlist> => {
+
+  return customFetch<AutonomousAllowlist>(getUpdateAutonomousAllowlistUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autonomousAllowlistInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAutonomousAllowlistMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutonomousAllowlist>>, TError,{data: BodyType<AutonomousAllowlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAutonomousAllowlist>>, TError,{data: BodyType<AutonomousAllowlistInput>}, TContext> => {
+
+const mutationKey = ['updateAutonomousAllowlist'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAutonomousAllowlist>>, {data: BodyType<AutonomousAllowlistInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAutonomousAllowlist(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAutonomousAllowlistMutationResult = NonNullable<Awaited<ReturnType<typeof updateAutonomousAllowlist>>>
+    export type UpdateAutonomousAllowlistMutationBody = BodyType<AutonomousAllowlistInput>
+    export type UpdateAutonomousAllowlistMutationError = ErrorType<unknown>
+
+    export const useUpdateAutonomousAllowlist = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutonomousAllowlist>>, TError,{data: BodyType<AutonomousAllowlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAutonomousAllowlist>>,
+        TError,
+        {data: BodyType<AutonomousAllowlistInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAutonomousAllowlistMutationOptions(options));
+    }
+
+export const getSetAutonomousPauseUrl = () => {
+
+
+
+
+  return `/api/autonomous/pause`
+}
+
+export const setAutonomousPause = async (autonomousPauseInput: AutonomousPauseInput, options?: Parameters<typeof customFetch>[1]): Promise<AutonomousPause> => {
+
+  return customFetch<AutonomousPause>(getSetAutonomousPauseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autonomousPauseInput)
+  }
+);}
+
+
+
+
+
+export const getSetAutonomousPauseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutonomousPause>>, TError,{data: BodyType<AutonomousPauseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAutonomousPause>>, TError,{data: BodyType<AutonomousPauseInput>}, TContext> => {
+
+const mutationKey = ['setAutonomousPause'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAutonomousPause>>, {data: BodyType<AutonomousPauseInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setAutonomousPause(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAutonomousPauseMutationResult = NonNullable<Awaited<ReturnType<typeof setAutonomousPause>>>
+    export type SetAutonomousPauseMutationBody = BodyType<AutonomousPauseInput>
+    export type SetAutonomousPauseMutationError = ErrorType<unknown>
+
+    export const useSetAutonomousPause = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAutonomousPause>>, TError,{data: BodyType<AutonomousPauseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAutonomousPause>>,
+        TError,
+        {data: BodyType<AutonomousPauseInput>},
+        TContext
+      > => {
+      return useMutation(getSetAutonomousPauseMutationOptions(options));
+    }
+
+export const getConfirmAutonomousOrderUrl = () => {
+
+
+
+
+  return `/api/autonomous/order-confirmation`
+}
+
+export const confirmAutonomousOrder = async (autonomousOrderConfirmationInput: AutonomousOrderConfirmationInput, options?: Parameters<typeof customFetch>[1]): Promise<AutonomousOrderConfirmation> => {
+
+  return customFetch<AutonomousOrderConfirmation>(getConfirmAutonomousOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autonomousOrderConfirmationInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmAutonomousOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmAutonomousOrder>>, TError,{data: BodyType<AutonomousOrderConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmAutonomousOrder>>, TError,{data: BodyType<AutonomousOrderConfirmationInput>}, TContext> => {
+
+const mutationKey = ['confirmAutonomousOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmAutonomousOrder>>, {data: BodyType<AutonomousOrderConfirmationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmAutonomousOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmAutonomousOrderMutationResult = NonNullable<Awaited<ReturnType<typeof confirmAutonomousOrder>>>
+    export type ConfirmAutonomousOrderMutationBody = BodyType<AutonomousOrderConfirmationInput>
+    export type ConfirmAutonomousOrderMutationError = ErrorType<unknown>
+
+    export const useConfirmAutonomousOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmAutonomousOrder>>, TError,{data: BodyType<AutonomousOrderConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmAutonomousOrder>>,
+        TError,
+        {data: BodyType<AutonomousOrderConfirmationInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmAutonomousOrderMutationOptions(options));
     }
 
 export const getGetConnectionsUrl = () => {

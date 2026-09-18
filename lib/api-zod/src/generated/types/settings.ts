@@ -24,4 +24,11 @@ export interface Settings {
   customerSiteUrl: string | null;
   credentialsConfigured: boolean;
   notificationConfigured: boolean;
+  autonomousPaused: boolean;
+  /** @items.minimum 1 */
+  autonomousAllowlist: number[];
+  /** @nullable */
+  launchPreflightAt: Date | null;
+  /** @nullable */
+  launchOrderConfirmedAt: Date | null;
 }

@@ -45,6 +45,12 @@ function wasSkipped(result: unknown) {
 }
 
 export async function ensureBackgroundWorkerSchema() {
+  await db.execute(`alter table sync_settings
+    add column if not exists autonomous_paused boolean not null default false,
+    add column if not exists autonomous_allowlist text not null default '[]',
+    add column if not exists launch_preflight_at timestamptz,
+    add column if not exists launch_order_confirmed_at timestamptz,
+    add column if not exists launch_order_confirmation_note text`);
   await db.execute(`
     create table if not exists sync_background_job_state (
       name text primary key,

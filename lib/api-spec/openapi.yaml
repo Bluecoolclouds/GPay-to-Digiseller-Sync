@@ -368,6 +368,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SettingsPreview"
+  /autonomous/preflight:
+    get:
+      operationId: getAutonomousPreflight
+      tags: [settings]
+      responses:
+        "200":
+          description: Controlled autonomous launch preflight
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutonomousPreflight" }
+  /autonomous/allowlist:
+    put:
+      operationId: updateAutonomousAllowlist
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutonomousAllowlistInput" }
+      responses:
+        "200":
+          description: Updated allowlist
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutonomousAllowlist" }
+  /autonomous/pause:
+    post:
+      operationId: setAutonomousPause
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutonomousPauseInput" }
+      responses:
+        "200":
+          description: Emergency pause state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutonomousPause" }
+  /autonomous/order-confirmation:
+    post:
+      operationId: confirmAutonomousOrder
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutonomousOrderConfirmationInput" }
+      responses:
+        "200":
+          description: Operator confirmation recorded without buyer data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutonomousOrderConfirmation" }
   /connections:
     get:
       operationId: getConnections
@@ -785,7 +840,7 @@ components:
         createdAt: { type: string, format: date-time }
     Settings:
       type: object
-      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, digisellerChatCodeEnabled, digisellerThankYouPromoEnabled, customerSiteUrl, credentialsConfigured, notificationConfigured]
+      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, digisellerChatCodeEnabled, digisellerThankYouPromoEnabled, customerSiteUrl, credentialsConfigured, notificationConfigured, autonomousPaused, autonomousAllowlist, launchPreflightAt, launchOrderConfirmedAt]
       properties:
         defaultMarginPercent: { type: number }
         usdRubRate: { type: number }
@@ -801,6 +856,12 @@ components:
         customerSiteUrl: { type: [string, "null"], format: uri }
         credentialsConfigured: { type: boolean }
         notificationConfigured: { type: boolean }
+        autonomousPaused: { type: boolean }
+        autonomousAllowlist:
+          type: array
+          items: { type: integer, minimum: 1 }
+        launchPreflightAt: { type: [string, "null"], format: date-time }
+        launchOrderConfirmedAt: { type: [string, "null"], format: date-time }
     SettingsInput:
       type: object
       required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]
@@ -856,6 +917,57 @@ components:
           type: string
           format: uri
           description: HTTPS webhook URL. Omit to keep the current channel.
+    AutonomousPreflight:
+      type: object
+      required: [passed, checks, allowlistedProductCount, checkedAt]
+      properties:
+        passed: { type: boolean }
+        checks:
+          type: object
+          required: [gpay, digiseller, rate, workers, allowlist]
+          properties:
+            gpay: { type: boolean }
+            digiseller: { type: boolean }
+            rate: { type: boolean }
+            workers: { type: boolean }
+            allowlist: { type: boolean }
+        allowlistedProductCount: { type: integer }
+        checkedAt: { type: string, format: date-time }
+    AutonomousAllowlistInput:
+      type: object
+      required: [productIds]
+      properties:
+        productIds:
+          type: array
+          minItems: 5
+          maxItems: 10
+          items: { type: integer, minimum: 1 }
+    AutonomousAllowlist:
+      type: object
+      required: [productIds]
+      properties:
+        productIds: { type: array, items: { type: integer } }
+    AutonomousPauseInput:
+      type: object
+      required: [paused]
+      properties:
+        paused: { type: boolean }
+    AutonomousPause:
+      type: object
+      required: [paused]
+      properties:
+        paused: { type: boolean }
+    AutonomousOrderConfirmationInput:
+      type: object
+      required: [invoiceId, note]
+      properties:
+        invoiceId: { type: string, minLength: 1 }
+        note: { type: string, minLength: 5, maxLength: 1000 }
+    AutonomousOrderConfirmation:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed: { type: boolean }
     NotificationTestResult:
       type: object
       required: [success, message, checkedAt]
@@ -938,7 +1050,7 @@ components:
       properties:
         name:
           type: string
-          enum: [scheduler, order-sync, price-sync, purchase-reconciliation, digiseller-chat]
+          enum: [scheduler, order-sync, price-sync, purchase-reconciliation]
         intervalSeconds: { type: integer }
         lastHeartbeatAt: { type: [string, "null"], format: date-time }
         lastStartedAt: { type: [string, "null"], format: date-time }

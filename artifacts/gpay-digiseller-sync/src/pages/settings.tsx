@@ -1,26 +1,51 @@
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { useQueryClient } from "@tanstack/react-query"
-import { getGetConnectionsQueryKey, getGetSettingsQueryKey, useGetSettings, useUpdateSettings, useGetConnections, useTestConnections, usePreviewSettings, useTestNotifications, useDisableNotifications, SettingsInput } from "@workspace/api-client-react"
+import {
+  getGetAutonomousPreflightQueryKey,
+  getGetConnectionsQueryKey,
+  getGetSettingsQueryKey,
+  useConfirmAutonomousOrder,
+  useGetAutonomousPreflight,
+  useGetSettings,
+  useUpdateAutonomousAllowlist,
+  useUpdateSettings,
+  useGetConnections,
+  useSetAutonomousPause,
+  useTestConnections,
+  usePreviewSettings,
+  useTestNotifications,
+  useDisableNotifications,
+  SettingsInput,
+} from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { AlertTriangle, BellRing, Calculator, ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
+import { AlertTriangle, BellRing, Calculator, CheckCircle2, CirclePause, Play, ShieldCheck, Zap, ServerCrash, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function SettingsPage() {
   const queryClient = useQueryClient()
   const { data: settings, isLoading: settingsLoading } = useGetSettings()
+  const { data: preflight, isFetching: preflightLoading, refetch: runPreflight } = useGetAutonomousPreflight({
+    query: { enabled: false, queryKey: getGetAutonomousPreflightQueryKey() },
+  })
   const { data: connections, isLoading: connectionsLoading } = useGetConnections()
   const updateMutation = useUpdateSettings()
   const previewMutation = usePreviewSettings()
   const testConnectionsMutation = useTestConnections()
   const testNotificationsMutation = useTestNotifications()
   const disableNotificationsMutation = useDisableNotifications()
+  const allowlistMutation = useUpdateAutonomousAllowlist()
+  const pauseMutation = useSetAutonomousPause()
+  const confirmOrderMutation = useConfirmAutonomousOrder()
   const [previewedValues, setPreviewedValues] = useState("")
+  const [allowlistText, setAllowlistText] = useState("")
+  const [confirmationInvoice, setConfirmationInvoice] = useState("")
+  const [confirmationNote, setConfirmationNote] = useState("")
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>({
     defaultValues: {
@@ -48,6 +73,7 @@ export default function SettingsPage() {
         digisellerThankYouPromoEnabled: settings.digisellerThankYouPromoEnabled,
         customerSiteUrl: settings.customerSiteUrl ?? "",
       })
+      setAllowlistText(settings.autonomousAllowlist.join(", "))
     }
   }, [settings, reset])
 
@@ -81,6 +107,69 @@ export default function SettingsPage() {
   }
 
   const exchangeRateMode = watch("exchangeRateMode")
+  const automationMode = watch("automationMode")
+  const preflightIsFresh = Boolean(
+    settings?.launchPreflightAt &&
+      Date.now() - new Date(settings.launchPreflightAt).getTime() <= 15 * 60 * 1000,
+  )
+
+  const invalidateLaunchState = () => {
+    queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })
+    queryClient.invalidateQueries({ queryKey: getGetAutonomousPreflightQueryKey() })
+  }
+
+  const handleRunPreflight = async () => {
+    await runPreflight()
+    await queryClient.refetchQueries({ queryKey: getGetSettingsQueryKey() })
+  }
+
+  const saveAllowlist = () => {
+    const productIds = [...new Set(
+      allowlistText
+        .split(/[\s,;]+/)
+        .filter(Boolean)
+        .map(Number),
+    )]
+    if (productIds.some((id) => !Number.isInteger(id) || id <= 0) || productIds.length < 5 || productIds.length > 10) {
+      toast.error("Укажите от 5 до 10 корректных ID товаров")
+      return
+    }
+    allowlistMutation.mutate({ data: { productIds } }, {
+      onSuccess: () => {
+        invalidateLaunchState()
+        toast.success("Автономный набор сохранён")
+      },
+      onError: (error) => toast.error(error instanceof Error ? error.message : "Не удалось сохранить набор"),
+    })
+  }
+
+  const togglePause = () => {
+    pauseMutation.mutate({ data: { paused: !settings?.autonomousPaused } }, {
+      onSuccess: () => {
+        invalidateLaunchState()
+        toast.success(settings?.autonomousPaused ? "Аварийная пауза снята" : "Новые покупки и массовые изменения остановлены")
+      },
+      onError: () => toast.error("Не удалось изменить состояние паузы"),
+    })
+  }
+
+  const confirmProductionOrder = () => {
+    if (!confirmationInvoice.trim() || confirmationNote.trim().length < 5) {
+      toast.error("Укажите инвойс и краткое пояснение проверки")
+      return
+    }
+    confirmOrderMutation.mutate({
+      data: { invoiceId: confirmationInvoice.trim(), note: confirmationNote.trim() },
+    }, {
+      onSuccess: () => {
+        invalidateLaunchState()
+        setConfirmationInvoice("")
+        setConfirmationNote("")
+        toast.success("Production-заказ подтверждён оператором")
+      },
+      onError: () => toast.error("Заказ ещё не прошёл полный путь выдачи"),
+    })
+  }
 
   const handlePreview = handleSubmit((data) => {
     const preview = {
@@ -142,6 +231,108 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          <Card className={cn(
+            settings?.autonomousPaused
+              ? "border-destructive/50"
+              : settings?.automationMode === "automatic"
+                ? "border-emerald-500/40"
+                : "border-amber-500/40",
+          )}>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    {settings?.autonomousPaused
+                      ? <CirclePause className="h-5 w-5 text-destructive" />
+                      : <Play className="h-5 w-5 text-emerald-600" />}
+                    Контролируемый запуск
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    {settings?.autonomousPaused
+                      ? "Аварийная пауза: новые закупки и массовые изменения не запускаются."
+                      : settings?.automationMode === "automatic"
+                        ? "Автоматический режим активен только для разрешённого набора ключей."
+                        : "Ручной режим. Выполните все проверки перед включением автоматизации."}
+                  </CardDescription>
+                </div>
+                <Badge variant={settings?.autonomousPaused ? "destructive" : settings?.automationMode === "automatic" ? "success" : "secondary"}>
+                  {settings?.autonomousPaused ? "Пауза" : settings?.automationMode === "automatic" ? "Автоматический" : "Ручной"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Разрешённые товары-ключи</label>
+                <Input
+                  value={allowlistText}
+                  onChange={(event) => setAllowlistText(event.target.value)}
+                  placeholder="ID через запятую, от 5 до 10 товаров"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Сервер примет только доступные опубликованные ключи. Steam Gift и остальные товары останутся в ручном режиме.
+                </p>
+                <Button type="button" variant="outline" onClick={saveAllowlist} disabled={allowlistMutation.isPending}>
+                  Сохранить набор
+                </Button>
+              </div>
+
+              <div className="rounded-md border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">Предпусковая проверка</div>
+                    <p className="text-xs text-muted-foreground">
+                      GPay, Digiseller, курс, расписание worker-процессов и доступность allowlist.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={handleRunPreflight} disabled={preflightLoading}>
+                    <RefreshCw className={cn("mr-2 h-4 w-4", preflightLoading && "animate-spin")} />
+                    Проверить
+                  </Button>
+                </div>
+                {preflight && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+                    {Object.entries(preflight.checks).map(([name, passed]) => (
+                      <div key={name} className="flex items-center gap-1.5">
+                        {passed
+                          ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                        <span>{{ gpay: "GPay", digiseller: "Digiseller", rate: "Курс", workers: "Worker", allowlist: "Набор" }[name]}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-md border p-4">
+                <div className="font-medium">Подтверждение реального заказа</div>
+                <p className="text-xs text-muted-foreground">
+                  Укажите только инвойс полностью выданного дешёвого заказа и служебную заметку. Данные покупателя не сохраняются.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input value={confirmationInvoice} onChange={(event) => setConfirmationInvoice(event.target.value)} placeholder="Инвойс" />
+                  <Input value={confirmationNote} onChange={(event) => setConfirmationNote(event.target.value)} placeholder="Как проверен результат" />
+                </div>
+                <Button type="button" variant="outline" onClick={confirmProductionOrder} disabled={confirmOrderMutation.isPending}>
+                  Подтвердить полный путь
+                </Button>
+                {settings?.launchOrderConfirmedAt && (
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                    Проверка заказа подтверждена {new Date(settings.launchOrderConfirmedAt).toLocaleString("ru-RU")}.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <p className="max-w-xl text-xs text-muted-foreground">
+                  Пауза не отменяет уже начатые закупки и выдачу: они безопасно завершаются, а новые операции остаются в очереди.
+                </p>
+                <Button type="button" variant={settings?.autonomousPaused ? "outline" : "destructive"} onClick={togglePause} disabled={pauseMutation.isPending}>
+                  {settings?.autonomousPaused ? "Снять аварийную паузу" : "Аварийно приостановить"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <form id="settings-form" onSubmit={handleSubmit(onSubmit)}>
             <Card>
               <CardHeader>
@@ -258,8 +449,15 @@ export default function SettingsPage() {
                     {...register("automationMode")}
                   >
                     <option value="manual">Ручной</option>
-                    <option value="automatic">Автоматический</option>
+                    <option value="automatic" disabled={Boolean(settings?.autonomousPaused || !preflightIsFresh || !settings?.launchOrderConfirmedAt)}>
+                      Автоматический
+                    </option>
                   </select>
+                  {automationMode !== "automatic" && (!preflightIsFresh || !settings?.launchOrderConfirmedAt) && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Автоматический режим станет доступен после успешной проверки и подтверждения production-заказа.
+                    </p>
+                  )}
                 </div>
                 
                 <div className="flex items-center justify-between pt-2 border-t">

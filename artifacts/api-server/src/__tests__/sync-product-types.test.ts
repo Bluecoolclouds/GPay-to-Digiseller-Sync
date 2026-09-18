@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
   activitiesTable,
+  backgroundJobStateTable,
   db,
   pool,
   productsTable,
@@ -169,6 +170,17 @@ async function seedProducts() {
   ]);
 }
 
+async function allowlistProductsByGpayIds(gpayIds: number[]) {
+  const products = await db
+    .select({ id: productsTable.id })
+    .from(productsTable)
+    .where(inArray(productsTable.gpayId, gpayIds));
+  await db
+    .update(settingsTable)
+    .set({ autonomousAllowlist: JSON.stringify(products.map((product) => product.id)) })
+    .where(eq(settingsTable.id, 1));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await originalFetch(`${baseUrl}${path}`, {
     ...init,
@@ -309,6 +321,146 @@ test("bulk margin update recalculates every selected draft atomically", async ()
   assert.ok(updated.every((product) => product.marginPercent === 27.5));
   assert.ok(updated.every((product) => product.profitRub >= 100));
   assert.ok(updated.every((product) => product.salePriceRub > 0));
+});
+
+test("emergency pause rejects bulk margin changes without touching products", async () => {
+  await seedProducts();
+  const [selected] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.gpayId, keyGpayId));
+  await db
+    .update(settingsTable)
+    .set({ autonomousPaused: true })
+    .where(eq(settingsTable.id, 1));
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/products/bulk-margin`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        productIds: [selected.id],
+        marginPercent: 42,
+      }),
+    });
+    const body = (await response.json()) as { error?: string };
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, selected.id));
+
+    assert.equal(response.status, 409);
+    assert.match(body.error ?? "", /приостановлены оператором/i);
+    assert.equal(saved.marginPercent, 15);
+  } finally {
+    await db
+      .update(settingsTable)
+      .set({ autonomousPaused: false })
+      .where(eq(settingsTable.id, 1));
+  }
+});
+
+test("manual mode can pass preflight after a recent skipped price-sync run", async () => {
+  const now = new Date();
+  const preflightGpayIds = Array.from(
+    { length: 5 },
+    (_, index) => 1_150_001_000 + index,
+  );
+  await db.delete(productsTable).where(inArray(productsTable.gpayId, preflightGpayIds));
+  const products = await db
+    .insert(productsTable)
+    .values(
+      preflightGpayIds.map((gpayId, index) => ({
+        gpayId,
+        digisellerId: 1_950_001_000 + index,
+        name: `Preflight key ${index + 1}`,
+        productType: "2",
+        supplierPriceUsd: 1,
+        salePriceRub: 200,
+        marginPercent: 15,
+        profitRub: 100,
+        isAvailable: true,
+        publicationStatus: "published" as const,
+      })),
+    )
+    .returning({ id: productsTable.id });
+  await db
+    .update(settingsTable)
+    .set({
+      automationMode: "manual",
+      exchangeRateMode: "manual",
+      usdRubRate: 92,
+      autonomousAllowlist: JSON.stringify(products.map((product) => product.id)),
+      launchPreflightAt: null,
+    })
+    .where(eq(settingsTable.id, 1));
+  await db.delete(backgroundJobStateTable);
+  await db.insert(backgroundJobStateTable).values([
+    {
+      name: "scheduler",
+      intervalSeconds: 30,
+      lastHeartbeatAt: now,
+    },
+    ...(["purchase-reconciliation", "order-sync", "digiseller-chat"] as const).map(
+      (name) => ({
+        name,
+        intervalSeconds: 60,
+        lastHeartbeatAt: now,
+        lastStartedAt: now,
+        lastSuccessfulAt: now,
+        lastFinishedAt: now,
+      }),
+    ),
+    {
+      name: "price-sync",
+      intervalSeconds: 60 * 60,
+      lastHeartbeatAt: now,
+      lastStartedAt: now,
+      lastSuccessfulAt: null,
+      lastFinishedAt: now,
+      lastResult: JSON.stringify({ skipped: true }),
+    },
+  ]);
+
+  try {
+    const result = await request<{
+      passed: boolean;
+      checks: { workers: boolean };
+    }>("/api/autonomous/preflight");
+    const [settings] = await db
+      .select({ launchPreflightAt: settingsTable.launchPreflightAt })
+      .from(settingsTable)
+      .where(eq(settingsTable.id, 1));
+
+    assert.equal(result.passed, true);
+    assert.equal(result.checks.workers, true);
+    assert.ok(settings.launchPreflightAt);
+  } finally {
+    await db.delete(productsTable).where(inArray(productsTable.gpayId, preflightGpayIds));
+    await db.delete(backgroundJobStateTable);
+  }
+});
+
+test("failed autonomous preflight invalidates an earlier successful check", async () => {
+  const previousCheck = new Date();
+  await db
+    .update(settingsTable)
+    .set({
+      autonomousAllowlist: "[]",
+      exchangeRateMode: "manual",
+      usdRubRate: 92,
+      launchPreflightAt: previousCheck,
+    })
+    .where(eq(settingsTable.id, 1));
+
+  const result = await request<{ passed: boolean }>("/api/autonomous/preflight");
+  const [settings] = await db
+    .select({ launchPreflightAt: settingsTable.launchPreflightAt })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+
+  assert.equal(result.passed, false);
+  assert.equal(settings.launchPreflightAt, null);
 });
 
 test("filtered margin update reports exact totals and changes only matching products", async () => {
@@ -601,6 +753,7 @@ async function preparePublishedPriceFixture() {
       target: settingsTable.id,
       set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
+  await allowlistProductsByGpayIds([keyGpayId]);
 }
 
 function usePriceSyncResponses(status: Record<string, unknown>) {
@@ -661,6 +814,31 @@ test("published price is saved locally only after Digiseller confirms success", 
     assert.equal(result.failed, 0);
     assert.equal(saved.supplierPriceUsd, 21);
     assert.notEqual(saved.salePriceRub, 1100);
+  } finally {
+    fetchOverride = undefined;
+  }
+});
+
+test("non-allowlisted published price remains unchanged locally and remotely", async () => {
+  await preparePublishedPriceFixture();
+  await db
+    .update(settingsTable)
+    .set({ autonomousAllowlist: "[]" })
+    .where(eq(settingsTable.id, 1));
+  usePriceSyncResponses({ Status: 3, ErrorCount: 0 });
+
+  try {
+    const result = await syncKeyPrices();
+    const [saved] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.gpayId, keyGpayId));
+
+    assert.equal(result.changed, 1);
+    assert.equal(result.digisellerUpdated, 0);
+    assert.equal(saved.supplierPriceUsd, 11);
+    assert.equal(saved.salePriceRub, 1100);
+    assert.equal(saved.isAvailable, true);
   } finally {
     fetchOverride = undefined;
   }
@@ -1415,6 +1593,7 @@ test("a failed price batch does not prevent later batches from saving", async ()
       target: settingsTable.id,
       set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
+  await allowlistProductsByGpayIds(batchGpayIds);
 
   fetchOverride = async (input, init) => {
     const url = String(input);
@@ -1867,6 +2046,7 @@ test("hourly sync does not stock legacy Text notices", async () => {
       target: settingsTable.id,
       set: { automationMode: "automatic", exchangeRateMode: "manual" },
     });
+  await allowlistProductsByGpayIds(stockFixtureIds);
 
   fetchOverride = async (input, init) => {
     const url = String(input);
