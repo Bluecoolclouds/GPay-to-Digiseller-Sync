@@ -19,5 +19,12 @@ export const settingsTable = pgTable("sync_settings", {
   automationMode: text("automation_mode").notNull().default("manual"),
   disableOnUnavailable: boolean("disable_on_unavailable").notNull().default(true),
   notificationWebhookEncrypted: text("notification_webhook_encrypted"),
+  digisellerChatCodeEnabled: boolean("digiseller_chat_code_enabled")
+    .notNull()
+    .default(false),
+  digisellerThankYouPromoEnabled: boolean("digiseller_thank_you_promo_enabled")
+    .notNull()
+    .default(false),
+  customerSiteUrl: text("customer_site_url"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

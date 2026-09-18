@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images, Save } from "lucide-react"
+import { Search, Filter, Play, Check, AlertTriangle, ArrowRight, Images, Save, RotateCcw } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { getListProductsQueryKey } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
@@ -700,7 +700,9 @@ function ProductRow({
               </div>
               <div className="mt-1 break-words">{product.publicationError}</div>
               {product.publicationFailureStage === "image" && (
-                <div className="mt-1 font-medium">Повторите публикацию, чтобы загрузить изображение.</div>
+                <div className="mt-1 font-medium">
+                  Карточка уже создана. Повторная попытка обновит только незавершённые этапы и не создаст дубликат.
+                </div>
               )}
               {product.publicationFailureStage === "uncertain" && (
                 <div className="mt-1 font-medium">Не запускайте создание повторно, пока не проверите карточку в Digiseller.</div>
@@ -763,7 +765,17 @@ function ProductRow({
                 onClick={handlePublish}
                 disabled={batchIsActive || publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
               >
-                <Play className="w-3 h-3" /> Опубликовать
+                {product.publicationFailureStage === "image" ? (
+                  <>
+                    <RotateCcw className="w-3 h-3" />
+                    {publishMutation.isPending ? "Повторяем…" : "Повторить изображение"}
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3" />
+                    Опубликовать
+                  </>
+                )}
               </Button>
             </>
           )}

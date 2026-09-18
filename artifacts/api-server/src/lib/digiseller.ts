@@ -167,6 +167,101 @@ export async function loginDigiseller(): Promise<string> {
   return json.token;
 }
 
+export type DigisellerChat = {
+  id: number;
+  unread: boolean;
+};
+
+export type DigisellerChatMessage = {
+  id: number;
+  text: string;
+  fromSeller: boolean;
+  deleted: boolean;
+  file: boolean;
+};
+
+function chatJson(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === "object") {
+    const value = body as Record<string, unknown>;
+    for (const key of ["chats", "items", "messages", "data", "rows"]) {
+      if (Array.isArray(value[key])) return value[key] as unknown[];
+    }
+  }
+  return [];
+}
+
+export async function fetchDigisellerBuyerChats(token: string) {
+  const result: DigisellerChat[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const url = new URL("https://api.digiseller.com/api/debates/v2/chats");
+    url.searchParams.set("token", token);
+    url.searchParams.set("filter_new", "1");
+    url.searchParams.set("pagesize", "200");
+    url.searchParams.set("page", String(page));
+    const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    const body = await response.json();
+    if (!response.ok) throw new Error(`Не удалось получить чаты Digiseller (${response.status})`);
+    const rows = chatJson(body);
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const item = row as Record<string, unknown>;
+      const id = Number(item.id_i ?? item.id ?? item.chat_id ?? item.id_chat);
+      if (Number.isInteger(id) && id > 0) result.push({ id, unread: true });
+    }
+    if (rows.length < 200) break;
+  }
+  return [...new Map(result.map((chat) => [chat.id, chat])).values()];
+}
+
+export async function fetchDigisellerChatMessages(token: string, chatId: number, oldId?: number) {
+  const url = new URL("https://api.digiseller.com/api/debates/v2");
+  url.searchParams.set("token", token);
+  url.searchParams.set("id_i", String(chatId));
+  if (oldId) url.searchParams.set("old_id", String(oldId));
+  url.searchParams.set("newer", "1");
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  const body = await response.json();
+  if (!response.ok) throw new Error(`Не удалось получить сообщения Digiseller (${response.status})`);
+  return chatJson(body).map((row): DigisellerChatMessage | null => {
+    if (!row || typeof row !== "object") return null;
+    const item = row as Record<string, unknown>;
+    const id = Number(item.id ?? item.id_message ?? item.message_id);
+    const text = String(item.message ?? item.text ?? item.body ?? "").trim();
+    const sender = String(item.author ?? item.sender ?? item.user_type ?? "").toLowerCase();
+    return {
+      id,
+      text,
+      fromSeller: item.is_seller === true || item.seller === true || Number(item.seller) === 1 || sender === "seller" || Number(item.buyer) !== 1,
+      deleted: item.deleted === true || item.is_deleted === true || Number(item.deleted) === 1,
+      file: item.is_file === true || Number(item.is_file) === 1,
+    };
+  }).filter((message): message is DigisellerChatMessage =>
+    Boolean(message && Number.isInteger(message.id) && message.id > 0),
+  );
+}
+
+export async function sendDigisellerChatMessage(token: string, chatId: number, message: string) {
+  const url = new URL("https://api.digiseller.com/api/debates/v2/");
+  url.searchParams.set("token", token);
+  url.searchParams.set("id_i", String(chatId));
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message, files: [] }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`Не удалось отправить сообщение Digiseller (${response.status})`);
+}
+
+export async function markDigisellerChatSeen(token: string, chatId: number) {
+  const url = new URL("https://api.digiseller.com/api/debates/v2/seen");
+  url.searchParams.set("token", token);
+  url.searchParams.set("id_i", String(chatId));
+  const response = await fetch(url, { method: "POST", signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`Не удалось отметить чат прочитанным (${response.status})`);
+}
+
 export async function fetchDigisellerSellerProducts(
   providedToken?: string,
 ): Promise<DigisellerSellerProduct[]> {

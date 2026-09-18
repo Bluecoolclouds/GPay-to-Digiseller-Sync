@@ -18,6 +18,10 @@ export interface Settings {
   minimumProfitRub: number;
   automationMode: SettingsAutomationMode;
   disableOnUnavailable: boolean;
+  digisellerChatCodeEnabled: boolean;
+  digisellerThankYouPromoEnabled: boolean;
+  /** @nullable */
+  customerSiteUrl: string | null;
   credentialsConfigured: boolean;
   notificationConfigured: boolean;
 }

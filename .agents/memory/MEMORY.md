@@ -13,3 +13,4 @@
 - [Fulfillment crash recovery](fulfillment-crash-recovery.md) — recover every durable delivery state between supplier purchase and marketplace confirmation.
 - [Atomic pricing settings](atomic-pricing-settings.md) — activate pricing rules only after serialized Digiseller price application succeeds or is safely rolled back.
 - [Digiseller state-change reconciliation](digiseller-state-change-reconciliation.md) — confirm seller-visible state after ambiguous external mutations before local commit.
+- [Digiseller buyer chat promotions](digiseller-buyer-chat-promotions.md) — promo codes are validated once in chat, but the 5% discount is applied manually unless Digiseller adds a supported API.

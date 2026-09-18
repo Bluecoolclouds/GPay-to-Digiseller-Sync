@@ -33,6 +33,10 @@ export interface SettingsApplyInput {
   minimumProfitRub: number;
   automationMode: SettingsApplyInputAutomationMode;
   disableOnUnavailable: boolean;
+  digisellerChatCodeEnabled?: boolean;
+  digisellerThankYouPromoEnabled?: boolean;
+  /** @nullable */
+  customerSiteUrl?: string | null;
   /** @minLength 1 */
   previewToken: string;
   /** HTTPS webhook URL. Omit to keep the current channel. */

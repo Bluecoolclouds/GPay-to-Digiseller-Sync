@@ -394,6 +394,9 @@ export const GetSettingsResponse = zod.object({
   "minimumProfitRub": zod.number(),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
+  "digisellerChatCodeEnabled": zod.boolean(),
+  "digisellerThankYouPromoEnabled": zod.boolean(),
+  "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
   "notificationConfigured": zod.boolean()
 })
@@ -427,6 +430,9 @@ export const UpdateSettingsBody = zod.object({
   "minimumProfitRub": zod.number().min(updateSettingsBodyMinimumProfitRubMin),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
+  "digisellerChatCodeEnabled": zod.boolean().optional(),
+  "digisellerThankYouPromoEnabled": zod.boolean().optional(),
+  "customerSiteUrl": zod.string().url().nullish(),
   "previewToken": zod.string().min(1),
   "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })
@@ -441,6 +447,9 @@ export const UpdateSettingsResponse = zod.object({
   "minimumProfitRub": zod.number(),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
+  "digisellerChatCodeEnabled": zod.boolean(),
+  "digisellerThankYouPromoEnabled": zod.boolean(),
+  "customerSiteUrl": zod.string().url().nullable(),
   "credentialsConfigured": zod.boolean(),
   "notificationConfigured": zod.boolean()
 })
@@ -473,6 +482,9 @@ export const PreviewSettingsBody = zod.object({
   "minimumProfitRub": zod.number().min(previewSettingsBodyMinimumProfitRubMin),
   "automationMode": zod.enum(['manual', 'automatic']),
   "disableOnUnavailable": zod.boolean(),
+  "digisellerChatCodeEnabled": zod.boolean().optional(),
+  "digisellerThankYouPromoEnabled": zod.boolean().optional(),
+  "customerSiteUrl": zod.string().url().nullish(),
   "notificationWebhookUrl": zod.string().url().optional().describe('HTTPS webhook URL. Omit to keep the current channel.')
 })
 
@@ -602,7 +614,7 @@ export const ListOrdersResponse = zod.object({
   "isStale": zod.boolean()
 }),
   "workers": zod.array(zod.object({
-  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation']),
+  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation', 'digiseller-chat']),
   "intervalSeconds": zod.number().int(),
   "lastHeartbeatAt": zod.coerce.date().nullable(),
   "lastStartedAt": zod.coerce.date().nullable(),

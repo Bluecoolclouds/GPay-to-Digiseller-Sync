@@ -1740,6 +1740,23 @@ router.post("/settings/preview", async (req, res): Promise<void> => {
   }
   const { notificationWebhookUrl: _notificationWebhookUrl, ...candidate } =
     parsed.data;
+  candidate.customerSiteUrl = candidate.customerSiteUrl?.trim() || null;
+  if (candidate.digisellerChatCodeEnabled) {
+    try {
+      if (
+        !candidate.customerSiteUrl ||
+        new URL(candidate.customerSiteUrl).protocol !== "https:"
+      ) {
+        throw new Error();
+      }
+    } catch {
+      res.status(400).json({
+        error:
+          "Для обработки кодов из чата укажите полный HTTPS-адрес клиентского сайта",
+      });
+      return;
+    }
+  }
   const rate =
     candidate.exchangeRateMode === "manual"
       ? {
@@ -1807,6 +1824,19 @@ router.put("/settings", async (req, res): Promise<void> => {
     return;
   }
   const { previewToken, notificationWebhookUrl, ...candidate } = parsed.data;
+  candidate.customerSiteUrl = candidate.customerSiteUrl?.trim() || null;
+  if (candidate.digisellerChatCodeEnabled) {
+    if (!candidate.customerSiteUrl) {
+      res.status(400).json({ error: "Укажите HTTPS URL клиентского сайта для ссылок из чата" });
+      return;
+    }
+    try {
+      if (new URL(candidate.customerSiteUrl).protocol !== "https:") throw new Error();
+    } catch {
+      res.status(400).json({ error: "URL клиентского сайта должен использовать HTTPS" });
+      return;
+    }
+  }
   if (notificationWebhookUrl) {
     try {
       await validateNotificationWebhookUrl(notificationWebhookUrl);

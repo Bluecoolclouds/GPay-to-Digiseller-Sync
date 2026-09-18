@@ -23,6 +23,7 @@ await build({
     path.resolve(artifactDir, "src/__tests__/public-orders.test.ts"),
     path.resolve(artifactDir, "src/__tests__/background-worker.test.ts"),
     path.resolve(artifactDir, "src/__tests__/notifications.test.ts"),
+    path.resolve(artifactDir, "src/__tests__/digiseller-chat.test.ts"),
   ],
   platform: "node",
   bundle: true,

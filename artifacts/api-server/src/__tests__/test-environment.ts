@@ -11,6 +11,7 @@ const syncSchema = `sync_product_types_test_${schemaSuffix}`;
 const publicOrdersSchema = `public_orders_test_${schemaSuffix}`;
 const backgroundWorkerSchema = `background_worker_test_${schemaSuffix}`;
 const notificationsSchema = `notifications_test_${schemaSuffix}`;
+const digisellerChatSchema = `digiseller_chat_test_${schemaSuffix}`;
 assert.match(syncSchema, /^sync_product_types_test_[a-f0-9]+$/);
 assert.match(publicOrdersSchema, /^public_orders_test_[a-f0-9]+$/);
 assert.match(backgroundWorkerSchema, /^background_worker_test_[a-f0-9]+$/);
@@ -28,6 +29,7 @@ const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mj
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
 const backgroundWorkerTestFile = path.join(compiledDir, "background-worker.test.mjs");
 const notificationsTestFile = path.join(compiledDir, "notifications.test.mjs");
+const digisellerChatTestFile = path.join(compiledDir, "digiseller-chat.test.mjs");
 
 const authTestFile = path.join(compiledDir, "auth.test.mjs");
 function environmentFor(schema: string) {
@@ -88,10 +90,16 @@ try {
   await createTestSchema(backgroundWorkerSchema);
   await createTestSchema(syncSchema);
   await createTestSchema(notificationsSchema);
+  await createTestSchema(digisellerChatSchema);
   run(
     process.execPath,
     ["--test", "--test-concurrency=1", publicOrdersTestFile],
     environmentFor(publicOrdersSchema),
+  );
+  run(
+    process.execPath,
+    ["--test", "--test-concurrency=1", digisellerChatTestFile],
+    environmentFor(digisellerChatSchema),
   );
   run(
     process.execPath,
@@ -109,6 +117,7 @@ try {
   await pool.query(`drop schema if exists "${backgroundWorkerSchema}" cascade`);
   await pool.query(`drop schema if exists "${syncSchema}" cascade`);
   await pool.query(`drop schema if exists "${notificationsSchema}" cascade`);
+  await pool.query(`drop schema if exists "${digisellerChatSchema}" cascade`);
   await pool.end();
   await rm(compiledDir, { recursive: true, force: true });
 }

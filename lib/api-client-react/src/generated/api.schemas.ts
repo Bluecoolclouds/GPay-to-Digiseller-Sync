@@ -393,6 +393,10 @@ export interface Settings {
   minimumProfitRub: number;
   automationMode: SettingsAutomationMode;
   disableOnUnavailable: boolean;
+  digisellerChatCodeEnabled: boolean;
+  digisellerThankYouPromoEnabled: boolean;
+  /** @nullable */
+  customerSiteUrl: string | null;
   credentialsConfigured: boolean;
   notificationConfigured: boolean;
 }
@@ -438,6 +442,10 @@ export interface SettingsInput {
   minimumProfitRub: number;
   automationMode: SettingsInputAutomationMode;
   disableOnUnavailable: boolean;
+  digisellerChatCodeEnabled?: boolean;
+  digisellerThankYouPromoEnabled?: boolean;
+  /** @nullable */
+  customerSiteUrl?: string | null;
   /** HTTPS webhook URL. Omit to keep the current channel. */
   notificationWebhookUrl?: string;
 }
@@ -501,6 +509,10 @@ export interface SettingsApplyInput {
   minimumProfitRub: number;
   automationMode: SettingsApplyInputAutomationMode;
   disableOnUnavailable: boolean;
+  digisellerChatCodeEnabled?: boolean;
+  digisellerThankYouPromoEnabled?: boolean;
+  /** @nullable */
+  customerSiteUrl?: string | null;
   /** @minLength 1 */
   previewToken: string;
   /** HTTPS webhook URL. Omit to keep the current channel. */
@@ -609,6 +621,7 @@ export const BackgroundJobHealthName = {
   'order-sync': 'order-sync',
   'price-sync': 'price-sync',
   'purchase-reconciliation': 'purchase-reconciliation',
+  'digiseller-chat': 'digiseller-chat',
 } as const;
 
 export interface BackgroundJobHealth {

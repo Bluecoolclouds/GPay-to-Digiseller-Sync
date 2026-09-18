@@ -26,6 +26,9 @@ export default function SettingsPage() {
     defaultValues: {
       exchangeRateMode: "cbr",
       disableOnUnavailable: true,
+      digisellerChatCodeEnabled: false,
+      digisellerThankYouPromoEnabled: false,
+      customerSiteUrl: "",
     },
   })
 
@@ -40,13 +43,19 @@ export default function SettingsPage() {
         fixedReserveRub: settings.fixedReserveRub,
         minimumProfitRub: settings.minimumProfitRub,
         automationMode: settings.automationMode as any,
-        disableOnUnavailable: settings.disableOnUnavailable
+        disableOnUnavailable: settings.disableOnUnavailable,
+        digisellerChatCodeEnabled: settings.digisellerChatCodeEnabled,
+        digisellerThankYouPromoEnabled: settings.digisellerThankYouPromoEnabled,
+        customerSiteUrl: settings.customerSiteUrl ?? "",
       })
     }
   }, [settings, reset])
 
   const onSubmit = (data: SettingsInput) => {
-    const update = { ...data }
+    const update = {
+      ...data,
+      customerSiteUrl: data.customerSiteUrl?.trim() || null,
+    }
     if (!update.notificationWebhookUrl?.trim()) {
       delete update.notificationWebhookUrl
     }
@@ -74,7 +83,10 @@ export default function SettingsPage() {
   const exchangeRateMode = watch("exchangeRateMode")
 
   const handlePreview = handleSubmit((data) => {
-    const preview = { ...data }
+    const preview = {
+      ...data,
+      customerSiteUrl: data.customerSiteUrl?.trim() || null,
+    }
     if (!preview.notificationWebhookUrl?.trim()) {
       delete preview.notificationWebhookUrl
     }
@@ -259,6 +271,43 @@ export default function SettingsPage() {
                     checked={watch("disableOnUnavailable")} 
                     onCheckedChange={(c) => setValue("disableOnUnavailable", c)}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Чат Digiseller</CardTitle>
+                <CardDescription>
+                  Для API-ключа Digiseller нужны права переписки с покупателями:
+                  просмотр и отправка сообщений.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-medium">Принимать 16-значные коды в чате</label>
+                    <p className="max-w-md text-xs text-muted-foreground">
+                      Проверяет код заказа и отправляет покупателю ссылку на страницу получения.
+                    </p>
+                  </div>
+                  <Switch checked={watch("digisellerChatCodeEnabled")} onCheckedChange={(value) => setValue("digisellerChatCodeEnabled", value)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-medium">Отправлять промокод после выдачи ключа</label>
+                    <p className="max-w-md text-xs text-muted-foreground">
+                      Одноразовый код на 5% действует 30 дней. Скидку оператор применяет вручную.
+                    </p>
+                  </div>
+                  <Switch checked={watch("digisellerThankYouPromoEnabled")} onCheckedChange={(value) => setValue("digisellerThankYouPromoEnabled", value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">URL клиентского сайта</label>
+                  <Input type="url" placeholder="https://example.com/app" {...register("customerSiteUrl")} />
+                  <p className="text-xs text-muted-foreground">
+                    Укажите HTTPS-адрес вместе с базовым путём приложения, без завершающего слеша.
+                  </p>
                 </div>
               </CardContent>
             </Card>

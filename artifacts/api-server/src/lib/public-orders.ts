@@ -36,6 +36,7 @@ import {
   verifyDigisellerUniqueCode,
 } from "./digiseller";
 import { logger } from "./logger";
+import { sendDigisellerThankYou } from "./digiseller-chat";
 import {
   notifyFailure,
   notifyRecovery,
@@ -132,6 +133,7 @@ export async function getPublicOrder(token: string) {
   const tokenHash = hash(token);
   const [order] = await db
     .select({
+      id: syncOrdersTable.id,
       productName: syncOrdersTable.productName,
       code: syncOrdersTable.publicCodeEncrypted,
       expiresAt: syncOrdersTable.publicLinkExpiresAt,
@@ -154,7 +156,7 @@ export async function getPublicOrder(token: string) {
         isNull(syncOrdersTable.publicOpenedAt),
       ),
     );
-  return {
+  const result = {
     returned: false as const,
     productName: order.productName,
     code: order.submittedAt ? "" : decrypt(order.code),
@@ -165,6 +167,12 @@ export async function getPublicOrder(token: string) {
     expiresAt: order.expiresAt,
     alreadySubmitted: Boolean(order.submittedAt),
   };
+  if (result.deliveryStatus === "delivered" && result.deliveredKey) {
+    void sendDigisellerThankYou(order.id).catch((error) => {
+      logger.warn({ err: error, orderId: order.id }, "Could not send Digiseller thank-you");
+    });
+  }
+  return result;
 }
 
 export async function submitPublicOrderCode(token: string, code: string) {

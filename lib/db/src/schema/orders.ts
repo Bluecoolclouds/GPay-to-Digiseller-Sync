@@ -14,7 +14,8 @@ export type BackgroundJobName =
   | "scheduler"
   | "order-sync"
   | "price-sync"
-  | "purchase-reconciliation";
+  | "purchase-reconciliation"
+  | "digiseller-chat";
 
 export const syncOrderStatus = pgEnum("sync_order_status", [
   "new",
@@ -44,6 +45,26 @@ export const syncOrdersTable = pgTable(
     publicSubmittedCodeHash: text("public_submitted_code_hash"),
     publicSubmittedCodeEncrypted: text("public_submitted_code_encrypted"),
     publicSubmissionError: text("public_submission_error"),
+    digisellerChatId: integer("digiseller_chat_id"),
+    digisellerChatLastMessageId: integer("digiseller_chat_last_message_id"),
+    digisellerChatLinkSentAt: timestamp("digiseller_chat_link_sent_at", {
+      withTimezone: true,
+    }),
+    digisellerChatLinkEncrypted: text("digiseller_chat_link_encrypted"),
+    digisellerChatThankYouSentAt: timestamp(
+      "digiseller_chat_thank_you_sent_at",
+      { withTimezone: true },
+    ),
+    digisellerChatError: text("digiseller_chat_error"),
+    promoCodeEncrypted: text("promo_code_encrypted"),
+    promoCodeHash: text("promo_code_hash"),
+    promoCodeExpiresAt: timestamp("promo_code_expires_at", {
+      withTimezone: true,
+    }),
+    promoCodeRedeemedAt: timestamp("promo_code_redeemed_at", {
+      withTimezone: true,
+    }),
+    promoCodeRedeemedInvoiceId: text("promo_code_redeemed_invoice_id"),
     gpayPurchaseStatus: text("gpay_purchase_status"),
     gpayPurchaseUniqueCode: text("gpay_purchase_unique_code"),
     gpayPurchaseOrderId: integer("gpay_purchase_order_id"),
@@ -86,6 +107,9 @@ export const syncOrdersTable = pgTable(
     gpayPurchaseUniqueCodeUnique: uniqueIndex(
       "sync_orders_gpay_purchase_unique_code_unique",
     ).on(table.gpayPurchaseUniqueCode),
+    promoCodeHashUnique: uniqueIndex("sync_orders_promo_code_hash_unique").on(
+      table.promoCodeHash,
+    ),
   }),
 );
 

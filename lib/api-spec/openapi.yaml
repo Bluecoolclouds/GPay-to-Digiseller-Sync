@@ -785,7 +785,7 @@ components:
         createdAt: { type: string, format: date-time }
     Settings:
       type: object
-      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, credentialsConfigured, notificationConfigured]
+      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, digisellerChatCodeEnabled, digisellerThankYouPromoEnabled, customerSiteUrl, credentialsConfigured, notificationConfigured]
       properties:
         defaultMarginPercent: { type: number }
         usdRubRate: { type: number }
@@ -796,6 +796,9 @@ components:
         minimumProfitRub: { type: number }
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
+        digisellerChatCodeEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled: { type: boolean }
+        customerSiteUrl: { type: [string, "null"], format: uri }
         credentialsConfigured: { type: boolean }
         notificationConfigured: { type: boolean }
     SettingsInput:
@@ -811,6 +814,9 @@ components:
         minimumProfitRub: { type: number, minimum: 0 }
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
+        digisellerChatCodeEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled: { type: boolean }
+        customerSiteUrl: { type: [string, "null"], format: uri }
         notificationWebhookUrl:
           type: string
           format: uri
@@ -842,6 +848,9 @@ components:
         minimumProfitRub: { type: number, minimum: 0 }
         automationMode: { type: string, enum: [manual, automatic] }
         disableOnUnavailable: { type: boolean }
+        digisellerChatCodeEnabled: { type: boolean }
+        digisellerThankYouPromoEnabled: { type: boolean }
+        customerSiteUrl: { type: [string, "null"], format: uri }
         previewToken: { type: string, minLength: 1 }
         notificationWebhookUrl:
           type: string
@@ -929,7 +938,7 @@ components:
       properties:
         name:
           type: string
-          enum: [scheduler, order-sync, price-sync, purchase-reconciliation]
+          enum: [scheduler, order-sync, price-sync, purchase-reconciliation, digiseller-chat]
         intervalSeconds: { type: integer }
         lastHeartbeatAt: { type: [string, "null"], format: date-time }
         lastStartedAt: { type: [string, "null"], format: date-time }

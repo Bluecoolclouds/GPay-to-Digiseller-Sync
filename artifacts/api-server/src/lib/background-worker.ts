@@ -4,6 +4,7 @@ import { logger } from "./logger";
 import { syncDigisellerOrders } from "./orders";
 import { syncKeyPrices } from "./price-sync";
 import { reconcilePendingGPayPurchases } from "./public-orders";
+import { syncDigisellerBuyerChats } from "./digiseller-chat";
 import {
   notifyFailure,
   notifyRecovery,
@@ -16,6 +17,7 @@ const JOB_LOCKS: Record<Exclude<BackgroundJobName, "scheduler">, number> = {
   "price-sync": 704_291_173,
   "order-sync": 704_291_174,
   "purchase-reconciliation": 704_291_175,
+  "digiseller-chat": 704_291_176,
 };
 
 export const BACKGROUND_JOBS = [
@@ -26,6 +28,7 @@ export const BACKGROUND_JOBS = [
   },
   { name: "order-sync", intervalSeconds: 5 * 60, run: syncDigisellerOrders },
   { name: "price-sync", intervalSeconds: 60 * 60, run: syncKeyPrices },
+  { name: "digiseller-chat", intervalSeconds: 60, run: syncDigisellerBuyerChats },
 ] as const;
 
 function describeError(error: unknown) {
@@ -56,6 +59,21 @@ export async function ensureBackgroundWorkerSchema() {
       updated_at timestamptz not null default now()
     )
   `);
+  await db.execute(`alter table sync_settings add column if not exists digiseller_chat_code_enabled boolean not null default false`);
+  await db.execute(`alter table sync_settings add column if not exists digiseller_thank_you_promo_enabled boolean not null default false`);
+  await db.execute(`alter table sync_settings add column if not exists customer_site_url text`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_id integer`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_last_message_id integer`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_link_sent_at timestamptz`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_link_encrypted text`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_thank_you_sent_at timestamptz`);
+  await db.execute(`alter table sync_orders add column if not exists digiseller_chat_error text`);
+  await db.execute(`alter table sync_orders add column if not exists promo_code_encrypted text`);
+  await db.execute(`alter table sync_orders add column if not exists promo_code_hash text`);
+  await db.execute(`alter table sync_orders add column if not exists promo_code_expires_at timestamptz`);
+  await db.execute(`alter table sync_orders add column if not exists promo_code_redeemed_at timestamptz`);
+  await db.execute(`alter table sync_orders add column if not exists promo_code_redeemed_invoice_id text`);
+  await db.execute(`create unique index if not exists sync_orders_promo_code_hash_unique on sync_orders (promo_code_hash)`);
 }
 
 function lockIdFor(name: Exclude<BackgroundJobName, "scheduler">) {
