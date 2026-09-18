@@ -79,7 +79,7 @@ export async function sendDigisellerThankYou(orderId: number) {
     }).where(eq(syncOrdersTable.id, orderId));
   }
   await sendDigisellerChatMessage(token, chatId,
-    `Спасибо за покупку! Ваш ключ уже доступен на странице заказа. Ваш персональный промокод ${promo} даёт скидку 5% при ручном применении к следующей покупке и действует до ${expiry.toLocaleDateString("ru-RU")}. Код одноразовый: отправьте его в чат Digiseller до оформления следующей покупки.`);
+    `Спасибо за покупку! Ваш ключ уже доступен на странице заказа. Ваш персональный промокод ${promo} даёт скидку 5% при ручном применении к следующей покупке и действует до ${expiry.toLocaleDateString("ru-RU")}. Код одноразовый: отправьте его в чат Digiseller до оплаты следующей покупки и дождитесь подтверждения новой цены от оператора. К уже оплаченному заказу скидка не применяется.`);
   await db.update(syncOrdersTable).set({ digisellerChatThankYouSentAt: new Date(), digisellerChatError: null, updatedAt: new Date() }).where(eq(syncOrdersTable.id, orderId));
   return true;
 }
@@ -118,7 +118,7 @@ export async function syncDigisellerBuyerChats() {
         const redeem = await redeemDigisellerPromo(text.toUpperCase(), String(chat.id));
         const reply =
           redeem.status === "redeemed"
-            ? "Промокод зарегистрирован. Скидка 5% будет применена оператором вручную к этой покупке."
+            ? "Промокод зарегистрирован один раз. Digiseller не предоставляет API для автоматического применения такого кода: оператор подтвердит цену следующей покупки вручную. Не оплачивайте новый заказ до подтверждения — к уже оплаченному заказу скидка не применяется."
             : redeem.status === "expired"
               ? "Срок действия промокода истёк."
               : redeem.status === "already-used"

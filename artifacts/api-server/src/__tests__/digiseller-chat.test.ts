@@ -130,6 +130,8 @@ test("thank-you generates one reusable promo with thirty-day expiry", async () =
   await sendDigisellerThankYou(order.id);
   assert.equal(sent.length, 1);
   assert.match(sent[0], /GP-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+  assert.match(sent[0], /дождитесь подтверждения новой цены/);
+  assert.match(sent[0], /к уже оплаченному заказу скидка не применяется/i);
   assert.ok(stored.promoCodeExpiresAt!.getTime() - Date.now() > 29 * 24 * 60 * 60 * 1_000);
 });
 
@@ -158,4 +160,57 @@ test("promo redemption distinguishes redeemed, used, expired and unknown", async
   const expiredCode = "GP-EEEE-EEEE";
   await db.update(syncOrdersTable).set({ promoCodeHash: createHash("sha256").update(expiredCode).digest("hex"), promoCodeExpiresAt: new Date(Date.now() - 1_000), promoCodeRedeemedAt: null }).where(eq(syncOrdersTable.id, order.id));
   assert.equal((await redeemDigisellerPromo(expiredCode, "9300001")).status, "expired");
+});
+
+test("promo chat reply does not promise an automatic discount on a paid order", async () => {
+  const sourceOrder = await createOrder("9400001");
+  const chatOrder = await createOrder("9400002");
+  await db.update(syncOrdersTable)
+    .set({ digisellerChatId: Number(sourceOrder.invoiceId) })
+    .where(eq(syncOrdersTable.id, sourceOrder.id));
+
+  const sent: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/apilogin")) return response({ token: "token" });
+    if (url.pathname.endsWith("/chats")) {
+      return response({ chats: [{ id_i: Number(chatOrder.invoiceId) }] });
+    }
+    if (url.pathname === "/api/debates/v2/") {
+      if (init?.method === "POST") {
+        sent.push(String(JSON.parse(String(init.body)).message ?? ""));
+        return response({ retval: 0 });
+      }
+      return response({ messages: [] });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+
+  await sendDigisellerThankYou(sourceOrder.id);
+  const promo = sent[0].match(/GP-[A-Z0-9]{4}-[A-Z0-9]{4}/)![0];
+  sent.length = 0;
+
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/apilogin")) return response({ token: "token" });
+    if (url.pathname.endsWith("/chats")) {
+      return response({ chats: [{ id_i: Number(chatOrder.invoiceId) }] });
+    }
+    if (url.pathname === "/api/debates/v2") {
+      return response({ messages: [{ id: 1, message: promo, buyer: 1 }] });
+    }
+    if (url.pathname === "/api/debates/v2/") {
+      sent.push(String(JSON.parse(String(init?.body)).message ?? ""));
+      return response({ retval: 0 });
+    }
+    if (url.pathname.endsWith("/seen")) return response({});
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+
+  await syncDigisellerBuyerChats();
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /не предоставляет API/);
+  assert.match(sent[0], /Не оплачивайте новый заказ до подтверждения/);
+  assert.match(sent[0], /к уже оплаченному заказу скидка не применяется/i);
+  assert.doesNotMatch(sent[0], /автоматически|к этой покупке/i);
 });

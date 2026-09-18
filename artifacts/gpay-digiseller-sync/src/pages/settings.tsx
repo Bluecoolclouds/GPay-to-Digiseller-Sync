@@ -495,7 +495,9 @@ export default function SettingsPage() {
                   <div className="space-y-0.5">
                     <label className="text-sm font-medium">Отправлять промокод после выдачи ключа</label>
                     <p className="max-w-md text-xs text-muted-foreground">
-                      Одноразовый код на 5% действует 30 дней. Скидку оператор применяет вручную.
+                      Одноразовый код на 5% действует 30 дней. В официальном API Digiseller нет
+                      безопасного способа применить такой код к неоплаченному заказу, поэтому
+                      оператор подтверждает новую цену вручную до оплаты.
                     </p>
                   </div>
                   <Switch checked={watch("digisellerThankYouPromoEnabled")} onCheckedChange={(value) => setValue("digisellerThankYouPromoEnabled", value)} />
