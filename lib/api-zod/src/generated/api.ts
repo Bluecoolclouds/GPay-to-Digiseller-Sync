@@ -682,7 +682,7 @@ export const ListOrdersResponse = zod.object({
   "isStale": zod.boolean()
 }),
   "workers": zod.array(zod.object({
-  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation']),
+  "name": zod.enum(['scheduler', 'order-sync', 'price-sync', 'purchase-reconciliation', 'digiseller-chat']),
   "intervalSeconds": zod.number().int(),
   "lastHeartbeatAt": zod.coerce.date().nullable(),
   "lastStartedAt": zod.coerce.date().nullable(),

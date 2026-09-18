@@ -678,6 +678,7 @@ export const BackgroundJobHealthName = {
   'order-sync': 'order-sync',
   'price-sync': 'price-sync',
   'purchase-reconciliation': 'purchase-reconciliation',
+  'digiseller-chat': 'digiseller-chat',
 } as const;
 
 export interface BackgroundJobHealth {

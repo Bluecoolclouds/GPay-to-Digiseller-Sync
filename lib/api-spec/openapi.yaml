@@ -1050,7 +1050,7 @@ components:
       properties:
         name:
           type: string
-          enum: [scheduler, order-sync, price-sync, purchase-reconciliation]
+          enum: [scheduler, order-sync, price-sync, purchase-reconciliation, digiseller-chat]
         intervalSeconds: { type: integer }
         lastHeartbeatAt: { type: [string, "null"], format: date-time }
         lastStartedAt: { type: [string, "null"], format: date-time }
