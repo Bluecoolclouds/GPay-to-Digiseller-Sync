@@ -17,6 +17,7 @@ await rm(outdir, { recursive: true, force: true });
 await build({
   entryPoints: [
     path.resolve(artifactDir, "src/__tests__/digiseller-price-tasks.test.ts"),
+    path.resolve(artifactDir, "src/__tests__/product-image.test.ts"),
     path.resolve(artifactDir, "src/__tests__/sync-product-types.test.ts"),
     path.resolve(artifactDir, "src/__tests__/test-environment.ts"),
     path.resolve(artifactDir, "src/__tests__/auth.test.ts"),

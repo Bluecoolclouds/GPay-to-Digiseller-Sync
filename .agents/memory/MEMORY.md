@@ -14,3 +14,4 @@
 - [Atomic pricing settings](atomic-pricing-settings.md) — activate pricing rules only after serialized Digiseller price application succeeds or is safely rolled back.
 - [Digiseller state-change reconciliation](digiseller-state-change-reconciliation.md) — confirm seller-visible state after ambiguous external mutations before local commit.
 - [Digiseller native review bonus](digiseller-buyer-chat-promotions.md) — use Digiseller’s own 5% gift certificate issued after a positive review; do not generate custom chat promo codes.
+- [Digiseller image replacement](digiseller-image-replacement.md) — uploading a new preview alone does not replace the old gallery image; promote the new image and remove prior previews.

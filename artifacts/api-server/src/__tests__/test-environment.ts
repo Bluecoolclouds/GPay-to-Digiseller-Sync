@@ -26,6 +26,7 @@ assert.doesNotMatch(
 );
 const testFile = path.join(compiledDir, "sync-product-types.test.mjs");
 const priceTaskTestFile = path.join(compiledDir, "digiseller-price-tasks.test.mjs");
+const productImageTestFile = path.join(compiledDir, "product-image.test.mjs");
 const publicOrdersTestFile = path.join(compiledDir, "public-orders.test.mjs");
 const backgroundWorkerTestFile = path.join(compiledDir, "background-worker.test.mjs");
 const notificationsTestFile = path.join(compiledDir, "notifications.test.mjs");
@@ -67,6 +68,7 @@ if (authResult.error) throw authResult.error;
 if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
 
 run(process.execPath, ["--test", "--test-concurrency=1", priceTaskTestFile]);
+run(process.execPath, ["--test", "--test-concurrency=1", productImageTestFile]);
 
 async function createTestSchema(schema: string) {
   assert.match(schema, /^[a-z0-9_]+$/);

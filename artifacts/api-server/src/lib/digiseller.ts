@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { generateAiProductImage } from "./ai-product-image";
 import { selectCategoryWithAi } from "./ai-category";
 import { logger } from "./logger";
@@ -838,7 +836,6 @@ export async function setDigisellerCodeUnlimitedStock(
 }
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const execFileAsync = promisify(execFile);
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -853,12 +850,14 @@ export async function uploadDigisellerProductImage(
     name: string;
     productKind: "key" | "gift";
     region: string;
+    replaceExisting?: boolean;
   },
   providedToken?: string,
 ): Promise<void> {
   let bytes: ArrayBuffer | Buffer | null = null;
   let contentType = "image/png";
   let extension = "png";
+  let sourceError: string | null = null;
 
   if (input.imageUrl) {
     try {
@@ -891,7 +890,11 @@ export async function uploadDigisellerProductImage(
       bytes = downloaded;
       contentType = responseType;
       extension = responseType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
-    } catch {
+    } catch (error) {
+      sourceError =
+        error instanceof Error
+          ? error.message
+          : "Не удалось получить изображение GPay";
       bytes = null;
     }
   }
@@ -904,46 +907,28 @@ export async function uploadDigisellerProductImage(
         region: input.region,
       });
     } catch (error) {
-      logger.warn(
-        { err: error, productName: input.name },
-        "AI product image generation failed; using local fallback",
+      const aiError =
+        error instanceof Error
+          ? error.message
+          : "Неизвестная ошибка gpt-image-2";
+      logger.error(
+        {
+          err: error,
+          productId,
+          productName: input.name,
+          gpayImageError: sourceError,
+        },
+        "AI product image generation failed",
       );
-      const cleanName = input.name
-        .replace(/[\u0000-\u001f\u007f]/g, " ")
-        .slice(0, 110);
-      const subtitle = `${input.productKind === "key" ? "DIGITAL KEY" : "STEAM GIFT"}  •  ${input.region || "GLOBAL"}`;
-      const { stdout } = await execFileAsync(
-        "magick",
+      throw new Error(
         [
-          "-size", "1024x1024",
-          "gradient:#0f172a-#2563eb",
-          "-fill", "#93c5fd",
-          "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-          "-pointsize", "36",
-          "-gravity", "northwest",
-          "-annotate", "+70+75", "DIGITAL PRODUCT",
-          "(",
-          "-size", "884x470",
-          "-background", "none",
-          "-fill", "white",
-          "-font", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-          "-pointsize", "58",
-          "-gravity", "center",
-          `caption:${cleanName}`,
-          ")",
-          "-gravity", "center",
-          "-geometry", "+0-10",
-          "-composite",
-          "-fill", "#bfdbfe",
-          "-pointsize", "30",
-          "-gravity", "south",
-          "-annotate", "+0+75", subtitle,
-          "-depth", "8",
-          "png:-",
-        ],
-        { encoding: "buffer", maxBuffer: MAX_IMAGE_BYTES },
+          sourceError ? `Изображение GPay: ${sourceError}` : null,
+          `gpt-image-2: ${aiError}`,
+        ]
+          .filter(Boolean)
+          .join(". "),
+        { cause: error },
       );
-      bytes = stdout;
     }
   }
 
@@ -970,6 +955,66 @@ export async function uploadDigisellerProductImage(
     throw new Error(
       getDigisellerError(json, `Не удалось загрузить изображение (${response.status})`),
     );
+  }
+  if (input.replaceExisting) {
+    const newPreviewId = json.content?.[0]?.preview_id;
+    if (!newPreviewId) {
+      throw new Error(
+        "Digiseller загрузил изображение, но не вернул его ID для замены старой заглушки",
+      );
+    }
+    const productResponse = await fetch(
+      `https://api.digiseller.com/api/products/${productId}/data?token=${encodeURIComponent(token)}`,
+      { signal: AbortSignal.timeout(30_000) },
+    );
+    const productJson = (await productResponse.json()) as {
+      retval?: number;
+      retdesc?: string;
+      preview_imgs?: Array<{ id?: number }>;
+    };
+    if (!productResponse.ok || productJson.retval !== 0) {
+      throw new Error(
+        getDigisellerError(
+          productJson,
+          `Не удалось получить галерею изображений (${productResponse.status})`,
+        ),
+      );
+    }
+    const updatePreview = async (
+      previewId: number,
+      options: { enabled?: boolean; index?: number; delete?: boolean },
+    ) => {
+      const optionsResponse = await fetch(
+        `https://api.digiseller.com/api/product/preview/options/image/${previewId}?token=${encodeURIComponent(token)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(options),
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+      if (!optionsResponse.ok) {
+        throw new Error(
+          `Не удалось обновить галерею Digiseller (${optionsResponse.status})`,
+        );
+      }
+    };
+    await updatePreview(newPreviewId, {
+      enabled: true,
+      index: 0,
+      delete: false,
+    });
+    const oldPreviewIds = (productJson.preview_imgs ?? [])
+      .map((image) => Number(image.id))
+      .filter(
+        (previewId) =>
+          Number.isInteger(previewId) &&
+          previewId > 0 &&
+          previewId !== newPreviewId,
+      );
+    for (const previewId of oldPreviewIds) {
+      await updatePreview(previewId, { delete: true });
+    }
   }
 }
 

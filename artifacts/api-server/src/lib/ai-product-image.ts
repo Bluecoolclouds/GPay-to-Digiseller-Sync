@@ -47,25 +47,41 @@ export async function generateAiProductImage(input: {
     "The result must be a clean finished product image, not a mockup photographed in a scene.",
   ].join(" ");
 
-  const response = await fetch(`${baseUrl}/v1/images/generations`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-image-2",
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      quality: "medium",
-      output_format: "png",
-    }),
-    // Publication requests are terminated by the Replit proxy after about two
-    // minutes. Fall back to the generated local card before that happens.
-    signal: AbortSignal.timeout(45_000),
-  });
-  const json = (await response.json()) as ImageGenerationResponse;
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/v1/images/generations`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-image-2",
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "medium",
+        output_format: "png",
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (error) {
+    throw new Error(
+      `Запрос генерации не выполнен: ${
+        error instanceof Error ? error.message : "ошибка сети"
+      }`,
+      { cause: error },
+    );
+  }
+  let json: ImageGenerationResponse;
+  try {
+    json = (await response.json()) as ImageGenerationResponse;
+  } catch (error) {
+    throw new Error(
+      `API генерации вернул некорректный ответ (${response.status})`,
+      { cause: error },
+    );
+  }
   const image = json.data?.[0];
   if (!response.ok || !image) {
     throw new Error(

@@ -211,6 +211,11 @@ export interface BatchPublishInput {
   productIds: number[];
 }
 
+export interface PublishProductInput {
+  /** Force a new image upload for an existing Digiseller card. */
+  regenerateImage?: boolean;
+}
+
 export type BatchPublishItemStatus = typeof BatchPublishItemStatus[keyof typeof BatchPublishItemStatus];
 
 

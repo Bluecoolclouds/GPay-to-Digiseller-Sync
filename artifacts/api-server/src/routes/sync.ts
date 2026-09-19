@@ -815,7 +815,10 @@ async function autoLinkExactDigisellerProducts(
   return { linked, ambiguous };
 }
 
-async function publishProductRecord(current: ProductRecord) {
+async function publishProductRecord(
+  current: ProductRecord,
+  options?: { replaceExistingImage?: boolean },
+) {
   if (!current.isAvailable) {
     throw new Error("Можно публиковать только доступные товары");
   }
@@ -1092,6 +1095,7 @@ async function publishProductRecord(current: ProductRecord) {
           name: current.name,
           productKind: classifyGPayProductType(current.productType) as "key" | "gift",
           region: current.region,
+          replaceExisting: options?.replaceExistingImage,
         },
         token,
       );
@@ -1440,6 +1444,7 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const regenerateImage = req.body?.regenerateImage === true;
   const [current] = await db
     .select()
     .from(productsTable)
@@ -1455,7 +1460,17 @@ router.post("/products/:id/publish", async (req, res): Promise<void> => {
         .from(productsTable)
         .where(eq(productsTable.id, current.id));
       if (!latest) throw new Error("Товар не найден");
-      return publishProductRecord(latest);
+      return publishProductRecord(
+        regenerateImage
+          ? {
+              ...latest,
+              digisellerImageUploaded: false,
+              publicationStatus: "error",
+              publicationFailureStage: "image",
+            }
+          : latest,
+        { replaceExistingImage: regenerateImage },
+      );
     });
     await db.insert(activitiesTable).values({
       type: "publish",

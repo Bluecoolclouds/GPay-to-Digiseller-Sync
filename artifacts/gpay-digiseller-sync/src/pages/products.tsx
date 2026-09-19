@@ -579,14 +579,18 @@ function ProductRow({
     )
   }
 
-  const handlePublish = () => {
-    publishMutation.mutate({ id: product.id }, {
+  const handlePublish = (regenerateImage = false) => {
+    publishMutation.mutate({ id: product.id, data: { regenerateImage } }, {
       onSuccess: (res) => {
         onUpdateRef.current(res)
         if (res.imageUrl && !res.digisellerImageUploaded) {
           toast.warning("Товар опубликован, но изображение не загрузилось")
         } else {
-          toast.success("Товар опубликован в Digiseller")
+          toast.success(
+            regenerateImage
+              ? "Изображение перегенерировано и загружено"
+              : "Товар опубликован в Digiseller",
+          )
         }
       },
       onError: (error) =>
@@ -742,9 +746,22 @@ function ProductRow({
             </span>
           )}
           {isPublished ? (
-            <Badge variant="outline" className="gap-1 bg-muted/50 border-primary/20 text-primary h-7 px-2">
-              <Check className="w-3 h-3" /> Опубликовано
-            </Badge>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-xs gap-1.5"
+                onClick={() => handlePublish(true)}
+                disabled={batchIsActive || publishMutation.isPending}
+              >
+                <RotateCcw className="w-3 h-3" />
+                {publishMutation.isPending ? "Генерируем…" : "Перегенерировать изображение"}
+              </Button>
+              <Badge variant="outline" className="gap-1 bg-muted/50 border-primary/20 text-primary h-7 px-2">
+                <Check className="w-3 h-3" /> Опубликовано
+              </Badge>
+            </>
           ) : (
             <>
               {!product.digisellerId && (
@@ -762,7 +779,7 @@ function ProductRow({
               <Button
                 size="sm"
                 className="h-7 text-xs px-3 gap-1.5"
-                onClick={handlePublish}
+                onClick={() => handlePublish(false)}
                 disabled={batchIsActive || publishMutation.isPending || !product.isAvailable || product.productKind === ProductProductKind.unknown}
               >
                 {product.publicationFailureStage === "image" ? (

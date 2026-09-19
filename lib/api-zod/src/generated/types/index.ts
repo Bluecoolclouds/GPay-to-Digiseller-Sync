@@ -77,6 +77,7 @@ export * from './productUpdatePublicationStatus';
 export * from './publicOrder';
 export * from './publicOrderAccessInput';
 export * from './publicOrderCodeInput';
+export * from './publishProductInput';
 export * from './settings';
 export * from './settingsApplyInput';
 export * from './settingsApplyInputAutomationMode';

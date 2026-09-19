@@ -189,6 +189,12 @@ export const PublishProductParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const publishProductBodyRegenerateImageDefault = false;
+
+export const PublishProductBody = zod.object({
+  "regenerateImage": zod.boolean().default(publishProductBodyRegenerateImageDefault).describe('Force a new image upload for an existing Digiseller card.')
+})
+
 export const PublishProductResponse = zod.object({
   "id": zod.number().int(),
   "gpayId": zod.number().int(),

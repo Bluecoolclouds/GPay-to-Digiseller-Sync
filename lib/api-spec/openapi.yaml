@@ -164,6 +164,12 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishProductInput"
       responses:
         "200":
           description: Product publication result
@@ -753,6 +759,13 @@ components:
           maxItems: 50
           uniqueItems: true
           items: { type: integer, minimum: 1 }
+    PublishProductInput:
+      type: object
+      properties:
+        regenerateImage:
+          type: boolean
+          default: false
+          description: Force a new image upload for an existing Digiseller card.
     BatchPublishItem:
       type: object
       required: [productId, name, status, imageStatus]

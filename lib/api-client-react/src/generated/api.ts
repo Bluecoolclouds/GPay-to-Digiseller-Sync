@@ -59,6 +59,7 @@ import type {
   PublicOrder,
   PublicOrderAccessInput,
   PublicOrderCodeInput,
+  PublishProductInput,
   Settings,
   SettingsApplyInput,
   SettingsInput,
@@ -667,14 +668,15 @@ export const getPublishProductUrl = (id: number,) => {
   return `/api/products/${id}/publish`
 }
 
-export const publishProduct = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<Product> => {
+export const publishProduct = async (id: number,
+    publishProductInput?: PublishProductInput, options?: Parameters<typeof customFetch>[1]): Promise<Product> => {
 
   return customFetch<Product>(getPublishProductUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publishProductInput)
   }
 );}
 
@@ -683,8 +685,8 @@ export const publishProduct = async (id: number, options?: Parameters<typeof cus
 
 
 export const getPublishProductMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number;data?: BodyType<PublishProductInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number;data?: BodyType<PublishProductInput>}, TContext> => {
 
 const mutationKey = ['publishProduct'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -696,10 +698,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishProduct>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishProduct>>, {id: number;data?: BodyType<PublishProductInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  publishProduct(id,requestOptions)
+          return  publishProduct(id,data,requestOptions)
         }
 
 
@@ -710,15 +712,15 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type PublishProductMutationResult = NonNullable<Awaited<ReturnType<typeof publishProduct>>>
-
+    export type PublishProductMutationBody = BodyType<PublishProductInput> | undefined
     export type PublishProductMutationError = ErrorType<void>
 
     export const usePublishProduct = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishProduct>>, TError,{id: number;data?: BodyType<PublishProductInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof publishProduct>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<PublishProductInput>},
         TContext
       > => {
       return useMutation(getPublishProductMutationOptions(options));
