@@ -45,3 +45,17 @@ storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/conversation:a197ed28-7
 storage_version_token = "1789078619014363"
 content_type = "text/markdown"
 source_uri = "file://GPAY_TO_DIGISELLER_PLAN.md"
+
+[[outputs]]
+id = "0gdfatXehwxXaf5clHwEh"
+uri = "file://attached_assets/generated_images/apinet-cloud-ad-1200x628.jpg"
+type = "image"
+title = "Рекламный баннер APINET.Cloud"
+description = "Готовый широкий баннер 1200×628 в JPG. Размер файла около 181 КБ — соответствует ограничению до 4 МБ."
+logical_id = "c29ed64b-f81b-4314-bfb4-82ab39482438"
+content_hash = "sha256:b7df26d001627aa1dd3d1881e2356d1fe87aa75d172c7061cac5f12e4f3830e1"
+size = 181375
+mtime_ms = 1789864424598
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:a948d8da-78c0-40a8-a446-1136ad5a089c/c29ed64b-f81b-4314-bfb4-82ab39482438/c5805905-a1a9-48ad-b5dc-9b8ac0c029f4"
+storage_version_token = "1789864441324834"
+content_type = "image/jpeg"
