@@ -68,7 +68,6 @@ if (authResult.error) throw authResult.error;
 if (authResult.status !== 0) throw new Error("Auth middleware tests failed");
 
 run(process.execPath, ["--test", "--test-concurrency=1", priceTaskTestFile]);
-run(process.execPath, ["--test", "--test-concurrency=1", productImageTestFile]);
 
 async function createTestSchema(schema: string) {
   assert.match(schema, /^[a-z0-9_]+$/);
@@ -93,6 +92,11 @@ try {
   await createTestSchema(syncSchema);
   await createTestSchema(notificationsSchema);
   await createTestSchema(digisellerChatSchema);
+  run(
+    process.execPath,
+    ["--test", "--test-concurrency=1", productImageTestFile],
+    environmentFor(syncSchema),
+  );
   run(
     process.execPath,
     ["--test", "--test-concurrency=1", publicOrdersTestFile],

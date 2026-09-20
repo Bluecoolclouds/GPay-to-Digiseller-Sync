@@ -388,6 +388,13 @@ export const SettingsAutomationMode = {
   automatic: 'automatic',
 } as const;
 
+export interface ImageProviderSettings {
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  apiKeyConfigured: boolean;
+}
+
 export interface Settings {
   defaultMarginPercent: number;
   usdRubRate: number;
@@ -412,6 +419,26 @@ export interface Settings {
   launchPreflightAt: string | null;
   /** @nullable */
   launchOrderConfirmedAt: string | null;
+  imageProvider: ImageProviderSettings;
+}
+
+export interface ImageProviderSettingsInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  providerName: string;
+  baseUrl: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  model: string;
+  /**
+     * Omit to keep the currently configured API key.
+     * @minLength 1
+     */
+  apiKey?: string;
 }
 
 export type SettingsInputExchangeRateMode = typeof SettingsInputExchangeRateMode[keyof typeof SettingsInputExchangeRateMode];

@@ -5,6 +5,7 @@
  * GPay Market to Digiseller synchronization API
  * OpenAPI spec version: 0.1.0
  */
+import type { ImageProviderSettings } from './imageProviderSettings';
 import type { SettingsAutomationMode } from './settingsAutomationMode';
 import type { SettingsExchangeRateMode } from './settingsExchangeRateMode';
 
@@ -32,4 +33,5 @@ export interface Settings {
   launchPreflightAt: Date | null;
   /** @nullable */
   launchOrderConfirmedAt: Date | null;
+  imageProvider: ImageProviderSettings;
 }

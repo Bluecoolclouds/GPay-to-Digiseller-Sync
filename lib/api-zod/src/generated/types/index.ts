@@ -44,6 +44,8 @@ export * from './getProductsMarginSummaryProductKind';
 export * from './getProductsMarginSummaryStatus';
 export * from './gPayReconciliationInput';
 export * from './healthStatus';
+export * from './imageProviderSettings';
+export * from './imageProviderSettingsInput';
 export * from './listActivitiesParams';
 export * from './listOrdersParams';
 export * from './listOrdersStatus';

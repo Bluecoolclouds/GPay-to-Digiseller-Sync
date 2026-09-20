@@ -374,6 +374,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SettingsPreview"
+  /settings/image-provider:
+    put:
+      operationId: updateImageProviderSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageProviderSettingsInput"
+      responses:
+        "200":
+          description: Updated image provider settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageProviderSettings"
   /autonomous/preflight:
     get:
       operationId: getAutonomousPreflight
@@ -853,7 +870,7 @@ components:
         createdAt: { type: string, format: date-time }
     Settings:
       type: object
-      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, digisellerChatCodeEnabled, digisellerThankYouPromoEnabled, customerSiteUrl, credentialsConfigured, notificationConfigured, autonomousPaused, autonomousAllowlist, launchPreflightAt, launchOrderConfirmedAt]
+      required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable, digisellerChatCodeEnabled, digisellerThankYouPromoEnabled, customerSiteUrl, credentialsConfigured, notificationConfigured, autonomousPaused, autonomousAllowlist, launchPreflightAt, launchOrderConfirmedAt, imageProvider]
       properties:
         defaultMarginPercent: { type: number }
         usdRubRate: { type: number }
@@ -877,6 +894,27 @@ components:
           items: { type: integer, minimum: 1 }
         launchPreflightAt: { type: [string, "null"], format: date-time }
         launchOrderConfirmedAt: { type: [string, "null"], format: date-time }
+        imageProvider:
+          $ref: "#/components/schemas/ImageProviderSettings"
+    ImageProviderSettings:
+      type: object
+      required: [providerName, baseUrl, model, apiKeyConfigured]
+      properties:
+        providerName: { type: string }
+        baseUrl: { type: string, format: uri }
+        model: { type: string }
+        apiKeyConfigured: { type: boolean }
+    ImageProviderSettingsInput:
+      type: object
+      required: [providerName, baseUrl, model]
+      properties:
+        providerName: { type: string, minLength: 1, maxLength: 80 }
+        baseUrl: { type: string, format: uri }
+        model: { type: string, minLength: 1, maxLength: 120 }
+        apiKey:
+          type: string
+          minLength: 1
+          description: Omit to keep the currently configured API key.
     SettingsInput:
       type: object
       required: [defaultMarginPercent, usdRubRate, exchangeRateMode, conversionMarkupPercent, digisellerFeePercent, fixedReserveRub, minimumProfitRub, automationMode, disableOnUnavailable]

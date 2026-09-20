@@ -411,7 +411,13 @@ export const GetSettingsResponse = zod.object({
   "autonomousPaused": zod.boolean(),
   "autonomousAllowlist": zod.array(zod.number().int().min(1)),
   "launchPreflightAt": zod.coerce.date().nullable(),
-  "launchOrderConfirmedAt": zod.coerce.date().nullable()
+  "launchOrderConfirmedAt": zod.coerce.date().nullable(),
+  "imageProvider": zod.object({
+  "providerName": zod.string(),
+  "baseUrl": zod.string().url(),
+  "model": zod.string(),
+  "apiKeyConfigured": zod.boolean()
+})
 })
 
 
@@ -471,7 +477,13 @@ export const UpdateSettingsResponse = zod.object({
   "autonomousPaused": zod.boolean(),
   "autonomousAllowlist": zod.array(zod.number().int().min(1)),
   "launchPreflightAt": zod.coerce.date().nullable(),
-  "launchOrderConfirmedAt": zod.coerce.date().nullable()
+  "launchOrderConfirmedAt": zod.coerce.date().nullable(),
+  "imageProvider": zod.object({
+  "providerName": zod.string(),
+  "baseUrl": zod.string().url(),
+  "model": zod.string(),
+  "apiKeyConfigured": zod.boolean()
+})
 })
 
 
@@ -528,6 +540,28 @@ export const PreviewSettingsResponse = zod.object({
   "rateIsFallback": zod.boolean(),
   "automaticUpdateAllowed": zod.boolean(),
   "previewToken": zod.string().min(1)
+})
+
+
+export const updateImageProviderSettingsBodyProviderNameMax = 80;
+
+export const updateImageProviderSettingsBodyModelMax = 120;
+
+
+
+
+export const UpdateImageProviderSettingsBody = zod.object({
+  "providerName": zod.string().min(1).max(updateImageProviderSettingsBodyProviderNameMax),
+  "baseUrl": zod.string().url(),
+  "model": zod.string().min(1).max(updateImageProviderSettingsBodyModelMax),
+  "apiKey": zod.string().min(1).optional().describe('Omit to keep the currently configured API key.')
+})
+
+export const UpdateImageProviderSettingsResponse = zod.object({
+  "providerName": zod.string(),
+  "baseUrl": zod.string().url(),
+  "model": zod.string(),
+  "apiKeyConfigured": zod.boolean()
 })
 
 

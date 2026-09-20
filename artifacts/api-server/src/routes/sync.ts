@@ -49,8 +49,11 @@ import {
   UpdateAutonomousAllowlistBody,
   SetAutonomousPauseBody,
   ConfirmAutonomousOrderBody,
+  UpdateImageProviderSettingsBody,
+  UpdateImageProviderSettingsResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { encryptImageProviderApiKey } from "../lib/image-provider-settings";
 import {
   classifyGPayProductType,
   fetchGPayProducts,
@@ -1834,6 +1837,53 @@ router.get("/settings", async (_req, res): Promise<void> => {
     autonomousAllowlist: (() => { try { return JSON.parse(settings.autonomousAllowlist); } catch { return []; } })(),
     credentialsConfigured: credentialsConfigured(),
     notificationConfigured: Boolean(settings.notificationWebhookEncrypted),
+    imageProvider: {
+      providerName: settings.imageProviderName,
+      baseUrl: settings.imageProviderBaseUrl,
+      model: settings.imageProviderModel,
+      apiKeyConfigured: Boolean(
+        settings.imageProviderApiKeyEncrypted || process.env.APINET_API_KEY,
+      ),
+    },
+  }));
+});
+
+router.put("/settings/image-provider", async (req, res): Promise<void> => {
+  const parsed = UpdateImageProviderSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  let url: URL;
+  try {
+    url = new URL(parsed.data.baseUrl);
+    if (url.protocol !== "https:") throw new Error();
+  } catch {
+    res.status(400).json({ error: "URL провайдера должен использовать HTTPS" });
+    return;
+  }
+  const current = await getSettingsRow();
+  const encryptedKey = parsed.data.apiKey?.trim()
+    ? encryptImageProviderApiKey(parsed.data.apiKey.trim())
+    : current.imageProviderApiKeyEncrypted;
+  const [updated] = await db
+    .update(settingsTable)
+    .set({
+      imageProviderName: parsed.data.providerName.trim(),
+      imageProviderBaseUrl: url.toString().replace(/\/+$/, ""),
+      imageProviderModel: parsed.data.model.trim(),
+      imageProviderApiKeyEncrypted: encryptedKey,
+      updatedAt: new Date(),
+    })
+    .where(eq(settingsTable.id, 1))
+    .returning();
+  res.json(UpdateImageProviderSettingsResponse.parse({
+    providerName: updated.imageProviderName,
+    baseUrl: updated.imageProviderBaseUrl,
+    model: updated.imageProviderModel,
+    apiKeyConfigured: Boolean(
+      updated.imageProviderApiKeyEncrypted || process.env.APINET_API_KEY,
+    ),
   }));
 });
 
@@ -2141,6 +2191,15 @@ router.put("/settings", async (req, res): Promise<void> => {
       notificationConfigured:
         notificationWebhookUrl !== undefined ||
         Boolean(application.settings.notificationWebhookEncrypted),
+      imageProvider: {
+        providerName: application.settings.imageProviderName,
+        baseUrl: application.settings.imageProviderBaseUrl,
+        model: application.settings.imageProviderModel,
+        apiKeyConfigured: Boolean(
+          application.settings.imageProviderApiKeyEncrypted ||
+            process.env.APINET_API_KEY,
+        ),
+      },
     }),
   );
 });

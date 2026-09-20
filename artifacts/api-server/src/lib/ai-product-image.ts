@@ -1,3 +1,5 @@
+import { getImageProviderConfig } from "./image-provider-settings";
+
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type ImageGenerationResponse = {
@@ -23,11 +25,8 @@ export async function generateAiProductImage(input: {
   productKind: "key" | "gift";
   region: string;
 }): Promise<Buffer> {
-  const apiKey = process.env.APINET_API_KEY;
-  const baseUrl = (process.env.APINET_BASE_URL || "https://apinet.cloud").replace(
-    /\/+$/,
-    "",
-  );
+  const provider = await getImageProviderConfig();
+  const { apiKey, baseUrl } = provider;
   if (!apiKey) {
     throw new Error("APINET_API_KEY is not configured");
   }
@@ -56,7 +55,7 @@ export async function generateAiProductImage(input: {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-image-2",
+        model: provider.model,
         prompt,
         n: 1,
         size: "1024x1024",

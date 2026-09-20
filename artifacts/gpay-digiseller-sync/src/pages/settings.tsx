@@ -15,6 +15,7 @@ import {
   useTestConnections,
   usePreviewSettings,
   useTestNotifications,
+  useUpdateImageProviderSettings,
   useDisableNotifications,
   SettingsInput,
 } from "@workspace/api-client-react"
@@ -42,10 +43,17 @@ export default function SettingsPage() {
   const allowlistMutation = useUpdateAutonomousAllowlist()
   const pauseMutation = useSetAutonomousPause()
   const confirmOrderMutation = useConfirmAutonomousOrder()
+  const imageProviderMutation = useUpdateImageProviderSettings()
   const [previewedValues, setPreviewedValues] = useState("")
   const [allowlistText, setAllowlistText] = useState("")
   const [confirmationInvoice, setConfirmationInvoice] = useState("")
   const [confirmationNote, setConfirmationNote] = useState("")
+  const [imageProvider, setImageProvider] = useState({
+    providerName: "APINET",
+    baseUrl: "https://apinet.cloud",
+    model: "gpt-image-2",
+    apiKey: "",
+  })
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsInput>({
     defaultValues: {
@@ -74,6 +82,12 @@ export default function SettingsPage() {
         customerSiteUrl: settings.customerSiteUrl ?? "",
       })
       setAllowlistText(settings.autonomousAllowlist.join(", "))
+      setImageProvider({
+        providerName: settings.imageProvider.providerName,
+        baseUrl: settings.imageProvider.baseUrl,
+        model: settings.imageProvider.model,
+        apiKey: "",
+      })
     }
   }, [settings, reset])
 
@@ -334,6 +348,56 @@ export default function SettingsPage() {
           </Card>
 
           <form id="settings-form" onSubmit={handleSubmit(onSubmit)}>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Генерация изображений</CardTitle>
+                <CardDescription>
+                  OpenAI-совместимый API. Ключ хранится зашифрованно и не показывается после сохранения.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Провайдер</label>
+                    <Input value={imageProvider.providerName} onChange={(e) => setImageProvider((v) => ({ ...v, providerName: e.target.value }))} placeholder="APINET" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Модель</label>
+                    <Input value={imageProvider.model} onChange={(e) => setImageProvider((v) => ({ ...v, model: e.target.value }))} placeholder="gpt-image-2" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-medium">Базовый URL</label>
+                    <Input value={imageProvider.baseUrl} onChange={(e) => setImageProvider((v) => ({ ...v, baseUrl: e.target.value }))} placeholder="https://apinet.cloud" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-medium">API-ключ</label>
+                    <Input type="password" autoComplete="new-password" value={imageProvider.apiKey} onChange={(e) => setImageProvider((v) => ({ ...v, apiKey: e.target.value }))} placeholder={settings?.imageProvider.apiKeyConfigured ? "Ключ сохранён — оставьте пустым, чтобы не менять" : "Введите API-ключ"} />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={imageProviderMutation.isPending}
+                  onClick={() => imageProviderMutation.mutate({
+                    data: {
+                      providerName: imageProvider.providerName.trim(),
+                      baseUrl: imageProvider.baseUrl.trim(),
+                      model: imageProvider.model.trim(),
+                      ...(imageProvider.apiKey.trim() ? { apiKey: imageProvider.apiKey.trim() } : {}),
+                    },
+                  }, {
+                    onSuccess: () => {
+                      setImageProvider((v) => ({ ...v, apiKey: "" }))
+                      queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })
+                      toast.success("Провайдер изображений сохранён")
+                    },
+                    onError: () => toast.error("Не удалось сохранить провайдера изображений"),
+                  })}
+                >
+                  Сохранить провайдера
+                </Button>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Правила ценообразования</CardTitle>

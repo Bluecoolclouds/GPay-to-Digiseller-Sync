@@ -41,6 +41,8 @@ import type {
   GPayReconciliationInput,
   GetProductsMarginSummaryParams,
   HealthStatus,
+  ImageProviderSettings,
+  ImageProviderSettingsInput,
   ListActivitiesParams,
   ListOrdersParams,
   ListProductsParams,
@@ -1411,6 +1413,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getPreviewSettingsMutationOptions(options));
+    }
+
+export const getUpdateImageProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/image-provider`
+}
+
+export const updateImageProviderSettings = async (imageProviderSettingsInput: ImageProviderSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<ImageProviderSettings> => {
+
+  return customFetch<ImageProviderSettings>(getUpdateImageProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(imageProviderSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateImageProviderSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateImageProviderSettings>>, TError,{data: BodyType<ImageProviderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateImageProviderSettings>>, TError,{data: BodyType<ImageProviderSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateImageProviderSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateImageProviderSettings>>, {data: BodyType<ImageProviderSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateImageProviderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateImageProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateImageProviderSettings>>>
+    export type UpdateImageProviderSettingsMutationBody = BodyType<ImageProviderSettingsInput>
+    export type UpdateImageProviderSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdateImageProviderSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateImageProviderSettings>>, TError,{data: BodyType<ImageProviderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateImageProviderSettings>>,
+        TError,
+        {data: BodyType<ImageProviderSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateImageProviderSettingsMutationOptions(options));
     }
 
 export const getGetAutonomousPreflightUrl = () => {

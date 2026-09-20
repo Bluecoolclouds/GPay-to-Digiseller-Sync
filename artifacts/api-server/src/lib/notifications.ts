@@ -65,6 +65,11 @@ export async function ensureNotificationSchema() {
   await db.execute(`
     alter table sync_settings
       add column if not exists notification_webhook_encrypted text;
+    alter table sync_settings
+      add column if not exists image_provider_name text not null default 'APINET',
+      add column if not exists image_provider_base_url text not null default 'https://apinet.cloud',
+      add column if not exists image_provider_model text not null default 'gpt-image-2',
+      add column if not exists image_provider_api_key_encrypted text;
     create table if not exists sync_notification_state (
       key text primary key,
       active boolean not null default false,

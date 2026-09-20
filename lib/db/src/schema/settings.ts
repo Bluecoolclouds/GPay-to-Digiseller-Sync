@@ -24,6 +24,12 @@ export const settingsTable = pgTable("sync_settings", {
   launchOrderConfirmedAt: timestamp("launch_order_confirmed_at", { withTimezone: true }),
   launchOrderConfirmationNote: text("launch_order_confirmation_note"),
   notificationWebhookEncrypted: text("notification_webhook_encrypted"),
+  imageProviderName: text("image_provider_name").notNull().default("APINET"),
+  imageProviderBaseUrl: text("image_provider_base_url")
+    .notNull()
+    .default("https://apinet.cloud"),
+  imageProviderModel: text("image_provider_model").notNull().default("gpt-image-2"),
+  imageProviderApiKeyEncrypted: text("image_provider_api_key_encrypted"),
   digisellerChatCodeEnabled: boolean("digiseller_chat_code_enabled")
     .notNull()
     .default(false),
