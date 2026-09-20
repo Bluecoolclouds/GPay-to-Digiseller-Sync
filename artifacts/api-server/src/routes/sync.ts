@@ -1213,6 +1213,30 @@ async function publishJobItem(
     if (!current) throw new Error("Товар не найден");
 
     item.name = current.name;
+    if (item.operation === "regenerateImage") {
+      if (
+        current.publicationStatus !== "published" ||
+        !current.digisellerId
+      ) {
+        throw new Error("AI-изображение можно обновить только у опубликованной карточки");
+      }
+      item.status = "publishing";
+      await savePublicationJobItems(taskId, items);
+      const result = await publishProductRecord(
+        {
+          ...current,
+          digisellerImageUploaded: false,
+          publicationStatus: "error",
+          publicationFailureStage: "image",
+        },
+        { replaceExistingImage: true },
+      );
+      item.status = result.imageStatus === "failed" ? "failed" : "published";
+      item.digisellerId = result.product.digisellerId;
+      item.imageStatus = result.imageStatus;
+      item.error = result.imageError;
+      return;
+    }
     if (
       current.publicationStatus === "published" &&
       current.digisellerId &&
@@ -1308,9 +1332,10 @@ async function runPublicationJob(taskId: string) {
       }
     }
   };
-  await Promise.all(
-    Array.from({ length: Math.min(2, items.length) }, () => worker()),
-  );
+  const workerCount = items.some((item) => item.operation === "regenerateImage")
+    ? 1
+    : Math.min(2, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   const succeeded = items.filter((item) => item.status === "published").length;
   const failed = items.filter((item) => item.status === "failed").length;
@@ -1331,8 +1356,12 @@ async function runPublicationJob(taskId: string) {
     .where(eq(publicationJobsTable.id, taskId));
   await db.insert(activitiesTable).values({
     type: "publish",
-    title: "Пакетная публикация завершена",
-    description: `Опубликовано ${succeeded}, ошибок ${failed}, изображений не загружено ${imageFailures}.`,
+    title: items.some((item) => item.operation === "regenerateImage")
+      ? "Пакетная генерация изображений завершена"
+      : "Пакетная публикация завершена",
+    description: items.some((item) => item.operation === "regenerateImage")
+      ? `Изображения обновлены у ${succeeded} товаров, ошибок ${failed}.`
+      : `Опубликовано ${succeeded}, ошибок ${failed}, изображений не загружено ${imageFailures}.`,
     status: failed > 0 || imageFailures > 0 ? "warning" : "success",
   });
   } finally {
@@ -1387,13 +1416,38 @@ router.post("/products/publish-batch", async (req, res): Promise<void> => {
   }
 
   const rows = await db
-    .select({ id: productsTable.id, name: productsTable.name })
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      publicationStatus: productsTable.publicationStatus,
+      digisellerId: productsTable.digisellerId,
+    })
     .from(productsTable)
     .where(inArray(productsTable.id, ids));
+  if (body.data.regenerateImages) {
+    const eligibleIds = new Set(
+      rows
+        .filter(
+          (row) =>
+            row.publicationStatus === "published" && row.digisellerId !== null,
+        )
+        .map((row) => row.id),
+    );
+    const invalidIds = ids.filter((id) => !eligibleIds.has(id));
+    if (invalidIds.length > 0) {
+      res.status(409).json({
+        error: `AI-изображения доступны только для опубликованных карточек. Проверьте товары: ${invalidIds.join(", ")}`,
+      });
+      return;
+    }
+  }
   const names = new Map(rows.map((row) => [row.id, row.name]));
   const items: PublicationJobItem[] = ids.map((productId) => ({
     productId,
     name: names.get(productId) ?? `Товар #${productId}`,
+    ...(body.data.regenerateImages
+      ? { operation: "regenerateImage" as const }
+      : {}),
     status: "queued",
     digisellerId: null,
     imageStatus: "skipped",

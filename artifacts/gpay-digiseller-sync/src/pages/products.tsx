@@ -90,12 +90,21 @@ export default function ProductsPage() {
     const imageFailures = batchTask.items.filter(
       (item) => item.imageStatus === "failed",
     ).length
+    const regeneratingImages = batchTask.items.some(
+      (item) => item.operation === "regenerateImage",
+    )
     if (batchTask.failed > 0 || imageFailures > 0) {
       toast.warning(
-        `Опубликовано ${batchTask.succeeded}, ошибок ${batchTask.failed}, проблем с изображениями ${imageFailures}`,
+        regeneratingImages
+          ? `Изображения обновлены у ${batchTask.succeeded}, ошибок ${batchTask.failed}`
+          : `Опубликовано ${batchTask.succeeded}, ошибок ${batchTask.failed}, проблем с изображениями ${imageFailures}`,
       )
     } else {
-      toast.success(`Опубликовано ${batchTask.succeeded} товаров`)
+      toast.success(
+        regeneratingImages
+          ? `Изображения обновлены у ${batchTask.succeeded} товаров`
+          : `Опубликовано ${batchTask.succeeded} товаров`,
+      )
     }
   }, [batchTask, queryClient])
 
@@ -105,6 +114,12 @@ export default function ProductsPage() {
       product.isAvailable &&
       product.publicationStatus !== ProductPublicationStatus.published &&
       product.productKind !== ProductProductKind.unknown,
+  )
+  const publishedSelectedItems = visibleItems.filter(
+    (product) =>
+      selectedIds.has(product.id) &&
+      product.publicationStatus === ProductPublicationStatus.published &&
+      product.digisellerId !== null,
   )
   const allEligibleSelected =
     visibleItems.length > 0 &&
@@ -146,6 +161,36 @@ export default function ProductsPage() {
         onError: (error) =>
           toast.error(
             getMutationErrorMessage(error, "Пакетная публикация не выполнена"),
+          ),
+      },
+    )
+  }
+
+  const handleBatchImageRegeneration = () => {
+    const productIds = publishedSelectedItems.map((product) => product.id)
+    if (productIds.length === 0) {
+      toast.error("Выберите опубликованные карточки")
+      return
+    }
+    if (
+      !window.confirm(
+        `Сгенерировать и заменить изображения у ${productIds.length} опубликованных карточек? Товары будут обработаны по одному. Старые изображения будут заменены.`,
+      )
+    ) return
+    batchMutation.mutate(
+      { data: { productIds, regenerateImages: true } },
+      {
+        onSuccess: (result) => {
+          setSelectedIds(new Set())
+          queryClient.setQueryData(
+            getGetLatestPublishProductsBatchQueryKey(),
+            result,
+          )
+          toast.success("Последовательная генерация изображений запущена")
+        },
+        onError: (error) =>
+          toast.error(
+            getMutationErrorMessage(error, "Не удалось запустить генерацию изображений"),
           ),
       },
     )
@@ -218,6 +263,8 @@ export default function ProductsPage() {
   }
   const batchIsActive =
     batchTask?.status === "queued" || batchTask?.status === "running"
+  const batchRegeneratingImages =
+    batchTask?.items.some((item) => item.operation === "regenerateImage") ?? false
   const completedItems =
     batchTask?.items.filter(
       (item) => item.status === "published" || item.status === "failed",
@@ -289,6 +336,20 @@ export default function ProductsPage() {
               <Save className="h-4 w-4" />
               {marginMutation.isPending ? "Применение…" : "Применить маржу"}
             </Button>
+            {!allFilteredSelected && publishedSelectedItems.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={handleBatchImageRegeneration}
+                disabled={batchMutation.isPending || batchIsActive}
+              >
+                <Images className="h-4 w-4" />
+                {batchMutation.isPending || batchIsActive
+                  ? "Генерация…"
+                  : `Создать AI-изображения (${publishedSelectedItems.length})`}
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -381,8 +442,12 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between gap-4">
             <div className="font-medium">
               {batchTask.status === "completed"
-                ? `Пакет завершён: опубликовано ${batchTask.succeeded} из ${batchTask.requested}`
-                : `Публикация: обработано ${completedItems} из ${batchTask.requested}`}
+                ? batchRegeneratingImages
+                  ? `Генерация завершена: обновлено ${batchTask.succeeded} из ${batchTask.requested}`
+                  : `Пакет завершён: опубликовано ${batchTask.succeeded} из ${batchTask.requested}`
+                : batchRegeneratingImages
+                  ? `AI-изображения: обработано ${completedItems} из ${batchTask.requested}`
+                  : `Публикация: обработано ${completedItems} из ${batchTask.requested}`}
             </div>
             <Badge variant={batchTask.status === "completed" ? "outline" : "secondary"}>
               {batchTask.status === "queued"
@@ -414,9 +479,13 @@ export default function ProductsPage() {
                   {item.status === "queued"
                     ? "Ожидает"
                     : item.status === "publishing"
-                      ? "Публикуется…"
+                      ? item.operation === "regenerateImage"
+                        ? "Генерируется…"
+                        : "Публикуется…"
                       : item.status === "published"
-                        ? `Опубликован${item.digisellerId ? ` · DS ${item.digisellerId}` : ""}`
+                        ? item.operation === "regenerateImage"
+                          ? `Изображение обновлено${item.digisellerId ? ` · DS ${item.digisellerId}` : ""}`
+                          : `Опубликован${item.digisellerId ? ` · DS ${item.digisellerId}` : ""}`
                         : item.error || "Ошибка"}
                 </span>
               </div>

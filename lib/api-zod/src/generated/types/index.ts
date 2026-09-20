@@ -22,6 +22,7 @@ export * from './backgroundJobHealthName';
 export * from './batchPublishInput';
 export * from './batchPublishItem';
 export * from './batchPublishItemImageStatus';
+export * from './batchPublishItemOperation';
 export * from './batchPublishItemStatus';
 export * from './batchPublishResult';
 export * from './batchPublishTask';

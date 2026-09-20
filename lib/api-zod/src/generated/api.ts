@@ -224,10 +224,11 @@ export const PublishProductResponse = zod.object({
 
 export const publishProductsBatchBodyProductIdsMax = 50;
 
-
+export const publishProductsBatchBodyRegenerateImagesDefault = false;
 
 export const PublishProductsBatchBody = zod.object({
-  "productIds": zod.array(zod.number().int().min(1)).min(1).max(publishProductsBatchBodyProductIdsMax)
+  "productIds": zod.array(zod.number().int().min(1)).min(1).max(publishProductsBatchBodyProductIdsMax),
+  "regenerateImages": zod.boolean().default(publishProductsBatchBodyRegenerateImagesDefault).describe('Sequentially generate and replace images on existing published cards.')
 })
 
 export const PublishProductsBatchResponse = zod.object({
@@ -237,6 +238,7 @@ export const PublishProductsBatchResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number().int(),
   "name": zod.string(),
+  "operation": zod.enum(['publish', 'regenerateImage']).optional(),
   "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
   "digisellerId": zod.number().int().nullish(),
   "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
@@ -258,6 +260,7 @@ export const GetLatestPublishProductsBatchResponse = zod.union([zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number().int(),
   "name": zod.string(),
+  "operation": zod.enum(['publish', 'regenerateImage']).optional(),
   "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
   "digisellerId": zod.number().int().nullish(),
   "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),
@@ -283,6 +286,7 @@ export const GetPublishProductsBatchResponse = zod.object({
   "items": zod.array(zod.object({
   "productId": zod.number().int(),
   "name": zod.string(),
+  "operation": zod.enum(['publish', 'regenerateImage']).optional(),
   "status": zod.enum(['queued', 'publishing', 'published', 'failed']),
   "digisellerId": zod.number().int().nullish(),
   "imageStatus": zod.enum(['uploaded', 'skipped', 'failed']),

@@ -13,4 +13,6 @@ export interface BatchPublishInput {
      * @items.minimum 1
      */
   productIds: number[];
+  /** Sequentially generate and replace images on existing published cards. */
+  regenerateImages?: boolean;
 }

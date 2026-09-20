@@ -11,6 +11,7 @@ export type PublicationJobStatus = "queued" | "running" | "completed";
 export type PublicationJobItem = {
   productId: number;
   name: string;
+  operation?: "publish" | "regenerateImage";
   status: "queued" | "publishing" | "published" | "failed";
   digisellerId: number | null;
   imageStatus: "uploaded" | "skipped" | "failed";

@@ -776,6 +776,10 @@ components:
           maxItems: 50
           uniqueItems: true
           items: { type: integer, minimum: 1 }
+        regenerateImages:
+          type: boolean
+          default: false
+          description: Sequentially generate and replace images on existing published cards.
     PublishProductInput:
       type: object
       properties:
@@ -789,6 +793,7 @@ components:
       properties:
         productId: { type: integer }
         name: { type: string }
+        operation: { type: string, enum: [publish, regenerateImage] }
         status: { type: string, enum: [queued, publishing, published, failed] }
         digisellerId: { type: [integer, "null"] }
         imageStatus: { type: string, enum: [uploaded, skipped, failed] }

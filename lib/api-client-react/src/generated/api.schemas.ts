@@ -209,12 +209,22 @@ export interface BatchPublishInput {
      * @items.minimum 1
      */
   productIds: number[];
+  /** Sequentially generate and replace images on existing published cards. */
+  regenerateImages?: boolean;
 }
 
 export interface PublishProductInput {
   /** Force a new image upload for an existing Digiseller card. */
   regenerateImage?: boolean;
 }
+
+export type BatchPublishItemOperation = typeof BatchPublishItemOperation[keyof typeof BatchPublishItemOperation];
+
+
+export const BatchPublishItemOperation = {
+  publish: 'publish',
+  regenerateImage: 'regenerateImage',
+} as const;
 
 export type BatchPublishItemStatus = typeof BatchPublishItemStatus[keyof typeof BatchPublishItemStatus];
 
@@ -238,6 +248,7 @@ export const BatchPublishItemImageStatus = {
 export interface BatchPublishItem {
   productId: number;
   name: string;
+  operation?: BatchPublishItemOperation;
   status: BatchPublishItemStatus;
   /** @nullable */
   digisellerId?: number | null;

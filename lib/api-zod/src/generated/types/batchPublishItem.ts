@@ -6,11 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BatchPublishItemImageStatus } from './batchPublishItemImageStatus';
+import type { BatchPublishItemOperation } from './batchPublishItemOperation';
 import type { BatchPublishItemStatus } from './batchPublishItemStatus';
 
 export interface BatchPublishItem {
   productId: number;
   name: string;
+  operation?: BatchPublishItemOperation;
   status: BatchPublishItemStatus;
   /** @nullable */
   digisellerId?: number | null;
